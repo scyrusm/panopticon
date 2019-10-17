@@ -29,3 +29,5 @@ eval "$(_PANOPTICON_COMPLETE=source panopticon)"
 - Clean up docstrings and make sure that they are in numpydoc format
 - add in sphinx documentation
 - add in tests, including test data
+- add in test of signature capability
+- add in difference of correlations test
