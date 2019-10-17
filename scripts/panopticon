@@ -75,6 +75,20 @@ def gene_position_augmentation(loomfile):
     bookem.gene_position_augmentation_main(loomfile)
 
 
+@book.command()
+@click.option(
+        '--signaturefile',
+        help='gene signature file (headerless, single column)')
+@click.option(
+        '--loomfile',
+        help='gene signature file (headerless, single column)')
+def gene_signature_wizard(loomfile, signaturefile):
+    """
+    A prompt-guide approach to augmenting your loom file with gene signatures of interest.
+    """
+    bookem.gene_signature_wizard_main(loomfile=loomfile, signaturefile=signaturefile)
+
+
 
 @cli.command()
 @click.option(
