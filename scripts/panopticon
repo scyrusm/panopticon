@@ -1,0 +1,96 @@
+#! /usr/bin/env python
+
+import click
+import panopticon
+from panopticon.commands import rna_dna_correspondence as rdc
+from panopticon.commands import windowed_mean_expression_clustering as wmec
+from panopticon.commands import bookem
+from panopticon.commands import multireference_dna_correspondence as mdc
+import pkg_resources
+@click.group()
+@click.version_option(version=pkg_resources.require("panopticon")[0].version)
+def cli():
+    """Panopticon is a set of tools named after Jeremy Bentham's model for a prison, whereby multiple cells (!) could be observed with ease by a single individual.  
+    """
+
+@cli.command()
+@click.option(
+    '--patient', help='selected patient number', required=True, multiple=True)
+@click.option(
+    '--cell_type',
+    help='name of cell type of interest in the metadata')
+@click.option(
+    '--complexity_cutoff', help='Cutoff on cell complexity (i.e., include only cells with complexity equal to or above this value)', type=int, default=0)
+@click.option(
+        '--n_clusters', help='Number of clusters to look for', default=1, type=int)
+@click.option(
+        '--figure_output', help='Output file for umap, should end in e.g. .pdf, .jpg, .png, .svg', default=None)
+@click.argument('loomfile')
+def windowed_mean_expression_clustering(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
+    """Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof
+    """
+    wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output)
+
+@cli.command()
+@click.option(
+        '--seg_file',
+        help='path and filename of the segmentation file',
+        required=True)
+@click.option(
+        '--patient', help='selected patient number', required=True)
+@click.option(
+        '--time_point', help='selected time point', type=int)
+@click.option(
+        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
+@click.argument('loomfile')
+def rna_dna_correspondence(loomfile, seg_file, patient, time_point, output):
+    """For checking the malignancy status of cells with a paired DNA-derived segmentation file (returns a Mann-Whitney Z score and the p-value for the null hypothesis that there is no positive trend"""
+    if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
+        raise Exception("File output must be in matplotlib-compatible format")
+    rdc.rna_dna_correspondence_main(loomfile, seg_file, 'patient_ID', patient, time_point, output=output)
+
+@cli.group()
+def book():
+    """
+    A well-functioning surveillance state requires some bureaucracy.
+    """
+
+@book.command()
+def scrna_wizard():
+    """
+    A prompt-guided approach to generating a panopticon-compatible .loom file
+    """
+    bookem.scrna_wizard_main()
+
+@book.command()
+def cnv_wizard():
+    """
+    A prompt-guided approach to generating a panopticon-compatible .loom file
+    """
+    bookem.cnv_wizard_main()
+
+@book.command()
+@click.argument('loomfile')
+def gene_position_augmentation(loomfile):
+    bookem.gene_position_augmentation_main(loomfile)
+
+
+
+@cli.command()
+@click.option(
+        '--seg',
+        help='name of the segmentation',multiple=True, required=True)
+@click.option(
+        '--query', help='query on loom file', multiple=True)
+@click.option(
+        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
+@click.argument('loomfile')
+def multireference_dna_correspondence(loomfile, query, seg, output):
+    if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
+        raise Exception("File output must be in matplotlib-compatible format")
+    mdc.multireference_dna_correspondence_main(loomfile, query, seg, output=output)
+
+
+
+if __name__=='__main__':
+    cli()

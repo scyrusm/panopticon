@@ -1,0 +1,23 @@
+# This is a sample build configuration for Python.
+# Check our guides at https://confluence.atlassian.com/x/x4UWN for more examples.
+# Only use spaces to indent your .yml configuration.
+# -----
+# You can specify a custom docker image from Docker Hub as your build environment.
+image: python:3.7.3
+
+pipelines:
+  default:
+    - step:
+        caches:
+          - pip
+        script: # Modify the commands below to build your repository.
+          - apt-get update && apt-get install -y expect
+          - pip install --editable .
+          - pyensembl install --release 75 --species homo_sapiens
+          - cd examples
+          - ./make_loom.sh
+          - ./add_seg.sh
+          - ./test1.sh
+          - ./test2.sh
+          - ./test3.sh
+
