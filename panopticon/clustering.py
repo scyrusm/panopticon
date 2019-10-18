@@ -9,15 +9,17 @@ from scipy.cluster import hierarchy
 from matplotlib.pyplot import cm
 import matplotlib
 
+from typing import Any
 
-def kt_cluster(mean_window_expression_ranks, t=4):
+
+def kt_cluster(mean_window_expression_ranks: np.ndarray, t: int = 4) -> Any:
     """
     For clustering points (ideally mean window expression vectors) via 1 - KT, where KT is the Kendall-Tau correlation of those vectors
 
     Parameters
     ----------
     mean_window_expression_ranks :
-        
+
     t : Number of clusters to look for
          (Default value = 4)
 
@@ -26,15 +28,15 @@ def kt_cluster(mean_window_expression_ranks, t=4):
 
     """
 
-    def kt(a, b):
+    def kt(a: np.ndarray, b: np.ndarray) -> float:
         """
 
         Parameters
         ----------
         a : First vector
-            
+
         b :  Second vector
-            
+
 
         Returns
         -------
