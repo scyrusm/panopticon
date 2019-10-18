@@ -1,13 +1,8 @@
 import numpy as np
-import seaborn as sns
-from scipy.cluster.hierarchy import dendrogram, linkage
+from scipy.cluster.hierarchy import linkage
 from scipy.cluster.hierarchy import fcluster
 from scipy.stats import kendalltau
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-from scipy.cluster import hierarchy
-from matplotlib.pyplot import cm
-import matplotlib
 
 from typing import Any
 
