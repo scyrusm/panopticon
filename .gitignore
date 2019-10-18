@@ -1,5 +1,7 @@
 *.tar.gz
 *.loom
+*.ipynb
+*.pdf
 
 # Packages
 *.egg
