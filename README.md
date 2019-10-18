@@ -8,11 +8,11 @@ Panopticon is a set of tools named after Jeremy Bentham's model for a prison, wh
 
 You can install the panopticon on the command line by cloning this git repository :
 ```
-	git clone https://smarkson@bitbucket.org/carterlab/panopticon.git
-	cd panopticon
-	pip install --editable .
+    git clone https://smarkson@bitbucket.org/carterlab/panopticon.git
+    cd panopticon
+    pip install --editable .
     pyensembl install --release 75 --species homo_sapiens
-```	
+```
 
 Now try exploring the exciting panopticon programming with
 
