@@ -98,11 +98,16 @@ def gene_signature_wizard(loomfile, signaturefile):
         '--query', help='query on loom file', multiple=True)
 @click.option(
         '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
+@click.option(
+        '--stratifyby', help='stratify results by some metadata column (e.g. time_point)', type=str)
+@click.option(
+        '--signature', help='Examine with gene signature (a la AddModuleScore)', type=str)
 @click.argument('loomfile')
-def multireference_dna_correspondence(loomfile, query, seg, output):
-    if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
-        raise Exception("File output must be in matplotlib-compatible format")
-    mdc.multireference_dna_correspondence_main(loomfile, query, seg, output=output)
+def multireference_dna_correspondence(loomfile, query, seg, output, stratifyby, signature):
+    if output is not None:
+        if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
+            raise Exception("File output must be in matplotlib-compatible format")
+    mdc.multireference_dna_correspondence_main(loomfile, query, seg, output=output, stratifyby=stratifyby, modulescore_signature=signature)
 
 
 

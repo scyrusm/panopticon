@@ -74,6 +74,7 @@ def multireference_dna_correspondence(loom,
     for segmentation in tqdm(segmentations, desc='Processing segmentations'):
         crd = loom.ra[segmentation]
         expressions = loom[:, loomquery]
+
         genemask = ~np.isnan(crd)#np.isin(loom.ra['gene'], list(crd.keys()))
         expressions = expressions[genemask, :]
         validgenes = loom.ra['gene'][genemask]
