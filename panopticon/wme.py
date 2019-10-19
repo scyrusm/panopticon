@@ -4,18 +4,14 @@ wme.py
 wme
 """
 
-## second version
+# second version
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
-from scipy import sparse
 from scipy import stats
-import matplotlib.pyplot as plt
 from itertools import islice
 from scipy.sparse import coo_matrix, save_npz
 from panopticon.utilities import get_valid_gene_info
-
-
 
 
 def get_list_of_gene_windows(genes, window_size=200, window_step=1):
@@ -33,7 +29,6 @@ def get_list_of_gene_windows(genes, window_size=200, window_step=1):
     Returns
     -------
 
-    
     """
     gene_names, gene_contigs, gene_starts, gene_ends = get_valid_gene_info(genes)
 

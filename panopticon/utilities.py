@@ -1,10 +1,12 @@
+from typing import List, Tuple
+
 from pyensembl import EnsemblRelease
 import numpy as np
 import pandas as pd
 
 valid_chromosomes = [str(x) for x in range(1, 23)] + ['X']
 
-def get_valid_gene_info(genes):
+def get_valid_gene_info(genes: List[str]) -> Tuple[List[str], List[int], List[int], List[int]]:
     """
 
     Parameters
