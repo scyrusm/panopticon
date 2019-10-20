@@ -2,10 +2,6 @@
 
 import click
 import panopticon
-from panopticon.commands import rna_dna_correspondence as rdc
-from panopticon.commands import windowed_mean_expression_clustering as wmec
-from panopticon.commands import bookem
-from panopticon.commands import multireference_dna_correspondence as mdc
 import pkg_resources
 @click.group()
 @click.version_option(version=pkg_resources.require("panopticon")[0].version)
@@ -29,6 +25,7 @@ def cli():
 def windowed_mean_expression_clustering(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
     """Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof
     """
+    from panopticon.commands import windowed_mean_expression_clustering as wmec
     wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output)
 
 @cli.command()
@@ -47,6 +44,7 @@ def rna_dna_correspondence(loomfile, seg_file, patient, time_point, output):
     """For checking the malignancy status of cells with a paired DNA-derived segmentation file (returns a Mann-Whitney Z score and the p-value for the null hypothesis that there is no positive trend"""
     if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
         raise Exception("File output must be in matplotlib-compatible format")
+    from panopticon.commands import rna_dna_correspondence as rdc
     rdc.rna_dna_correspondence_main(loomfile, seg_file, 'patient_ID', patient, time_point, output=output)
 
 @cli.group()
@@ -60,6 +58,7 @@ def scrna_wizard():
     """
     A prompt-guided approach to generating a panopticon-compatible .loom file
     """
+    from panopticon.commands import bookem
     bookem.scrna_wizard_main()
 
 @book.command()
@@ -67,11 +66,13 @@ def cnv_wizard():
     """
     A prompt-guided approach to generating a panopticon-compatible .loom file
     """
+    from panopticon.commands import bookem
     bookem.cnv_wizard_main()
 
 @book.command()
 @click.argument('loomfile')
 def gene_position_augmentation(loomfile):
+    from panopticon.commands import bookem
     bookem.gene_position_augmentation_main(loomfile)
 
 
@@ -107,6 +108,7 @@ def multireference_dna_correspondence(loomfile, query, seg, output, stratifyby, 
     if output is not None:
         if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
             raise Exception("File output must be in matplotlib-compatible format")
+    from panopticon.commands import multireference_dna_correspondence as mdc
     mdc.multireference_dna_correspondence_main(loomfile, query, seg, output=output, stratifyby=stratifyby, modulescore_signature=signature)
 
 
