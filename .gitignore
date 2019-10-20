@@ -2,6 +2,7 @@
 *.loom
 *.ipynb
 *.pdf
+*.py[cod]
 
 # Packages
 *.egg

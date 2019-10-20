@@ -92,7 +92,7 @@ def scrna_wizard_main():
             "Which of these columns corresponds to the gene name?",
             type=click.Choice(genes.columns))
         if gene_col != 'gene':
-            genes['gene'] = gene[gene_col]
+            genes['gene'] = genes[gene_col]
             genes.drop(gene_col, inplace=True, axis=1)
 
     loompy.create(filepath + '/' + filename, matrix, genes.to_dict("list"),
