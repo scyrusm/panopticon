@@ -1,24 +1,25 @@
 import pandas as pd
-from pyensembl import EnsemblRelease
 from panopticon.utilities import get_valid_gene_info
 from tqdm import tqdm
 import numpy as np
 from scipy import stats
 
-def segmentation_to_copy_ratio_dict(genes,
-                                             segmentation,
-                                             chrom_col='chrom',
-                                             start_col='chromStart',
-                                             end_col='chromEnd',
-                                             score_col='copyRatio',
-                                             log2=False):
+from typing import Any, List
+
+def segmentation_to_copy_ratio_dict(genes: List[str],
+                                    segmentation: Any,
+                                    chrom_col: str = 'chrom',
+                                    start_col: str = 'chromStart',
+                                    end_col: str = 'chromEnd',
+                                    score_col: str = 'copyRatio',
+                                    log2: bool = False) -> Any:
     """
 
 
     Parameters
     ----------
     segmentation : File containing the segmentation.  Should be readable with pandas.read_table.
-        
+
     chrom_col : Column name indicating chromosomes (bed file column name is default)
         (Default value = 'chrom')
     start_col : Column name indicating region start (bed file column name is default)
@@ -33,7 +34,6 @@ def segmentation_to_copy_ratio_dict(genes,
     Returns
     -------
     A dictionary of genes to their copy ratios
-    
     """
 
     gene_names, gene_contigs, gene_starts, gene_ends = get_valid_gene_info(
@@ -66,9 +66,9 @@ def segmentation_to_copy_ratio_dict(genes,
         direction='backward').set_index('gene')[score_col].to_dict()
 
 
-def multireference_dna_correspondence(loom,
-                                           loomquery, 
-                                           *segmentations):
+def multireference_dna_correspondence(loom: Any,
+                                      loomquery: Any,
+                                      *segmentations: Any) -> Any:
 
     list_of_correlations = []
     for segmentation in tqdm(segmentations, desc='Processing segmentations'):
@@ -87,4 +87,3 @@ def multireference_dna_correspondence(loom,
                 stats.kendalltau(tcrs, expressions[:, icell]).correlation)
         list_of_correlations.append(correlations)
     return list_of_correlations
-
