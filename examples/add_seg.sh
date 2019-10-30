@@ -1,4 +1,4 @@
-#!/usr/bin/expect
+#!/usr/bin/env expect
 
 for {set x 1} {$x<5} {incr x} {
     eval spawn "panopticon book cnv-wizard"

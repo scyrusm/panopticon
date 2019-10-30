@@ -1,4 +1,4 @@
-#!/usr/bin/expect
+#!/usr/bin/env expect
 
 eval spawn "panopticon book scrna-wizard"
 expect "Location of .loom"

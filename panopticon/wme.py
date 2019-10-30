@@ -170,7 +170,6 @@ def get_windowed_mean_expression(loom,
         relevant_indices = metadata[(metadata[cell_type_column].astype(str) == str(cell_type))
                                     & (metadata[patient_column].astype(str).isin(patient))].index.values
 
-    from IPython.core.debugger import set_trace; set_trace()
     if log2:
         relevant_expression_data = 2**loom[:, relevant_indices] - 1
     else:
