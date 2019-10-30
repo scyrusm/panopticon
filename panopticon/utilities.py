@@ -1,5 +1,6 @@
 from typing import List, Tuple
-
+import binascii
+import sys
 from pyensembl import EnsemblRelease
 import numpy as np
 import pandas as pd
@@ -79,3 +80,32 @@ def get_module_score(loom, signature_name, querymask=None, nbins=100, ncontrol=5
     control_group = np.array(control_group)
     control = nonsigdata[control_group].mean(axis=0)
     return signature - control
+
+
+def intify(df_init):
+    df = df_init.copy()
+    for col in df.columns:
+        if col.endswith('_ad'):
+            raise Exception("Don't append you column names with _ad! -- Samuel")
+        df[col] = df[col].apply(lambda x:  int(binascii.hexlify(x.encode()), 16))
+    while np.sum(df.max()>sys.maxsize)>0:
+        for col in df.columns:
+            if df[col].max() > sys.maxsize:
+                df[col+'_ad'] = df[col] // sys.maxsize
+                df[col] = df[col] % sys.maxsize
+    return df.astype(np.int64)
+
+def deintify(df_init):
+    df = df_init.copy()
+    while np.sum([x.endswith('_ad') for x in df.columns]) > 0:
+        for col in df.columns:
+            if col.endswith('_ad') and col+'_ad' not in df.columns:
+                df[col[0:-3]] = df[col[0:-3]].astype(object)
+                df[col] = df[col].astype(object)
+                df[col[0:-3]] = df[col[0:-3]] + sys.maxsize * df[col]
+
+                df.drop(col, axis=1, inplace=True)
+
+    for col in df.columns:
+        df[col] = df[col].apply(lambda x: binascii.unhexlify(hex(x)[2::].encode()).decode())
+    return df
