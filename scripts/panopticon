@@ -9,7 +9,7 @@ def cli():
     """Panopticon is a set of tools named after Jeremy Bentham's model for a prison, whereby multiple cells (!) could be observed with ease by a single individual.  
     """
 
-@cli.command()
+@cli.command(short_help="Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof")
 @click.option(
     '--patient', help='selected patient number', required=True, multiple=True)
 @click.option(
@@ -23,12 +23,12 @@ def cli():
         '--figure_output', help='Output file for umap, should end in e.g. .pdf, .jpg, .png, .svg', default=None)
 @click.argument('loomfile')
 def windowed_mean_expression_clustering(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
-    """Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof
-    """
     from panopticon.commands import windowed_mean_expression_clustering as wmec
     wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output)
 
-@cli.command()
+@cli.command(short_help="For checking the malignancy status of cells with a paired DNA-derived"
+                        "segmentation file (returns a Mann-Whitney Z score and the p-value for"
+                        "the null hypothesis that there is no positive trend")
 @click.option(
         '--seg_file',
         help='path and filename of the segmentation file',
@@ -41,17 +41,14 @@ def windowed_mean_expression_clustering(loomfile, patient, cell_type, complexity
         '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
 @click.argument('loomfile')
 def rna_dna_correspondence(loomfile, seg_file, patient, time_point, output):
-    """For checking the malignancy status of cells with a paired DNA-derived segmentation file (returns a Mann-Whitney Z score and the p-value for the null hypothesis that there is no positive trend"""
     if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
         raise Exception("File output must be in matplotlib-compatible format")
     from panopticon.commands import rna_dna_correspondence as rdc
     rdc.rna_dna_correspondence_main(loomfile, seg_file, 'patient_ID', patient, time_point, output=output)
 
-@cli.group()
+@cli.group(short_help="A well-functioning surveillance state requires some bureaucracy.")
 def book():
-    """
-    A well-functioning surveillance state requires some bureaucracy.
-    """
+    pass
 
 @book.command()
 def scrna_wizard():
