@@ -22,7 +22,7 @@ def cli():
 @click.option(
         '--figure_output', help='Output file for umap, should end in e.g. .pdf, .jpg, .png, .svg', default=None)
 @click.argument('loomfile')
-def windowed_mean_expression_clustering(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
+def wmec(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
     from panopticon.commands import windowed_mean_expression_clustering as wmec
     wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output)
 
