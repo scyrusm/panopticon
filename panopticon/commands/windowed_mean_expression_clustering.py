@@ -45,6 +45,7 @@ def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, compl
             mask = labels == label
             plt.scatter(embedding[mask, 0], embedding[mask, 1], label=label)
         plt.legend()
+        plt.title("UMAP Visualization")
         if figure_output:
             plt.savefig(figure_output)
         else:
