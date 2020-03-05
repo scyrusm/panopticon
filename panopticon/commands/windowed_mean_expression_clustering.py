@@ -24,7 +24,7 @@ def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, compl
         metadata['complexity'] = loom.ca['complexity']
         metadata['cell_type'] = loom.ca['cell_type']
         list_of_gene_windows = wme.get_list_of_gene_windows(genes)
-        mean_window_expressions = wme.get_windowed_mean_expression(loom,
+        mean_window_expressions, mean_window_metadata = wme.get_windowed_mean_expression(loom,
             list_of_gene_windows,
             patient_column='patient_ID',
             patient=patient,
@@ -41,23 +41,47 @@ def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, compl
         else:
             labels = np.ones(len(embedding))
         print(set(labels))
+        fig, ax = plt.subplots()
+        plt.rcParams.update({'font.size': 22})
         for label in set(labels):
             mask = labels == label
             plt.scatter(embedding[mask, 0], embedding[mask, 1], label=label)
-        plt.legend()
+        plt.title(" ".join(patient).replace('CSF','P').replace('DFCI','P'))
+        ax.spines['right'].set_visible(False)
+        ax.spines['top'].set_visible(False)
+        ax.tick_params(top=False)
+        ax.tick_params(labeltop=False)
+        ax.get_xaxis().set_ticks([])
+        ax.get_yaxis().set_ticks([])
+#        plt.tick_params(
+#            axis='x',          # changes apply to the x-axis
+#            which='both',      # both major and minor ticks are affected
+#            bottom=False,      # ticks along the bottom edge are off
+#            top=False,         # ticks along the top edge are off
+#            labelbottom=False)
+#        plt.tick_params(
+#            axis='y',          # changes apply to the x-axis
+#            which='both',      # both major and minor ticks are affected
+#            bottom=False,      # ticks along the bottom edge are off
+#            top=False,         # ticks along the top edge are off
+#            labelbottom=False)
+        ax.set_xlabel('UMAP 1', fontsize=22)
+        ax.set_ylabel('UMAP 2', fontsize=22)
+#        plt.legend()
         if figure_output:
             plt.savefig(figure_output)
         else:
             plt.show()
+        print("Save cluster functionality temporarily eliminated")
     
-        clusters_save_choice = click.prompt(
-            'Would you like to save these clusters?',
-            type=click.Choice({'y', 'n'}, case_sensitive=False),
-            default='n')
-        if clusters_save_choice == 'y':
-            default_cluster_file = '/'.join(
-                data.split('/')[0:-1]) + '/clusters.txt'
-            cluster_file = click.prompt(
-                'Where should the cluster labels be saved?',
-                default=default_cluster_file)
-            np.savetxt(cluster_file, labels, fmt='%i')
+#        clusters_save_choice = click.prompt(
+#            'Would you like to save these clusters?',
+#            type=click.Choice({'y', 'n'}, case_sensitive=False),
+#            default='n')
+#        if clusters_save_choice == 'y':
+#            default_cluster_file = '/'.join(
+#                data.split('/')[0:-1]) + '/clusters.txt'
+#            cluster_file = click.prompt(
+#                'Where should the cluster labels be saved?',
+#                default=default_cluster_file)
+#            np.savetxt(cluster_file, labels, fmt='%i')

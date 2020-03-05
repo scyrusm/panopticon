@@ -18,7 +18,7 @@ def scrna_wizard_main():
         "Data/counts matrix (sparse npz or dense txt)", type=click.File('rb'))
     if matrixpath.name.endswith('.npz'):
         matrix = sparse.load_npz(matrixpath)
-    elif str(matrixpath).endswith('.csv'):
+    elif matrixpath.name.endswith('.csv'):
         hasheader = click.prompt(
             'Does that file have a header?',
             type=click.Choice(['n', 'y']),
@@ -27,6 +27,20 @@ def scrna_wizard_main():
             matrix = pd.read_table(matrixpath, header=None, sep=',')
         elif hasheader == 'y':
             matrix = pd.read_table(matrixpath, sep=',')
+        from IPython.core.debugger import set_trace; set_trace()
+        if len(matrix.dtypes == object)>0:
+            potentialgenes = matrix.iloc[:,(matrix.dtypes == object).values]
+            print("Potential gene list:")
+            print(potentialgenes.head())
+            savepotentialgenes = click.prompt(
+                'Potential gene list identified.  Would you like to save?',
+                type=click.Choice(['n', 'y']))
+            if savepotentialgenes:
+               potentialgenesfile = click.prompt(
+                       'Gene list filename:',
+                   default='genelist_'+matrixpath.name)
+               np.savetxt(potentialgenesfile, potentialgenes, delimiter=',', fmt='%s')
+
         matrix = matrix.iloc[:, (matrix.dtypes != object).values]
         matrix = matrix.values
     else:
@@ -43,7 +57,12 @@ def scrna_wizard_main():
 
     metadatapath = click.prompt(
         "Cell metadata (pandas-loadable)", type=click.File('rb'))
-    metadata = pd.read_table(metadatapath)
+    if metadatapath.name.endswith('.csv'):
+        metadata = pd.read_table(metadatapath, sep=',')
+    else:
+        metadata = pd.read_table(metadatapath)
+
+    from IPython.core.debugger import set_trace; set_trace()
     iscomplexity = click.prompt(
         "Does this cell metadata file have a column corresponding to complexity?",
         type=click.Choice(['n', 'y']),

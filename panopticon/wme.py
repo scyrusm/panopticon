@@ -14,7 +14,7 @@ from scipy.sparse import coo_matrix, save_npz
 from panopticon.utilities import get_valid_gene_info
 
 
-def get_list_of_gene_windows(genes, window_size=200, window_step=1):
+def get_list_of_gene_windows(genes, window_size=400, window_step=50):
     """
 
     Parameters
@@ -65,7 +65,7 @@ def robustify(genes,
     genes :
         param list_of_gene_windows:
     expression_data :
-        param upper_cut:  (Default value = 5)
+        param upper_cut:  (Default value = 0)
     windsor :
         Default value = False)
     tqdm_desc :
@@ -150,10 +150,12 @@ def get_windowed_mean_expression(loom,
     # Nota bene:  patient id gets cast to string below
 
     genes = loom.ra['gene']
+    #  This is very inefficient--make a general function for loom copy-over
     metadata = pd.DataFrame(loom.ca['patient_ID'])
     metadata.columns = ['patient_ID']
     metadata['complexity'] = loom.ca['complexity']
     metadata['cell_type'] = loom.ca['cell_type']
+#    metadata['cell_name'] = loom.ca['cell_names'] # I hate this
 
     
     if complexity_cutoff > 0:
@@ -182,7 +184,7 @@ def get_windowed_mean_expression(loom,
         tqdm_desc='Calculating Mean Window Expressions, with "Robustification"',
         upper_cut=upper_cut
     )
-    return mean_window_expressions
+    return mean_window_expressions, metadata.loc[relevant_indices]
 
 
 def get_ranks(mean_window_expressions):
