@@ -27,7 +27,6 @@ def scrna_wizard_main():
             matrix = pd.read_table(matrixpath, header=None, sep=',')
         elif hasheader == 'y':
             matrix = pd.read_table(matrixpath, sep=',')
-        from IPython.core.debugger import set_trace; set_trace()
         if len(matrix.dtypes == object)>0:
             potentialgenes = matrix.iloc[:,(matrix.dtypes == object).values]
             print("Potential gene list:")
@@ -62,7 +61,6 @@ def scrna_wizard_main():
     else:
         metadata = pd.read_table(metadatapath)
 
-    from IPython.core.debugger import set_trace; set_trace()
     iscomplexity = click.prompt(
         "Does this cell metadata file have a column corresponding to complexity?",
         type=click.Choice(['n', 'y']),
