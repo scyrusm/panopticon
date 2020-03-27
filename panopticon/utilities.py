@@ -590,7 +590,8 @@ def generate_clustering(loom,
             linkage='ward')
         scores = []
         minnk = 2
-        for nk in tqdm(range(minnk, max_clusters, 1)):
+        for nk in tqdm(
+                range(minnk, np.min([max_clusters, embedding.shape[0]]), 1)):
             clustering.set_params(n_clusters=nk)
             clustering.fit(embedding)
             #kmeans = KMeans(n_clusters=nk, random_state=0).fit(embedding)
@@ -748,6 +749,8 @@ def cluster_differential_expression(loom,
         )
         if cluster_level == 'ClusteringIteration0':
             mask2 = ~np.isin(loom.ca[cluster_level], ident1)
+            clusterset = np.unique(loom.ca[cluster_level])
+            ident2 = list(np.setdiff1d(clusterset, ident1))
         else:
             cluster_level_number = int(cluster_level[-1])
             prefices = [
@@ -760,7 +763,7 @@ def cluster_differential_expression(loom,
                 )
             prefix = prefices[0]
             clusterset = [
-                x for x in np.unique(bmlja.ca[cluster_level])
+                x for x in np.unique(loom.ca[cluster_level])
                 if x.startswith(prefix)
             ]
             ident2 = list(np.setdiff1d(clusterset, ident1))
@@ -955,7 +958,8 @@ def get_cluster_embedding(loom,
                           cluster,
                           min_dist=0.01,
                           n_neighbors=None,
-                          verbose=False):
+                          verbose=False,
+                          mask=None):
     """
 
     Parameters
@@ -981,7 +985,10 @@ def get_cluster_embedding(loom,
     import umap
     import numpy as np
     clustering_level = len(str(cluster).split('-')) - 1
-    mask = loom.ca['ClusteringIteration{}'.format(clustering_level)] == cluster
+    if mask is None:
+        mask = loom.ca['ClusteringIteration{}'.format(clustering_level)] == cluster
+    else:
+        print("Clustering over custom mask--ignoring cluster argument")
     if n_neighbors is None:
         n_neighbors = int(np.sqrt(np.sum(mask)))
     data = loom[layername][:, mask]
@@ -1053,7 +1060,7 @@ def plot_subclusters(loom,
         plt.show()
 
 
-def get_metafield_breakdown(loom, cluster, field):
+def get_metafield_breakdown(loom, cluster, field, complexity_cutoff=0):
     """
 
     Parameters
@@ -1070,5 +1077,22 @@ def get_metafield_breakdown(loom, cluster, field):
 
     """
     cluster_level = len(str(cluster).split('-')) - 1
-    mask = loom.ca['ClusteringIteration{}'.format(cluster_level)] == cluster
+    mask = (loom.ca['ClusteringIteration{}'.format(cluster_level)] == cluster
+            ) & (loom.ca['nGene'] >= complexity_cutoff)
     return pd.DataFrame(loom.ca[field][mask])[0].value_counts()
+
+
+def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
+    from panopticon.utilities import get_module_score_matrix
+    matrix = loom[layername][:, mask]
+    sigmask = np.isin(loom.ra['gene'], genelist)
+    sig_score = get_module_score_matrix(matrix, sigmask)
+    maskedscores = []
+    counter = 0
+    for flag in mask:
+        if flag:
+            maskedscores.append(sig_score[counter])
+            counter += 1
+        else:
+            maskedscores.append(np.nan)
+    loom.ca[ca_name] = maskedscores
