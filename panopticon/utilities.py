@@ -709,6 +709,8 @@ def cluster_differential_expression(loom,
                                     layername,
                                     ident1,
                                     ident2=None,
+                                    mask1=None,
+                                    mask2=None,
                                     verbose=False,
                                     ident1_downsample_size=None,
                                     ident2_downsample_size=None):
@@ -740,40 +742,47 @@ def cluster_differential_expression(loom,
     from scipy.stats import mannwhitneyu
     from time import time
     import pandas as pd
-    if type(ident1) != list:
-        ident1 = [ident1]
-    mask1 = np.isin(loom.ca[cluster_level], ident1)
-    if ident2 == None:
-        print(
-            "Automatic complement: Cells in same subcluster except lowest subcluster"
-        )
-        if cluster_level == 'ClusteringIteration0':
-            mask2 = ~np.isin(loom.ca[cluster_level], ident1)
-            clusterset = np.unique(loom.ca[cluster_level])
-            ident2 = list(np.setdiff1d(clusterset, ident1))
-        else:
-            cluster_level_number = int(cluster_level[-1])
-            prefices = [
-                '-'.join(x.split('-')[0:(cluster_level_number)])
-                for x in ident1
-            ]
-            if len(np.unique(prefices)) > 1:
-                raise Exception(
-                    "Cluster Differential expression with automatic complement must use ident1 only from cells from same n-1th subcluster"
-                )
-            prefix = prefices[0]
-            clusterset = [
-                x for x in np.unique(loom.ca[cluster_level])
-                if x.startswith(prefix)
-            ]
-            ident2 = list(np.setdiff1d(clusterset, ident1))
-            mask2 = np.isin(loom.ca[cluster_level], ident2)
-
+    
+    if (mask1 is not None) and (mask2 is not None):
+        print("ignoring ident1, ident2")
+        
+    elif (mask1 is not None) or (mask2 is not None):
+        raise Exception("Either both or neither of mask1, mask2 must be specified")
     else:
-        if type(ident2) != list:
-            ident2 = [ident2]
-        mask2 = np.isin(loom.ca[cluster_level], ident2)
-    print("Comparison of", ident1, "against", ident2)
+        if type(ident1) != list:
+            ident1 = [ident1]
+        mask1 = np.isin(loom.ca[cluster_level], ident1)
+        if ident2 == None:
+            print(
+                "Automatic complement: Cells in same subcluster except lowest subcluster"
+            )
+            if cluster_level == 'ClusteringIteration0':
+                mask2 = ~np.isin(loom.ca[cluster_level], ident1)
+                clusterset = np.unique(loom.ca[cluster_level])
+                ident2 = list(np.setdiff1d(clusterset, ident1))
+            else:
+                cluster_level_number = int(cluster_level[-1])
+                prefices = [
+                    '-'.join(x.split('-')[0:(cluster_level_number)])+'-' # 13 Apr 2020--check that this works
+                    for x in ident1
+                ]
+                if len(np.unique(prefices)) > 1:
+                    raise Exception(
+                        "Cluster Differential expression with automatic complement must use ident1 only from cells from same n-1th subcluster"
+                    )
+                prefix = prefices[0]
+                clusterset = [
+                    x for x in np.unique(loom.ca[cluster_level])
+                    if x.startswith(prefix)
+                ]
+                ident2 = list(np.setdiff1d(clusterset, ident1))
+                mask2 = np.isin(loom.ca[cluster_level], ident2)
+
+        else:
+            if type(ident2) != list:
+                ident2 = [ident2]
+            mask2 = np.isin(loom.ca[cluster_level], ident2)
+        print("Comparison of", ident1, "against", ident2)
     if ident1_downsample_size:
         p = np.min([ident1_downsample_size, np.sum(mask1)]) / np.sum(mask1)
         mask1 *= np.random.choice([True, False],
@@ -992,6 +1001,7 @@ def get_cluster_embedding(loom,
     if n_neighbors is None:
         n_neighbors = int(np.sqrt(np.sum(mask)))
     data = loom[layername][:, mask]
+
     pca = PCA(n_components=np.min([50, data.shape[1]]))
     pca.fit(data[:, :].transpose())
 
@@ -1096,3 +1106,35 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
         else:
             maskedscores.append(np.nan)
     loom.ca[ca_name] = maskedscores
+
+def generate_gene_variances(loom, layername):
+    loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
+
+def generate_nmf_and_loadings(loom, layername, nvargenes=2000, n_components=500, verbose=False):
+    from sklearn.decomposition import NMF
+
+    if 'GeneVar' not in loom.ra.keys():
+        raise Exception("Necessary to have already generated gene expression variances")
+    vargenemask = loom.ra['GeneVar'] > np.sort(loom.ra['GeneVar'])[::-1][nvargenes]
+    X = loom[layername][vargenemask,:]
+    model = NMF(n_components=n_components, init='random', random_state=0, verbose=verbose)
+    W = model.fit_transform(X)
+    H = model.components_
+    
+    # record NMF basis
+    nmf_factors = []
+    counter = 0
+    for isvargene in vargenemask:
+        if isvargene:
+            nmf_factors.append(W[counter,:])
+            counter+=1
+        else:
+            nmf_factors.append(np.zeros(W.shape[1]))
+    nmf_factors = np.vstack(nmf_factors)
+    for i in range(nmf_factors.shape[1]):
+        loom.ra['NMF Component {}'.format(i+1)] = nmf_factors[:,i]
+        
+    # record NMF loadings
+    for i in range(H.shape[0]):
+        loom.ca['NMF Loading Component {}'.format(i+1)] = H[i,:]
+

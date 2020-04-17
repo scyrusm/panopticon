@@ -111,7 +111,6 @@ def scrna_wizard_main():
         if gene_col != 'gene':
             genes['gene'] = genes[gene_col]
             genes.drop(gene_col, inplace=True, axis=1)
-
     loompy.create(filepath + '/' + filename, matrix, genes.to_dict("list"),
                   metadata.to_dict("list"))
     print("Loom file creation complete.")
