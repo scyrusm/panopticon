@@ -359,7 +359,7 @@ def recover_meta(db, do_deint=False):
     return rowmeta, colmeta
 
 
-def generate_incremental_pca(loom, layername, batch_size=512):
+def generate_incremental_pca(loom, layername, batch_size=512, n_components=50):
     """
 
     Parameters
@@ -378,7 +378,7 @@ def generate_incremental_pca(loom, layername, batch_size=512):
 
     from tqdm import tqdm
     from sklearn.decomposition import IncrementalPCA
-    pca = IncrementalPCA(n_components=50)
+    pca = IncrementalPCA(n_components=n_components)
     for (ix, selection, view) in tqdm(
             loom.scan(axis=1, batch_size=batch_size),
             total=loom.shape[1] // batch_size):
@@ -386,6 +386,7 @@ def generate_incremental_pca(loom, layername, batch_size=512):
         pca.partial_fit(view[layername][:, :].T)
     for i in range(50):
         loom.ra['{} PC {}'.format(layername, i + 1)] = pca.components_[i]
+    loom.attrs['NumberPrincipalComponents'] = n_components
 
 
 def generate_pca_loadings(loom,
@@ -417,10 +418,11 @@ def generate_pca_loadings(loom,
         raise Exception(
             "It seems that {} PCs have not yet been calculated; ergo no UMAP embedding can be calculated"
             .format(layername))
-    n_pca_cols = np.max([
-        int(x.split(' PC ')[1]) for x in loom.ra.keys()
-        if '{} PC '.format(layername) in x
-    ])
+#    n_pca_cols = np.max([
+#        int(x.split(' PC ')[1]) for x in loom.ra.keys()
+#        if '{} PC '.format(layername) in x
+#    ])
+    n_pca_cols = loom.attr['NumberPrincipalComponents']
 
     #    elif pca_tpye == 'rank':
     #        n_pca_cols = np.max([int(x.split(' PC ')[1]) for x in loom.ra.keys() if 'rank PC' in x])
@@ -1110,7 +1112,7 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
 def generate_gene_variances(loom, layername):
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
 
-def generate_nmf_and_loadings(loom, layername, nvargenes=2000, n_components=500, verbose=False):
+def generate_nmf_and_loadings(loom, layername, nvargenes=2000, n_components=100, verbose=False):
     from sklearn.decomposition import NMF
 
     if 'GeneVar' not in loom.ra.keys():
@@ -1137,4 +1139,21 @@ def generate_nmf_and_loadings(loom, layername, nvargenes=2000, n_components=500,
     # record NMF loadings
     for i in range(H.shape[0]):
         loom.ca['NMF Loading Component {}'.format(i+1)] = H[i,:]
+
+    loom.attrs['NumberNMFComponents'] = n_components
+
+def generate_cell_and_gene_quality_metrics(loom, layername):   
+    import numpy as np
+    from statsmodels import robust
+    
+    rpgenemask = np.array([x.startswith('RP') for x in loom.ra['gene']])
+    madrp, meanrp, maxrp = loom[layername].map([robust.mad, np.mean, np.max], axis=1, selection=rpgenemask)
+    madall, meanall = loom[layername].map([robust.mad, np.mean], axis=1)
+    loom.ca['RibosomalRelativeMeanAbsoluteDeviation'] = madrp/meanrp
+    loom.ca['RibosomalMaxOverMean'] = maxrp/meanrp
+    loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall/meanall
+    def complexity(vec):
+        return np.sum(vec>0)
+    loom.ca['nGene']  = loom[layername].map([complexity], axis=1)[0]
+    loom.ra['nCell'] = loom[layername].map([complexity], axis=0)[0]
 
