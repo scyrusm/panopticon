@@ -418,11 +418,13 @@ def generate_pca_loadings(loom,
         raise Exception(
             "It seems that {} PCs have not yet been calculated; ergo no UMAP embedding can be calculated"
             .format(layername))
+
+
 #    n_pca_cols = np.max([
 #        int(x.split(' PC ')[1]) for x in loom.ra.keys()
 #        if '{} PC '.format(layername) in x
 #    ])
-    n_pca_cols = loom.attr['NumberPrincipalComponents']
+    n_pca_cols = loom.attrs['NumberPrincipalComponents']
 
     #    elif pca_tpye == 'rank':
     #        n_pca_cols = np.max([int(x.split(' PC ')[1]) for x in loom.ra.keys() if 'rank PC' in x])
@@ -454,7 +456,8 @@ def generate_embedding(loom,
                        n_epochs=1000,
                        metric='correlation',
                        random_state=None,
-                       pca_cols_to_use=None):
+                       components_to_use=None,
+                       mode='nmf'):
     """
 
     Parameters
@@ -483,31 +486,42 @@ def generate_embedding(loom,
 
     
     """
-    if len([
-            x for x in loom.ca.keys()
-            if '{} PC'.format(layername) in x and 'Loading' in x
-    ]) == 0:
-        raise Exception(
-            "It seems that {} PC Loadings have not yet been calculated; ergo no UMAP embedding can be calculated"
-            .format(layername))
-    n_pca_cols = np.max([
-        int(x.split(' PC ')[1].replace('Loading', '')) for x in loom.ca.keys()
-        if '{} PC '.format(layername) in x and 'Loading' in x
-    ])
-    pca_loadings = []
-    if pca_cols_to_use != None:
-        for col in [
-                '{} PC {} Loading'.format(layername, x)
-                for x in pca_cols_to_use
-        ]:
-            pca_loadings.append(loom.ca[col])
-    else:
-        for col in [
-                '{} PC {} Loading'.format(layername, x)
-                for x in range(1, n_pca_cols + 1)
-        ]:
-            pca_loadings.append(loom.ca[col])
-    compressedlogtpm = np.vstack(pca_loadings).T
+    if mode not in ['pca', 'nmf']:
+        raise Exception("Currently only two modes implemented:  nmf and pca")
+    if mode == 'pca':
+        n_pca_cols = loom.attrs['NumberPrincipalComponents']
+        pca_loadings = []
+        if components_to_use != None:
+            for col in [
+                    '{} PC {} Loading'.format(layername, x)
+                    for x in components_to_use
+            ]:
+                pca_loadings.append(loom.ca[col])
+        else:
+            for col in [
+                    '{} PC {} Loading'.format(layername, x)
+                    for x in range(1, n_pca_cols + 1)
+            ]:
+                pca_loadings.append(loom.ca[col])
+        compressed = np.vstack(pca_loadings).T
+    elif mode == 'nmf':
+        n_nmf_cols = loom.attrs['NumberNMFComponents']
+        print(n_nmf_cols)
+        nmf_loadings = []
+        if components_to_use != None:
+            for col in [
+                    '{} NMF Loading Component {}'.format(layername, x)
+                    for x in components_to_use
+            ]:
+                nmf_loadings.append(loom.ca[col])
+        else:
+            for col in [
+                    '{} NMF Loading Component {}'.format(layername, x)
+                    for x in range(1, n_nmf_cols + 1)
+            ]:
+                nmf_loadings.append(loom.ca[col])
+        print(len(nmf_loadings))
+        compressed = np.vstack(nmf_loadings).T
     reducer = umap.UMAP(
         random_state=None,
         min_dist=min_dist,
@@ -515,21 +529,17 @@ def generate_embedding(loom,
         metric=metric,
         verbose=True,
         n_epochs=n_epochs)
-    reducer.fit(compressedlogtpm, )
-    embedding = reducer.transform(compressedlogtpm)
-    loom.ca['UMAP embedding 1'] = embedding[:, 0]
-    loom.ca['UMAP embedding 2'] = embedding[:, 1]
-
-
-#    plt.scatter(embedding[:,0], embedding[:,1])
-#    plt.show()
+    embedding = reducer.fit_transform(compressed)
+    loom.ca['{} UMAP embedding 1'.format(mode.upper())] = embedding[:, 0]
+    loom.ca['{} UMAP embedding 2'.format(mode.upper())] = embedding[:, 1]
 
 
 def generate_clustering(loom,
                         layername,
                         clustering_depth=3,
                         starting_clustering_depth=0,
-                        max_clusters=200):
+                        max_clusters=200,
+                        mode='nmf'):
     """
 
     Parameters
@@ -560,14 +570,18 @@ def generate_clustering(loom,
         raise Exception(
             "starting_clustering_depth not yet computed; please run with lower starting_clustering depth, or 0"
         )
+    if mode not in ['pca', 'nmf']:
+        raise Exception("Currently only implemented for modes:  pca and nmf")
     from sklearn.metrics import silhouette_score
     from sklearn.cluster import AgglomerativeClustering
-    from sklearn.cluster import DBSCAN
+    if mode == 'pca':
+        from sklearn.decomposition import PCA
+    elif mode == 'nmf':
+        from sklearn.decomposition import NMF
 
-    from sklearn.decomposition import PCA
     from tqdm import tqdm
 
-    def get_subclustering(embedding, score_threshold, max_clusters=10):
+    def get_subclustering(X, score_threshold, max_clusters=10, min_input_size=5):
         """
 
         Parameters
@@ -584,90 +598,56 @@ def generate_clustering(loom,
 
         
         """
-        clustering = AgglomerativeClustering(
-            n_clusters=2,
-            memory='clusteringcachedir/',
-            affinity='euclidean',
-            compute_full_tree=True,
-            linkage='ward')
-        scores = []
-        minnk = 2
-        for nk in tqdm(
-                range(minnk, np.min([max_clusters, embedding.shape[0]]), 1)):
-            clustering.set_params(n_clusters=nk)
-            clustering.fit(embedding)
-            #kmeans = KMeans(n_clusters=nk, random_state=0).fit(embedding)
-            score = silhouette_score(
-                embedding,
-                clustering.labels_,
-                sample_size=np.min([5000, embedding.shape[0]]))
-            scores.append(score)
-            #break
-        if np.max(scores) >= score_threshold:
-            clustering.set_params(n_clusters=np.argmax(scores) + minnk)
-            clustering.fit(embedding)
-            return clustering.labels_
+        if X.shape[0] < min_input_size:
+            return np.array([0] * X.shape[0])
         else:
-            return np.array([0] * embedding.shape[0])
-
-    def get_embedding(logtpm, n_neighbors=30, min_dist=0.001):
-        """
-
-        Parameters
-        ----------
-        logtpm :
-            
-        n_neighbors :
-            (Default value = 30)
-        min_dist :
-            (Default value = 0.001)
-
-        Returns
-        -------
-
-        
-        """
-        pca = PCA(n_components=np.min([50, logtpm.shape[1]]))
-        pca.fit(logtpm[:, :].transpose())
-
-        cellpca = (logtpm.T @ pca.components_.T)
-        reducer = umap.UMAP(
-            random_state=17,
-            verbose=True,
-            min_dist=min_dist,
-            n_neighbors=n_neighbors,
-            metric='correlation')
-        reducer.fit(cellpca, )
-        embedding = reducer.transform(cellpca)
-        return embedding
+            clustering = AgglomerativeClustering(
+                n_clusters=2,
+                memory='clusteringcachedir/',
+                affinity='cosine',
+                compute_full_tree=True,
+                linkage='average')
+            scores = []
+            minnk = 2
+            for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1)):
+                clustering.set_params(n_clusters=nk)
+                clustering.fit(X)
+                score = silhouette_score(
+                    X,
+                    clustering.labels_,
+                    metric='cosine',
+                    sample_size=np.min([5000, X.shape[0]]))
+                scores.append(score)
+                #break
+            if np.max(scores) >= score_threshold:
+                clustering.set_params(n_clusters=np.argmax(scores) + minnk)
+                clustering.fit(X)
+                return clustering.labels_
+            else:
+                return np.array([0] * X.shape[0])
 
     if starting_clustering_depth == 0:
-        embedding = np.vstack(
-            [loom.ca['UMAP embedding 1'], loom.ca['UMAP embedding 2']]).T
+        if mode == 'nmf':
+            n_nmf_cols = loom.attrs['NumberNMFComponents']
+            nmf_loadings = []
+            for col in [
+                    '{} NMF Loading Component {}'.format(layername, x)
+                    for x in range(1, n_nmf_cols + 1)
+            ]:
+                nmf_loadings.append(loom.ca[col])
+            X = np.vstack(nmf_loadings).T
+        elif mode == 'pca':
+            n_pca_cols = loom.attrs['NumberPrincipalComponents']
+            pca_loadings = []
+            for col in [
+                    '{} PC {} Loading'.format(layername, x)
+                    for x in range(1, n_pca_cols + 1)
+            ]:
+                pca_loadings.append(loom.ca[col])
+            X = np.vstack(pca_loadings).T
+        clustering = get_subclustering(X, 0.4, max_clusters=200)
 
-        #clustering = AgglomerativeClustering(
-        #    n_clusters=2,
-        #    memory='clusteringcachedir/',
-        #    affinity='euclidean',
-        #    compute_full_tree=True,
-        #    linkage='ward')
-
-        #scores = []
-        #minnk = 2
-        #from IPython.core.debugger import set_trace; set_trace()
-
-        #for nk in tqdm(range(minnk, max_clusters, 1)):
-        #    clustering.set_params(n_clusters=nk)
-        #    clustering.fit(embedding)
-        #    score = silhouette_score(
-        #        embedding, clustering.labels_, sample_size=5000)
-        #    scores.append(score)
-        #    #break
-        #clustering.set_params(n_clusters=np.argmax(scores) + minnk)
-        #clustering.fit(embedding)
-        clustering = DBSCAN(eps=3, min_samples=2).fit(embedding)
-
-        loom.ca['ClusteringIteration0'] = clustering.labels_
+        loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
 
     from time import time
@@ -680,7 +660,6 @@ def generate_clustering(loom,
                 x for x in loom.ca['ClusteringIteration{}'.format(subi - 1)]
                 if x != 'U'
         ]):  #will need to fix
-            print("cluster: ", cluster)
             mask = loom.ca['ClusteringIteration{}'.format(
                 subi -
                 1)] == cluster  #first mask, check for top level clustering
@@ -689,9 +668,19 @@ def generate_clustering(loom,
             data_c = loom[layername][:, mask]
             print("time to load: ",
                   time() - start, ", mask size: ", np.sum(mask))
-            embedding = get_embedding(data_c)
-            nopath_clustering = get_subclustering(
-                embedding, score_threshold=0.4)
+            if mode == 'nmf':
+                model = NMF(
+                    n_components=np.min([50, data_c.shape[1]]),
+                    init='random',
+                    random_state=0)
+                X = model.fit_transform(data_c.T)
+            elif mode == 'pca':
+                model = PCA(
+                    n_components=np.min([50, data_c.shape[1]]),
+                    init='random',
+                    random_state=0)
+                X = model.fit_transform(data_c.T)
+            nopath_clustering = get_subclustering(X, score_threshold=0.4)
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
             ]
@@ -744,12 +733,13 @@ def cluster_differential_expression(loom,
     from scipy.stats import mannwhitneyu
     from time import time
     import pandas as pd
-    
+
     if (mask1 is not None) and (mask2 is not None):
         print("ignoring ident1, ident2")
-        
+
     elif (mask1 is not None) or (mask2 is not None):
-        raise Exception("Either both or neither of mask1, mask2 must be specified")
+        raise Exception(
+            "Either both or neither of mask1, mask2 must be specified")
     else:
         if type(ident1) != list:
             ident1 = [ident1]
@@ -765,7 +755,8 @@ def cluster_differential_expression(loom,
             else:
                 cluster_level_number = int(cluster_level[-1])
                 prefices = [
-                    '-'.join(x.split('-')[0:(cluster_level_number)])+'-' # 13 Apr 2020--check that this works
+                    '-'.join(x.split('-')[0:(cluster_level_number)]) +
+                    '-'  # 13 Apr 2020--check that this works
                     for x in ident1
                 ]
                 if len(np.unique(prefices)) > 1:
@@ -997,7 +988,8 @@ def get_cluster_embedding(loom,
     import numpy as np
     clustering_level = len(str(cluster).split('-')) - 1
     if mask is None:
-        mask = loom.ca['ClusteringIteration{}'.format(clustering_level)] == cluster
+        mask = loom.ca['ClusteringIteration{}'.format(
+            clustering_level)] == cluster
     else:
         print("Clustering over custom mask--ignoring cluster argument")
     if n_neighbors is None:
@@ -1024,7 +1016,8 @@ def plot_subclusters(loom,
                      cluster,
                      sublayers=1,
                      plot_output=None,
-                     label_clusters=True):
+                     label_clusters=True,
+                     complexity_cutoff=0):
     """
 
     Parameters
@@ -1048,15 +1041,23 @@ def plot_subclusters(loom,
     """
     from panopticon.utilities import get_cluster_embedding
     import matplotlib.pyplot as plt
-    embedding = get_cluster_embedding(loom, layername, cluster)
     current_layer = len(str(cluster).split('-')) - 1
+    if complexity_cutoff > 0:
+        print("Using complexity cutoff")
+        supermask = (loom.ca['ClusteringIteration{}'.format(current_layer)] ==
+                     cluster) & (loom.ca['nGene'] >= complexity_cutoff
+                                 )  # I kinda hate this (30 Apr 2020 smarkson)
+        embedding = get_cluster_embedding(
+            loom, layername, cluster, mask=supermask)
+    else:
+        embedding = get_cluster_embedding(loom, layername, cluster)
+        supermask = loom.ca['ClusteringIteration{}'.format(
+            current_layer)] == cluster
     subclusters = [
         x for x in np.unique(loom.ca['ClusteringIteration{}'.format(
             current_layer + sublayers)])
         if str(x).startswith(str(cluster) + '-')
     ]
-    supermask = loom.ca['ClusteringIteration{}'.format(
-        current_layer)] == cluster
     for subcluster in subclusters:
         mask = loom.ca['ClusteringIteration{}'.format(
             current_layer + sublayers)][supermask] == subcluster
@@ -1072,7 +1073,11 @@ def plot_subclusters(loom,
         plt.show()
 
 
-def get_metafield_breakdown(loom, cluster, field, complexity_cutoff=0):
+def get_metafield_breakdown(loom,
+                            cluster,
+                            field,
+                            complexity_cutoff=0,
+                            mask=None):
     """
 
     Parameters
@@ -1089,8 +1094,12 @@ def get_metafield_breakdown(loom, cluster, field, complexity_cutoff=0):
 
     """
     cluster_level = len(str(cluster).split('-')) - 1
-    mask = (loom.ca['ClusteringIteration{}'.format(cluster_level)] == cluster
-            ) & (loom.ca['nGene'] >= complexity_cutoff)
+    if mask is None:
+        mask = (loom.ca['ClusteringIteration{}'.format(cluster_level)] ==
+                cluster) & (loom.ca['nGene'] >= complexity_cutoff)
+    else:
+        print("ignoring cluster, using custom mask")
+        mask = (mask) & (loom.ca['nGene'] >= complexity_cutoff)
     return pd.DataFrame(loom.ca[field][mask])[0].value_counts()
 
 
@@ -1109,51 +1118,114 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
             maskedscores.append(np.nan)
     loom.ca[ca_name] = maskedscores
 
+
 def generate_gene_variances(loom, layername):
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
 
-def generate_nmf_and_loadings(loom, layername, nvargenes=2000, n_components=100, verbose=False):
+
+def generate_nmf_and_loadings(loom,
+                              layername,
+                              nvargenes=2000,
+                              n_components=100,
+                              verbose=False):
     from sklearn.decomposition import NMF
 
     if 'GeneVar' not in loom.ra.keys():
-        raise Exception("Necessary to have already generated gene expression variances")
-    vargenemask = loom.ra['GeneVar'] > np.sort(loom.ra['GeneVar'])[::-1][nvargenes]
-    X = loom[layername][vargenemask,:]
-    model = NMF(n_components=n_components, init='random', random_state=0, verbose=verbose)
+        raise Exception(
+            "Necessary to have already generated gene expression variances")
+    vargenemask = loom.ra['GeneVar'] > np.sort(
+        loom.ra['GeneVar'])[::-1][nvargenes]
+    X = loom[layername][vargenemask, :]
+    model = NMF(
+        n_components=n_components,
+        init='random',
+        random_state=0,
+        verbose=verbose)
     W = model.fit_transform(X)
     H = model.components_
-    
+
     # record NMF basis
     nmf_factors = []
     counter = 0
     for isvargene in vargenemask:
         if isvargene:
-            nmf_factors.append(W[counter,:])
-            counter+=1
+            nmf_factors.append(W[counter, :])
+            counter += 1
         else:
             nmf_factors.append(np.zeros(W.shape[1]))
     nmf_factors = np.vstack(nmf_factors)
+    factor_sums = []
     for i in range(nmf_factors.shape[1]):
-        loom.ra['NMF Component {}'.format(i+1)] = nmf_factors[:,i]
-        
+        loom.ra['{} NMF Component {}'.format(
+            layername, i + 1)] = nmf_factors[:, i] / np.sum(nmf_factors[:, i])
+        factor_sums.append(np.sum(nmf_factors[:, i]))
+    factor_sums = np.array(factor_sums)
     # record NMF loadings
     for i in range(H.shape[0]):
-        loom.ca['NMF Loading Component {}'.format(i+1)] = H[i,:]
+        loom.ca['{} NMF Loading Component {}'.format(
+            layername, i + 1)] = H[i, :] * factor_sums[i]
 
     loom.attrs['NumberNMFComponents'] = n_components
 
-def generate_cell_and_gene_quality_metrics(loom, layername):   
+
+def generate_cell_and_gene_quality_metrics(loom, layername):
     import numpy as np
     from statsmodels import robust
-    
+
     rpgenemask = np.array([x.startswith('RP') for x in loom.ra['gene']])
-    madrp, meanrp, maxrp = loom[layername].map([robust.mad, np.mean, np.max], axis=1, selection=rpgenemask)
+    madrp, meanrp, maxrp = loom[layername].map([robust.mad, np.mean, np.max],
+                                               axis=1,
+                                               selection=rpgenemask)
     madall, meanall = loom[layername].map([robust.mad, np.mean], axis=1)
-    loom.ca['RibosomalRelativeMeanAbsoluteDeviation'] = madrp/meanrp
-    loom.ca['RibosomalMaxOverMean'] = maxrp/meanrp
-    loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall/meanall
+    loom.ca['RibosomalRelativeMeanAbsoluteDeviation'] = madrp / meanrp
+    loom.ca['RibosomalMaxOverMean'] = maxrp / meanrp
+    loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
+
     def complexity(vec):
-        return np.sum(vec>0)
-    loom.ca['nGene']  = loom[layername].map([complexity], axis=1)[0]
+        return np.sum(vec > 0)
+
+    loom.ca['nGene'] = loom[layername].map([complexity], axis=1)[0]
     loom.ra['nCell'] = loom[layername].map([complexity], axis=0)[0]
 
+
+def get_cluster_specific_greater_than_cutoff_mask(loom,
+                                                  metric,
+                                                  cluster_level,
+                                                  default_cutoff,
+                                                  exception_dict={}):
+    mask = []
+    for metric_val, cluster in zip(loom.ca[metric], loom.ca[cluster_level]):
+
+        if cluster in exception_dict.keys():
+            mask.append(metric_val > exception_dict[cluster])
+        else:
+            mask.append(metric_val > default_cutoff)
+    return np.array(mask)
+
+
+def create_subsetted_loom(loom, output_loom, cellmask, genemask):
+    from panopticon.utilities import recover_meta
+    rowmeta, colmeta = recover_meta(loom)
+    loompy.create(output_loom, loom[:, cellmask][genemask, :],
+                  rowmeta[genemask].to_dict("list"),
+                  colmeta[cellmask].to_dict("list"))
+    with loompy.connect(output_loom) as smallerloom:
+        for layer in [x for x in loom.layer.keys() if x != '']:
+            smallerloom[layer] = loom[layer][:, cellmask][genemask, :]
+
+
+def get_patient_averaged_table(loom,
+                               patient_key='patient_ID',
+                               column_attributes=[],
+                               n_cell_cutoff=0):
+    unfiltered = pd.DataFrame(loom.ca[patient_key])
+    unfiltered.columns = [patient_key]
+    for column_attribute in column_attributes:
+        unfiltered[column_attribute] = loom.ca[column_attribute]
+    unfiltered.groupby(patient_key).mean()
+    threshold_filter = lambda x: np.sum(np.isnan(x)) > n_cell_cutoff
+    filtered = (
+        unfiltered.groupby(patient_key).apply(threshold_filter)).replace(
+            to_replace=False,
+            value=np.nan) * unfiltered.groupby(patient_key).mean()
+    return filtered

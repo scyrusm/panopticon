@@ -18,16 +18,23 @@ def scrna_wizard_main():
         "Data/counts matrix (sparse npz or dense txt)", type=click.File('rb'))
     if matrixpath.name.endswith('.npz'):
         matrix = sparse.load_npz(matrixpath)
-    elif matrixpath.name.endswith('.csv'):
+    elif (matrixpath.name.endswith('.csv')) or (matrixpath.name.endswith('.tsv')) or (matrixpath.name.endswith('.txt')):
         hasheader = click.prompt(
             'Does that file have a header?',
             type=click.Choice(['n', 'y']),
             default='n')
+        if (matrixpath.name.endswith('.csv')):
+            sep = ','
+        else:
+            sep='\t'
         if hasheader == 'n':
-            matrix = pd.read_table(matrixpath, header=None, sep=',')
+            matrix = pd.read_table(matrixpath, header=None, sep=sep)
         elif hasheader == 'y':
-            matrix = pd.read_table(matrixpath, sep=',')
+            matrix = pd.read_table(matrixpath, sep=sep)
+        from IPython.core.debugger import set_trace; set_trace()
+
         if len(matrix.dtypes == object)>0:
+            print("Number of str columns:",len(matrix.dtypes == object))
             potentialgenes = matrix.iloc[:,(matrix.dtypes == object).values]
             print("Potential gene list:")
             print(potentialgenes.head())
@@ -39,7 +46,19 @@ def scrna_wizard_main():
                        'Gene list filename:',
                    default='genelist_'+matrixpath.name)
                np.savetxt(potentialgenesfile, potentialgenes, delimiter=',', fmt='%s')
-
+        potentialcells = matrix.columns
+        savepotentialcells = click.prompt(
+            'Potential cell list identified.  Would you like to save?',
+            type=click.Choice(['n', 'y']))
+        if savepotentialcells:
+           potentialcellsfile = click.prompt(
+                   'Cell list filename:',
+               default='celllist_'+matrixpath.name)
+           print("assuming first column is genelist...")
+           potentialcells = pd.DataFrame(potentialcells[1::])
+           potentialcells.columns = ['cellname']
+           potentialcells.to_csv(potentialcellsfile)
+#           np.savetxt(potentialcellsfile, potentialcells, delimiter=',', fmt='%s')
         matrix = matrix.iloc[:, (matrix.dtypes != object).values]
         matrix = matrix.values
     else:
@@ -111,6 +130,7 @@ def scrna_wizard_main():
         if gene_col != 'gene':
             genes['gene'] = genes[gene_col]
             genes.drop(gene_col, inplace=True, axis=1)
+    from IPython.core.debugger import set_trace; set_trace()
     loompy.create(filepath + '/' + filename, matrix, genes.to_dict("list"),
                   metadata.to_dict("list"))
     print("Loom file creation complete.")
