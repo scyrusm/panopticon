@@ -52,13 +52,15 @@ def get_list_of_gene_windows(genes, window_size=400, window_step=50):
     return list_of_gene_windows
 
 
-def robustify(genes,
+def robust_mean_windowed_expressions(genes,
               list_of_gene_windows,
               expression_data,
               upper_cut=5,
               windsor=False,
               tqdm_desc=''):
     """
+    Produces an arithmetic mean over expression in windows determined by list_of_gene_windows.  Highest-expression genes in each window are discarded.  
+    Can be made more memory-friendly, by implementing a map function over expression_data--I still haven't done this.  S Markson 4 June 2020.  
 
     Parameters
     ----------
@@ -114,6 +116,8 @@ def get_windowed_mean_expression(loom,
                                  upper_cut=5,
                                  log2=False):
     """
+
+    THIS IS DEPRECATED--S. Markson 4 June 2020
 
     Parameters
     ----------
@@ -177,7 +181,7 @@ def get_windowed_mean_expression(loom,
     else:
         relevant_expression_data = loom[:, relevant_indices]
 
-    mean_window_expressions = robustify(
+    mean_window_expressions = robust_mean_windowed_expressions(
         genes,
         list_of_gene_windows,
         relevant_expression_data,

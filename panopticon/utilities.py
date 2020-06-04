@@ -15,11 +15,13 @@ valid_chromosomes = [str(x) for x in range(1, 23)] + ['X']
 
 def get_valid_gene_info(
         genes: List[str]) -> Tuple[List[str], List[int], List[int], List[int]]:
-    """
+    """Returns gene locations for all genes in ensemble 75--this is outdated!  --S Markson 3 June 2020
 
     Parameters
     ----------
     genes : A list of genes
+        
+    genes : List[str] :
         
     genes : List[str] :
         
@@ -58,7 +60,7 @@ def get_module_score_loom(loom,
                           querymask=None,
                           nbins=100,
                           ncontrol=5):
-    """
+    """Calculates a module score over a loom file.  This routine is deprecated--use generate masked module score (S Markson 3 June 2020).
 
     Parameters
     ----------
@@ -106,6 +108,8 @@ def get_module_score_loom(loom,
 
 def get_module_score_matrix(alldata, signature_mask, nbins=100, ncontrol=5):
     """
+
+    generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).  
 
     Parameters
     ----------
@@ -369,11 +373,14 @@ def generate_incremental_pca(loom, layername, batch_size=512, n_components=50):
     layername :
         
     batch_size :
-         (Default value = 512)
+        (Default value = 512)
+    n_components :
+         (Default value = 50)
 
     Returns
     -------
 
+    
     """
 
     from tqdm import tqdm
@@ -386,12 +393,12 @@ def generate_incremental_pca(loom, layername, batch_size=512, n_components=50):
         pca.partial_fit(view[layername][:, :].T)
     for i in range(50):
         loom.ra['{} PC {}'.format(layername, i + 1)] = pca.components_[i]
-    loom.attrs['NumberPrincipalComponents'] = n_components
+    loom.attrs['NumberPrincipalComponents_{}'.format(layername)] = n_components
+    loom.attrs['PCAExplainedVarianceRatio_{}'.format(layername)] = pca.explained_variance_ratio_
 
 
 def generate_pca_loadings(loom,
                           layername,
-                          pca_type='log_tpm',
                           dosparse=False,
                           batch_size=512):
     """
@@ -400,14 +407,12 @@ def generate_pca_loadings(loom,
     ----------
     loom :
         
-    pca_type :
-        (Default value = 'log_tpm')
     layername :
         
     dosparse :
-         (Default value = False)
+        (Default value = False)
     batch_size :
-         (Default value = 512)
+        (Default value = 512)
 
     Returns
     -------
@@ -424,7 +429,7 @@ def generate_pca_loadings(loom,
 #        int(x.split(' PC ')[1]) for x in loom.ra.keys()
 #        if '{} PC '.format(layername) in x
 #    ])
-    n_pca_cols = loom.attrs['NumberPrincipalComponents']
+    n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(layername)]
 
     #    elif pca_tpye == 'rank':
     #        n_pca_cols = np.max([int(x.split(' PC ')[1]) for x in loom.ra.keys() if 'rank PC' in x])
@@ -469,17 +474,21 @@ def generate_embedding(loom,
     layername :
         
     min_dist :
-         (Default value = 0.0001)
+        (Default value = 0.0001)
     n_neighbors :
-         (Default value = 30)
+        (Default value = 30)
     n_epochs :
-         (Default value = 1000)
+        (Default value = 1000)
     metric :
-         (Default value = 'correlation')
+        (Default value = 'correlation')
     random_state :
-         (Default value = None)
+        (Default value = None)
     pca_cols_to_use :
+        (Default value = None)
+    components_to_use :
          (Default value = None)
+    mode :
+         (Default value = 'nmf')
 
     Returns
     -------
@@ -489,7 +498,7 @@ def generate_embedding(loom,
     if mode not in ['pca', 'nmf']:
         raise Exception("Currently only two modes implemented:  nmf and pca")
     if mode == 'pca':
-        n_pca_cols = loom.attrs['NumberPrincipalComponents']
+        n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(layername)]
         pca_loadings = []
         if components_to_use != None:
             for col in [
@@ -539,7 +548,7 @@ def generate_clustering(loom,
                         clustering_depth=3,
                         starting_clustering_depth=0,
                         max_clusters=200,
-                        mode='nmf'):
+                        mode='pca'):
     """
 
     Parameters
@@ -554,6 +563,8 @@ def generate_clustering(loom,
         (Default value = 200)
     layername :
         
+    mode :
+         (Default value = 'pca')
 
     Returns
     -------
@@ -574,6 +585,7 @@ def generate_clustering(loom,
         raise Exception("Currently only implemented for modes:  pca and nmf")
     from sklearn.metrics import silhouette_score
     from sklearn.cluster import AgglomerativeClustering
+    from sklearn.preprocessing import StandardScaler
     if mode == 'pca':
         from sklearn.decomposition import PCA
     elif mode == 'nmf':
@@ -581,7 +593,10 @@ def generate_clustering(loom,
 
     from tqdm import tqdm
 
-    def get_subclustering(X, score_threshold, max_clusters=10, min_input_size=5):
+    def get_subclustering(X,
+                          score_threshold,
+                          max_clusters=20,
+                          min_input_size=5):
         """
 
         Parameters
@@ -592,6 +607,10 @@ def generate_clustering(loom,
             
         max_clusters :
             (Default value = 10)
+        X :
+            
+        min_input_size :
+             (Default value = 5)
 
         Returns
         -------
@@ -609,9 +628,11 @@ def generate_clustering(loom,
                 linkage='average')
             scores = []
             minnk = 2
-            for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1)):
+            for nk in tqdm(
+                    range(minnk, np.min([max_clusters, X.shape[0]]), 1)):
                 clustering.set_params(n_clusters=nk)
                 clustering.fit(X)
+
                 score = silhouette_score(
                     X,
                     clustering.labels_,
@@ -619,7 +640,9 @@ def generate_clustering(loom,
                     sample_size=np.min([5000, X.shape[0]]))
                 scores.append(score)
                 #break
+            print(np.array(scores))
             if np.max(scores) >= score_threshold:
+                print("Number of clusters:", np.argmax(scores) + minnk)
                 clustering.set_params(n_clusters=np.argmax(scores) + minnk)
                 clustering.fit(X)
                 return clustering.labels_
@@ -637,15 +660,20 @@ def generate_clustering(loom,
                 nmf_loadings.append(loom.ca[col])
             X = np.vstack(nmf_loadings).T
         elif mode == 'pca':
-            n_pca_cols = loom.attrs['NumberPrincipalComponents']
+            if layername.endswith('_standardized'):
+                raise Exception("Standardization automatically performed, use non-standardized layer (e.g. log(TPM+1)")
+            if layername+'_standardized' not in loom.layers.keys():
+                raise Exception("Must pre-compute PCA on standardized version of desired layer")
+            n_pca_cols = loom.attrs['NumberPrincipalComponents_{}_standardized'.format(layername)]
             pca_loadings = []
             for col in [
-                    '{} PC {} Loading'.format(layername, x)
+                    '{} PC {} Loading'.format(layername+'_standardized', x)
                     for x in range(1, n_pca_cols + 1)
             ]:
                 pca_loadings.append(loom.ca[col])
             X = np.vstack(pca_loadings).T
-        clustering = get_subclustering(X, 0.4, max_clusters=200)
+        clustering = get_subclustering(X, 0.2, max_clusters=max_clusters)
+
 
         loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
@@ -653,8 +681,8 @@ def generate_clustering(loom,
     from time import time
     for subi in range(starting_clustering_depth, clustering_depth):
 
-        loom.ca['ClusteringIteration{}'.format(subi)] = ['U'] * len(
-            loom.ca['ClusteringIteration{}'.format(subi - 1)])
+        loom.ca['ClusteringIteration{}'.format(subi )] = ['U'] * len(
+            loom.ca['ClusteringIteration{}'.format(subi - 1 )])
 
         for cluster in set([
                 x for x in loom.ca['ClusteringIteration{}'.format(subi - 1)]
@@ -677,15 +705,20 @@ def generate_clustering(loom,
             elif mode == 'pca':
                 model = PCA(
                     n_components=np.min([50, data_c.shape[1]]),
-                    init='random',
                     random_state=0)
-                X = model.fit_transform(data_c.T)
-            nopath_clustering = get_subclustering(X, score_threshold=0.4)
+
+    #            StandardScaler().fit_transform(loom['log(TPM+1)'][:,:].T, )
+
+#                from IPython.core.debugger import set_trace; set_trace()
+                data_c = StandardScaler().fit_transform(data_c.T)
+                X = model.fit_transform(data_c)
+
+            nopath_clustering = get_subclustering(X, score_threshold=0.2)
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
             ]
             loom.ca['ClusteringIteration{}'.format(
-                subi)][mask] = fullpath_clustering
+                subi )][mask] = fullpath_clustering
         loom.ca['ClusteringIteration{}'.format(subi)] = loom.ca[
             'ClusteringIteration{}'.format(
                 subi)]  #This is to force the changes to save to disk
@@ -718,17 +751,22 @@ def cluster_differential_expression(loom,
     ident1 :
         
     ident2 :
-         (Default value = None)
+        (Default value = None)
     verbose :
-         (Default value = False)
+        (Default value = False)
     ident1_downsample_size :
-         (Default value = None)
+        (Default value = None)
     ident2_downsample_size :
+        (Default value = None)
+    mask1 :
+         (Default value = None)
+    mask2 :
          (Default value = None)
 
     Returns
     -------
 
+    
     """
     from scipy.stats import mannwhitneyu
     from time import time
@@ -832,6 +870,7 @@ def get_cluster_markers(loom, layername, cluster_level):
     Returns
     -------
 
+    
     """
     from panopticon.utilities import cluster_differential_expression
     diffex = {}
@@ -854,12 +893,15 @@ def we_can_pickle_it(thing, thingname: str):
     ----------
     thing :
         
+    thingname : str :
+        
     thingname: str :
         
 
     Returns
     -------
 
+    
     """
     import pickle
     with open(thingname, 'wb') as f:
@@ -871,12 +913,15 @@ def we_can_unpickle_it(thingname: str):
 
     Parameters
     ----------
+    thingname : str :
+        
     thingname: str :
         
 
     Returns
     -------
 
+    
     """
     import pickle
     with open('diffex_level1.pkl', 'rb') as f:
@@ -897,6 +942,7 @@ def get_gsea_with_selenium(diffi):
     Returns
     -------
 
+    
     """
     from selenium import webdriver
     from selenium.webdriver.common.keys import Keys
@@ -973,15 +1019,18 @@ def get_cluster_embedding(loom,
     cluster :
         
     min_dist :
-         (Default value = 0.01)
+        (Default value = 0.01)
     n_neighbors :
-         (Default value = None)
+        (Default value = None)
     verbose :
-         (Default value = False)
+        (Default value = False)
+    mask :
+         (Default value = None)
 
     Returns
     -------
 
+    
     """
     from sklearn.decomposition import PCA
     import umap
@@ -1029,15 +1078,18 @@ def plot_subclusters(loom,
     cluster :
         
     sublayers :
-         (Default value = 1)
+        (Default value = 1)
     plot_output :
-         (Default value = None)
+        (Default value = None)
     label_clusters :
-         (Default value = True)
+        (Default value = True)
+    complexity_cutoff :
+         (Default value = 0)
 
     Returns
     -------
 
+    
     """
     from panopticon.utilities import get_cluster_embedding
     import matplotlib.pyplot as plt
@@ -1088,10 +1140,15 @@ def get_metafield_breakdown(loom,
         
     field :
         
+    complexity_cutoff :
+         (Default value = 0)
+    mask :
+         (Default value = None)
 
     Returns
     -------
 
+    
     """
     cluster_level = len(str(cluster).split('-')) - 1
     if mask is None:
@@ -1104,6 +1161,25 @@ def get_metafield_breakdown(loom,
 
 
 def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    mask :
+        
+    genelist :
+        
+    ca_name :
+        
+
+    Returns
+    -------
+
+    """
     from panopticon.utilities import get_module_score_matrix
     matrix = loom[layername][:, mask]
     sigmask = np.isin(loom.ra['gene'], genelist)
@@ -1120,6 +1196,19 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
 
 
 def generate_gene_variances(loom, layername):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+
+    Returns
+    -------
+
+    """
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
 
 
@@ -1128,6 +1217,25 @@ def generate_nmf_and_loadings(loom,
                               nvargenes=2000,
                               n_components=100,
                               verbose=False):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    nvargenes :
+         (Default value = 2000)
+    n_components :
+         (Default value = 100)
+    verbose :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
     from sklearn.decomposition import NMF
 
     if 'GeneVar' not in loom.ra.keys():
@@ -1169,6 +1277,19 @@ def generate_nmf_and_loadings(loom,
 
 
 def generate_cell_and_gene_quality_metrics(loom, layername):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+
+    Returns
+    -------
+
+    """
     import numpy as np
     from statsmodels import robust
 
@@ -1182,6 +1303,17 @@ def generate_cell_and_gene_quality_metrics(loom, layername):
     loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
 
     def complexity(vec):
+        """
+
+        Parameters
+        ----------
+        vec :
+            
+
+        Returns
+        -------
+
+        """
         return np.sum(vec > 0)
 
     loom.ca['nGene'] = loom[layername].map([complexity], axis=1)[0]
@@ -1193,6 +1325,25 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
                                                   cluster_level,
                                                   default_cutoff,
                                                   exception_dict={}):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    metric :
+        
+    cluster_level :
+        
+    default_cutoff :
+        
+    exception_dict :
+         (Default value = {})
+
+    Returns
+    -------
+
+    """
     mask = []
     for metric_val, cluster in zip(loom.ca[metric], loom.ca[cluster_level]):
 
@@ -1204,6 +1355,23 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
 
 
 def create_subsetted_loom(loom, output_loom, cellmask, genemask):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    output_loom :
+        
+    cellmask :
+        
+    genemask :
+        
+
+    Returns
+    -------
+
+    """
     from panopticon.utilities import recover_meta
     rowmeta, colmeta = recover_meta(loom)
     loompy.create(output_loom, loom[:, cellmask][genemask, :],
@@ -1218,6 +1386,23 @@ def get_patient_averaged_table(loom,
                                patient_key='patient_ID',
                                column_attributes=[],
                                n_cell_cutoff=0):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    patient_key :
+         (Default value = 'patient_ID')
+    column_attributes :
+         (Default value = [])
+    n_cell_cutoff :
+         (Default value = 0)
+
+    Returns
+    -------
+
+    """
     unfiltered = pd.DataFrame(loom.ca[patient_key])
     unfiltered.columns = [patient_key]
     for column_attribute in column_attributes:
@@ -1229,3 +1414,26 @@ def get_patient_averaged_table(loom,
             to_replace=False,
             value=np.nan) * unfiltered.groupby(patient_key).mean()
     return filtered
+
+
+def generate_standardized_layer(loom, layername):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+
+    Returns
+    -------
+
+    """
+    if layername.endswith('_standardized'):
+        raise Exception(
+            "It appears that layer is already standardized; note that _standardized suffix is reserved"
+        )
+    from sklearn.preprocessing import StandardScaler
+    loom[layername + '_standardized'] = StandardScaler().fit_transform(
+        loom[layername][:, :].T).T
