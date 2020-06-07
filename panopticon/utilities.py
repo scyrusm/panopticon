@@ -29,6 +29,8 @@ def get_valid_gene_info(
         
     genes : List[str] :
         
+    genes : List[str] :
+        
     genes: List[str] :
         
 
@@ -107,9 +109,7 @@ def get_module_score_loom(loom,
 
 
 def get_module_score_matrix(alldata, signature_mask, nbins=100, ncontrol=5):
-    """
-
-    generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).  
+    """generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).
 
     Parameters
     ----------
@@ -375,7 +375,7 @@ def generate_incremental_pca(loom, layername, batch_size=512, n_components=50):
     batch_size :
         (Default value = 512)
     n_components :
-         (Default value = 50)
+        (Default value = 50)
 
     Returns
     -------
@@ -394,13 +394,11 @@ def generate_incremental_pca(loom, layername, batch_size=512, n_components=50):
     for i in range(50):
         loom.ra['{} PC {}'.format(layername, i + 1)] = pca.components_[i]
     loom.attrs['NumberPrincipalComponents_{}'.format(layername)] = n_components
-    loom.attrs['PCAExplainedVarianceRatio_{}'.format(layername)] = pca.explained_variance_ratio_
+    loom.attrs['PCAExplainedVarianceRatio_{}'.format(
+        layername)] = pca.explained_variance_ratio_
 
 
-def generate_pca_loadings(loom,
-                          layername,
-                          dosparse=False,
-                          batch_size=512):
+def generate_pca_loadings(loom, layername, dosparse=False, batch_size=512):
     """
 
     Parameters
@@ -486,9 +484,9 @@ def generate_embedding(loom,
     pca_cols_to_use :
         (Default value = None)
     components_to_use :
-         (Default value = None)
+        (Default value = None)
     mode :
-         (Default value = 'nmf')
+        (Default value = 'nmf')
 
     Returns
     -------
@@ -498,7 +496,8 @@ def generate_embedding(loom,
     if mode not in ['pca', 'nmf']:
         raise Exception("Currently only two modes implemented:  nmf and pca")
     if mode == 'pca':
-        n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(layername)]
+        n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(
+            layername)]
         pca_loadings = []
         if components_to_use != None:
             for col in [
@@ -564,7 +563,7 @@ def generate_clustering(loom,
     layername :
         
     mode :
-         (Default value = 'pca')
+        (Default value = 'pca')
 
     Returns
     -------
@@ -595,7 +594,7 @@ def generate_clustering(loom,
 
     def get_subclustering(X,
                           score_threshold,
-                          max_clusters=20,
+                          max_clusters=50,
                           min_input_size=5):
         """
 
@@ -610,7 +609,7 @@ def generate_clustering(loom,
         X :
             
         min_input_size :
-             (Default value = 5)
+            (Default value = 5)
 
         Returns
         -------
@@ -661,19 +660,23 @@ def generate_clustering(loom,
             X = np.vstack(nmf_loadings).T
         elif mode == 'pca':
             if layername.endswith('_standardized'):
-                raise Exception("Standardization automatically performed, use non-standardized layer (e.g. log(TPM+1)")
-            if layername+'_standardized' not in loom.layers.keys():
-                raise Exception("Must pre-compute PCA on standardized version of desired layer")
-            n_pca_cols = loom.attrs['NumberPrincipalComponents_{}_standardized'.format(layername)]
+                raise Exception(
+                    "Standardization automatically performed, use non-standardized layer (e.g. log(TPM+1)"
+                )
+            if layername + '_standardized' not in loom.layers.keys():
+                raise Exception(
+                    "Must pre-compute PCA on standardized version of desired layer"
+                )
+            n_pca_cols = loom.attrs[
+                'NumberPrincipalComponents_{}_standardized'.format(layername)]
             pca_loadings = []
             for col in [
-                    '{} PC {} Loading'.format(layername+'_standardized', x)
+                    '{} PC {} Loading'.format(layername + '_standardized', x)
                     for x in range(1, n_pca_cols + 1)
             ]:
                 pca_loadings.append(loom.ca[col])
             X = np.vstack(pca_loadings).T
         clustering = get_subclustering(X, 0.2, max_clusters=max_clusters)
-
 
         loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
@@ -681,8 +684,8 @@ def generate_clustering(loom,
     from time import time
     for subi in range(starting_clustering_depth, clustering_depth):
 
-        loom.ca['ClusteringIteration{}'.format(subi )] = ['U'] * len(
-            loom.ca['ClusteringIteration{}'.format(subi - 1 )])
+        loom.ca['ClusteringIteration{}'.format(subi)] = ['U'] * len(
+            loom.ca['ClusteringIteration{}'.format(subi - 1)])
 
         for cluster in set([
                 x for x in loom.ca['ClusteringIteration{}'.format(subi - 1)]
@@ -704,12 +707,11 @@ def generate_clustering(loom,
                 X = model.fit_transform(data_c.T)
             elif mode == 'pca':
                 model = PCA(
-                    n_components=np.min([50, data_c.shape[1]]),
-                    random_state=0)
+                    n_components=np.min([50, data_c.shape[1]]), random_state=0)
 
-    #            StandardScaler().fit_transform(loom['log(TPM+1)'][:,:].T, )
+                #            StandardScaler().fit_transform(loom['log(TPM+1)'][:,:].T, )
 
-#                from IPython.core.debugger import set_trace; set_trace()
+                #                from IPython.core.debugger import set_trace; set_trace()
                 data_c = StandardScaler().fit_transform(data_c.T)
                 X = model.fit_transform(data_c)
 
@@ -718,7 +720,7 @@ def generate_clustering(loom,
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
             ]
             loom.ca['ClusteringIteration{}'.format(
-                subi )][mask] = fullpath_clustering
+                subi)][mask] = fullpath_clustering
         loom.ca['ClusteringIteration{}'.format(subi)] = loom.ca[
             'ClusteringIteration{}'.format(
                 subi)]  #This is to force the changes to save to disk
@@ -759,9 +761,9 @@ def cluster_differential_expression(loom,
     ident2_downsample_size :
         (Default value = None)
     mask1 :
-         (Default value = None)
+        (Default value = None)
     mask2 :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
@@ -895,6 +897,8 @@ def we_can_pickle_it(thing, thingname: str):
         
     thingname : str :
         
+    thingname : str :
+        
     thingname: str :
         
 
@@ -913,6 +917,8 @@ def we_can_unpickle_it(thingname: str):
 
     Parameters
     ----------
+    thingname : str :
+        
     thingname : str :
         
     thingname: str :
@@ -1025,7 +1031,7 @@ def get_cluster_embedding(loom,
     verbose :
         (Default value = False)
     mask :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
@@ -1084,7 +1090,7 @@ def plot_subclusters(loom,
     label_clusters :
         (Default value = True)
     complexity_cutoff :
-         (Default value = 0)
+        (Default value = 0)
 
     Returns
     -------
@@ -1141,9 +1147,9 @@ def get_metafield_breakdown(loom,
     field :
         
     complexity_cutoff :
-         (Default value = 0)
+        (Default value = 0)
     mask :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
@@ -1179,6 +1185,7 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
     Returns
     -------
 
+    
     """
     from panopticon.utilities import get_module_score_matrix
     matrix = loom[layername][:, mask]
@@ -1208,6 +1215,7 @@ def generate_gene_variances(loom, layername):
     Returns
     -------
 
+    
     """
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
 
@@ -1226,15 +1234,16 @@ def generate_nmf_and_loadings(loom,
     layername :
         
     nvargenes :
-         (Default value = 2000)
+        (Default value = 2000)
     n_components :
-         (Default value = 100)
+        (Default value = 100)
     verbose :
-         (Default value = False)
+        (Default value = False)
 
     Returns
     -------
 
+    
     """
     from sklearn.decomposition import NMF
 
@@ -1289,6 +1298,7 @@ def generate_cell_and_gene_quality_metrics(loom, layername):
     Returns
     -------
 
+    
     """
     import numpy as np
     from statsmodels import robust
@@ -1313,6 +1323,7 @@ def generate_cell_and_gene_quality_metrics(loom, layername):
         Returns
         -------
 
+        
         """
         return np.sum(vec > 0)
 
@@ -1338,11 +1349,12 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
     default_cutoff :
         
     exception_dict :
-         (Default value = {})
+        (Default value = {})
 
     Returns
     -------
 
+    
     """
     mask = []
     for metric_val, cluster in zip(loom.ca[metric], loom.ca[cluster_level]):
@@ -1371,12 +1383,15 @@ def create_subsetted_loom(loom, output_loom, cellmask, genemask):
     Returns
     -------
 
+    
     """
     from panopticon.utilities import recover_meta
+    if '' not in loom.layers.keys():
+        raise Exception("Expecting '' layer, yet none found")
     rowmeta, colmeta = recover_meta(loom)
-    loompy.create(output_loom, loom[:, cellmask][genemask, :],
-                  rowmeta[genemask].to_dict("list"),
-                  colmeta[cellmask].to_dict("list"))
+    loompy.create(
+        output_loom, loom[''].sparse().tocsr()[:, cellmask][genemask, :],
+        rowmeta[genemask].to_dict("list"), colmeta[cellmask].to_dict("list"))
     with loompy.connect(output_loom) as smallerloom:
         for layer in [x for x in loom.layer.keys() if x != '']:
             smallerloom[layer] = loom[layer][:, cellmask][genemask, :]
@@ -1393,15 +1408,16 @@ def get_patient_averaged_table(loom,
     loom :
         
     patient_key :
-         (Default value = 'patient_ID')
+        (Default value = 'patient_ID')
     column_attributes :
-         (Default value = [])
+        (Default value = [])
     n_cell_cutoff :
-         (Default value = 0)
+        (Default value = 0)
 
     Returns
     -------
 
+    
     """
     unfiltered = pd.DataFrame(loom.ca[patient_key])
     unfiltered.columns = [patient_key]
@@ -1429,6 +1445,7 @@ def generate_standardized_layer(loom, layername):
     Returns
     -------
 
+    
     """
     if layername.endswith('_standardized'):
         raise Exception(
@@ -1437,3 +1454,115 @@ def generate_standardized_layer(loom, layername):
     from sklearn.preprocessing import StandardScaler
     loom[layername + '_standardized'] = StandardScaler().fit_transform(
         loom[layername][:, :].T).T
+
+
+def generate_count_normalization(loom,
+                                 raw_count_layername,
+                                 output_layername,
+                                 denominator=10**5):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    raw_count_layername :
+        
+    output_layername :
+        
+    denominator :
+         (Default value = 10**5)
+
+    Returns
+    -------
+
+    """
+    import numpy as np
+    colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]
+    sparselayer = loom[raw_count_layername].sparse()
+    sparselayer = sparselayer.multiply(denominator / colsums).log1p().multiply(
+        1 / np.log(2))
+    loom[output_layername] = sparselayer
+
+def generate_malignancy_score(loom, layername, cell_sort_key='CellSort', patient_id_key='patient_ID', malignant_sort_label='45neg', cell_name_key='cellname'):
+    """
+
+    For calculating malignancy scores for cells based on inferred CNV.  This subroutine isn't terribly future proof.  S Markson 6 June 2020.  
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    cell_sort_key :
+         (Default value = 'CellSort')
+    patient_id_key :
+         (Default value = 'patient_ID')
+    malignant_sort_label :
+         (Default value = '45neg')
+    cellname_key :
+         (Default value = 'cellname')from panopticon.wme import get_list_of_gene_windows)
+    robust_mean_windowed_expressionsfrom sklearn.decomposition import PCAfrom tqdm import tqdmcnv_scores_dict :
+         (Default value = {}for patient in tqdm(np.unique(bm.ca[patient_id_key]))
+    desc :
+         (Default value = 'Computing per-patient)
+    per-cell malignancy scores' :
+        
+
+    Returns
+    -------
+
+    """
+    from panopticon.wme import get_list_of_gene_windows, robust_mean_windowed_expressions
+    from sklearn.decomposition import PCA
+    from tqdm import tqdm
+    cnv_scores_dict = {}
+    cnv_quantiles_dict = {} 
+    for patient in tqdm(
+            np.unique(loom.ca[patient_id_key]),
+            desc='Computing per-patient, per-cell malignancy scores'):
+        mask = loom.ca['patient_ID'] == patient
+        if malignant_sort_label in loom.ca[cell_sort_key][mask]:
+            gene_windows = get_list_of_gene_windows(loom.ra['gene'])
+            single_patient_expression = loom[layername][:, mask]
+            mwe = robust_mean_windowed_expressions(
+                loom.ra['gene'],
+                gene_windows,
+                single_patient_expression,
+                upper_cut=2)
+            pca = PCA(n_components=1)
+            pca1 = pca.fit_transform(mwe.T)[:, 0]
+            mask1 = loom.ca[cell_sort_key][mask] == malignant_sort_label
+            mask2 = loom.ca[cell_sort_key][mask] != malignant_sort_label
+            #if loom.ca[cell_sort_key][mask]
+            if pca1[mask1].mean() > pca1[mask2].mean():
+                scores45neg = np.sum(
+                    np.greater.outer(pca1[mask1], pca1[mask2]),
+                    axis=1) / np.sum(mask2)
+                cnv_quantiles = (np.argsort(pca1)/np.sum(mask))
+            elif pca1[mask1].mean() < pca1[mask2].mean():
+                scores45neg = np.sum(
+                    np.less.outer(pca1[mask1], pca1[mask2]),
+                    axis=1) / np.sum(mask2)
+                cnv_quantiles = (np.argsort(pca1)/np.sum(mask))[::-1]
+            else:
+                raise Exception(
+                    "Unlikely event that CNV same for 45+/- has occurred")
+    
+        else:
+            scores45neg = []
+            cnv_quantiles = [np.nan]*np.sum(mask)
+        counter45neg = 0
+        for i, (cell_name, cell_sort) in enumerate(zip(loom.ca[cell_name_key][mask],
+                                        loom.ca[cell_sort_key][mask])):
+            cnv_quantiles_dict[cell_name] = cnv_quantiles[i]
+            if cell_sort == malignant_sort_label:
+                cnv_scores_dict[cell_name] = scores45neg[counter45neg]
+                counter45neg += 1
+            else:
+                cnv_scores_dict[cell_name] = 0
+        if counter45neg != len(scores45neg):
+            raise Exception("Some 45- cells unaccounted for")
+    loom.ca['MalignantCNVScore'] = [cnv_scores_dict[x] for x in loom.ca[cell_name_key]]
+    loom.ca['MalignantCNVQuantile'] = [cnv_quantiles_dict[x] for x in loom.ca[cell_name_key]]
