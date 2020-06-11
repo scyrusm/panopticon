@@ -863,6 +863,8 @@ def cluster_differential_expression(loom,
                 ident2 = [ident2]
             mask2 = np.isin(loom.ca[cluster_level], ident2)
         print("Comparison of", ident1, "against", ident2)
+    if (np.sum(mask1) == 0) or (np.sum(mask2) == 0):
+        return np.nan
     if ident1_downsample_size:
         p = np.min([ident1_downsample_size, np.sum(mask1)]) / np.sum(mask1)
         mask1 *= np.random.choice([True, False],
@@ -1663,22 +1665,27 @@ def get_dictionary_of_cluster_means(loom, layername, clustering_level):
     return mean_dict
 
 
-def get_differential_expression_dict(loom, output=None):
+def get_differential_expression_dict(loom,
+                                     layername,
+                                     output=None,
+                                     downsample_size=500):
     from panopticon.utilities import cluster_differential_expression
     from panopticon.utilities import we_can_pickle_it
     diffex = {}
     for i in range(5):
-        for cluster in np.unique(bm.ca['ClusteringIteration{}'.format(i)]):
+        for cluster in np.unique(loom.ca['ClusteringIteration{}'.format(i)]):
             print(cluster)
             diffex[cluster] = cluster_differential_expression(
-                bm,
-                'ClusteringIteration3',
-                'log2(TP100k+1)',
+                loom,
+                'ClusteringIteration{}'.format(i),
+                layername,
                 ident1=cluster,
-                ident1_downsample_size=500,
-                ident2_downsample_size=500).query('MeanExpr1 >MeanExpr2').head(
-                    500)
-            print(diffex[cluster].head(20))
+                ident1_downsample_size=downsample_size,
+                ident2_downsample_size=downsample_size)
+            if type(diffex[cluster]) != float:
+                diffex[cluster] = diffex[cluster].query(
+                    'MeanExpr1 >MeanExpr2').head(500)
+                print(diffex[cluster].head(20))
             print('')
     if output is not None:
         we_can_pickle_it(diffex, output)
