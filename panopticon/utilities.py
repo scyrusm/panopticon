@@ -460,7 +460,7 @@ def generate_embedding(loom,
                        metric='correlation',
                        random_state=None,
                        components_to_use=None,
-                       mode='nmf'):
+                       mode='pca'):
     """
 
     Parameters
@@ -542,12 +542,74 @@ def generate_embedding(loom,
     loom.ca['{} UMAP embedding 2'.format(mode.upper())] = embedding[:, 1]
 
 
+def get_subclustering(X,
+                      score_threshold,
+                      max_clusters=50,
+                      min_input_size=10,
+                      silhouette_threshold=0.1):
+    """
+
+    Parameters
+    ----------
+    embedding :
+        
+    score_threshold :
+        
+    max_clusters :
+        (Default value = 10)
+    X :
+        
+    min_input_size :
+        (Default value = 5)
+
+    Returns
+    -------
+
+    
+    """
+    from sklearn.metrics import silhouette_score
+    from sklearn.cluster import AgglomerativeClustering
+    from tqdm import tqdm
+
+    if X.shape[0] < min_input_size:
+        return np.array([0] * X.shape[0])
+    else:
+        clustering = AgglomerativeClustering(
+            n_clusters=2,
+            memory='clusteringcachedir/',
+            affinity='cosine',
+            compute_full_tree=True,
+            linkage='average')
+        scores = []
+        minnk = 2
+        for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1)):
+            clustering.set_params(n_clusters=nk)
+            clustering.fit(X)
+
+            score = silhouette_score(
+                X,
+                clustering.labels_,
+                metric='cosine',
+                sample_size=np.min([5000, X.shape[0]]))
+            scores.append(score)
+            #break
+        print(np.array(scores))
+        if np.max(scores) >= score_threshold:
+            print("Number of clusters:", np.argmax(scores) + minnk)
+            clustering.set_params(n_clusters=np.argmax(scores) + minnk)
+            clustering.fit(X)
+            return clustering.labels_
+        else:
+            return np.array([0] * X.shape[0])
+
+
 def generate_clustering(loom,
                         layername,
                         clustering_depth=3,
                         starting_clustering_depth=0,
-                        max_clusters=200,
-                        mode='pca'):
+                        max_clusters='sqrt_rule',
+                        mode='pca',
+                        silhouette_threshold=0.1):
     """
 
     Parameters
@@ -582,71 +644,15 @@ def generate_clustering(loom,
         )
     if mode not in ['pca', 'nmf']:
         raise Exception("Currently only implemented for modes:  pca and nmf")
-    from sklearn.metrics import silhouette_score
-    from sklearn.cluster import AgglomerativeClustering
+    from time import time
+    from sklearn.decomposition import IncrementalPCA
     from sklearn.preprocessing import StandardScaler
+    from tqdm import tqdm
+    from panopticon.utilities import get_subclustering
     if mode == 'pca':
         from sklearn.decomposition import PCA
     elif mode == 'nmf':
         from sklearn.decomposition import NMF
-
-    from tqdm import tqdm
-
-    def get_subclustering(X,
-                          score_threshold,
-                          max_clusters=50,
-                          min_input_size=5):
-        """
-
-        Parameters
-        ----------
-        embedding :
-            
-        score_threshold :
-            
-        max_clusters :
-            (Default value = 10)
-        X :
-            
-        min_input_size :
-            (Default value = 5)
-
-        Returns
-        -------
-
-        
-        """
-        if X.shape[0] < min_input_size:
-            return np.array([0] * X.shape[0])
-        else:
-            clustering = AgglomerativeClustering(
-                n_clusters=2,
-                memory='clusteringcachedir/',
-                affinity='cosine',
-                compute_full_tree=True,
-                linkage='average')
-            scores = []
-            minnk = 2
-            for nk in tqdm(
-                    range(minnk, np.min([max_clusters, X.shape[0]]), 1)):
-                clustering.set_params(n_clusters=nk)
-                clustering.fit(X)
-
-                score = silhouette_score(
-                    X,
-                    clustering.labels_,
-                    metric='cosine',
-                    sample_size=np.min([5000, X.shape[0]]))
-                scores.append(score)
-                #break
-            print(np.array(scores))
-            if np.max(scores) >= score_threshold:
-                print("Number of clusters:", np.argmax(scores) + minnk)
-                clustering.set_params(n_clusters=np.argmax(scores) + minnk)
-                clustering.fit(X)
-                return clustering.labels_
-            else:
-                return np.array([0] * X.shape[0])
 
     if starting_clustering_depth == 0:
         if mode == 'nmf':
@@ -659,29 +665,43 @@ def generate_clustering(loom,
                 nmf_loadings.append(loom.ca[col])
             X = np.vstack(nmf_loadings).T
         elif mode == 'pca':
-            if layername.endswith('_standardized'):
-                raise Exception(
-                    "Standardization automatically performed, use non-standardized layer (e.g. log(TPM+1)"
-                )
-            if layername + '_standardized' not in loom.layers.keys():
-                raise Exception(
-                    "Must pre-compute PCA on standardized version of desired layer"
-                )
-            n_pca_cols = loom.attrs[
-                'NumberPrincipalComponents_{}_standardized'.format(layername)]
+            #            if layername.endswith('_standardized'):
+            #                raise Exception(
+            #                    "Standardization automatically performed, use non-standardized layer (e.g. log(TPM+1)"
+            #                )
+            #            if layername + '_standardized' not in loom.layers.keys():
+            #                raise Exception(
+            #                    "Must pre-compute PCA on standardized version of desired layer"
+            #                )
+            #            n_pca_cols = loom.attrs[
+            #                'NumberPrincipalComponents_{}_standardized'.format(layername)]
+            n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(
+                layername)]
             pca_loadings = []
+            #            for col in [
+            #                    '{} PC {} Loading'.format(layername + '_standardized', x)
+            #                    for x in range(1, n_pca_cols + 1)
+            #            ]:
             for col in [
-                    '{} PC {} Loading'.format(layername + '_standardized', x)
+                    '{} PC {} Loading'.format(layername, x)
                     for x in range(1, n_pca_cols + 1)
             ]:
                 pca_loadings.append(loom.ca[col])
             X = np.vstack(pca_loadings).T
-        clustering = get_subclustering(X, 0.2, max_clusters=max_clusters)
+        if max_clusters == 'sqrt_rule':
+            clustering = get_subclustering(
+                X,
+                silhouette_threshold,
+                max_clusters=int(np.floor(np.sqrt(X.shape[0])))
+            )  # This shouldn't be hard-coded S Markson 9 June 2020
+        else:
+            clustering = get_subclustering(
+                X, silhouette_threshold, max_clusters=max_clusters
+            )  # This shouldn't be hard-coded S Markson 9 June 2020
 
         loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
 
-    from time import time
     for subi in range(starting_clustering_depth, clustering_depth):
 
         loom.ca['ClusteringIteration{}'.format(subi)] = ['U'] * len(
@@ -697,7 +717,7 @@ def generate_clustering(loom,
             #break
             start = time()
             data_c = loom[layername][:, mask]
-            print("time to load: ",
+            print("processing cluster", cluster, "; time to load: ",
                   time() - start, ", mask size: ", np.sum(mask))
             if mode == 'nmf':
                 model = NMF(
@@ -706,16 +726,44 @@ def generate_clustering(loom,
                     random_state=0)
                 X = model.fit_transform(data_c.T)
             elif mode == 'pca':
-                model = PCA(
-                    n_components=np.min([50, data_c.shape[1]]), random_state=0)
 
-                #            StandardScaler().fit_transform(loom['log(TPM+1)'][:,:].T, )
+                #                data_c = StandardScaler().fit_transform(
+                #                    data_c.T
+                #                )  # This transposition is confusing.  S Markson 7 June 2020
+                data_c = data_c.T
+                if data_c.shape[0] > 5000:
+                    model = IncrementalPCA(n_components=10)
+                    for chunk in tqdm(
+                            np.array_split(
+                                data_c, data_c.shape[0] // 512, axis=0),
+                            desc='partial fitting over chunks of masked data'):
+                        model.partial_fit(chunk)
+                    X = model.transform(data_c)
+                    print("EV", model.explained_variance_)
+                    print("EVR", model.explained_variance_ratio_)
+                else:
+                    model = PCA(
+                        n_components=np.min([10, data_c.shape[0]]),
+                        random_state=0)
 
-                #                from IPython.core.debugger import set_trace; set_trace()
-                data_c = StandardScaler().fit_transform(data_c.T)
-                X = model.fit_transform(data_c)
+                    X = model.fit_transform(data_c)
+                    print("EV", model.explained_variance_)
+                    print("EVR", model.explained_variance_ratio_)
 
-            nopath_clustering = get_subclustering(X, score_threshold=0.2)
+            if max_clusters == 'sqrt_rule':
+                print("xshape", X.shape)
+                nopath_clustering = get_subclustering(
+                    X,
+                    silhouette_threshold,
+                    max_clusters=int(np.floor(np.sqrt(X.shape[0])))
+                )  # This shouldn't be hard-coded S Markson 9 June 2020
+            else:
+                nopath_clustering = get_subclustering(
+                    X, silhouette_threshold, max_clusters=max_clusters
+                )  # This shouldn't be hard-coded S Markson 9 June 2020
+
+
+#            nopath_clustering = get_subclustering(X, score_threshold=silhouette_threshold)  #Really shouldn't be hard-coded S Markson 9 June 2020
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
             ]
@@ -724,7 +772,6 @@ def generate_clustering(loom,
         loom.ca['ClusteringIteration{}'.format(subi)] = loom.ca[
             'ClusteringIteration{}'.format(
                 subi)]  #This is to force the changes to save to disk
-
 
 import numpy as np
 from tqdm import tqdm
@@ -842,7 +889,7 @@ def cluster_differential_expression(loom,
     for igene, gene in enumerate(
             tqdm(loom.ra['gene'], desc='Computing Mann-Whitney p-values')):
         genes.append(gene)
-        if np.sum(data1[igene, :]) + np.sum(data2[igene, :]) == 0:
+        if np.std(data1[igene, :]) + np.std(data2[igene, :]) < 1e-14:
             pvalues.append(1)
         else:
             pvalues.append(
@@ -1432,7 +1479,7 @@ def get_patient_averaged_table(loom,
     return filtered
 
 
-def generate_standardized_layer(loom, layername):
+def generate_standardized_layer(loom, layername, variance_axis='cell'):
     """
 
     Parameters
@@ -1451,9 +1498,18 @@ def generate_standardized_layer(loom, layername):
         raise Exception(
             "It appears that layer is already standardized; note that _standardized suffix is reserved"
         )
+    if variance_axis not in ['gene', 'cell']:
+        raise Exception(
+            "Can only set variance to be 1 along cell axis or gene axis")
     from sklearn.preprocessing import StandardScaler
-    loom[layername + '_standardized'] = StandardScaler().fit_transform(
-        loom[layername][:, :].T).T
+    if variance_axis == 'gene':
+        loom[layername +
+             '_gene_standardized'] = StandardScaler().fit_transform(
+                 loom[layername][:, :].T).T
+    elif variance_axis == 'cell':
+        loom[layername +
+             '_cell_standardized'] = StandardScaler().fit_transform(
+                 loom[layername][:, :])
 
 
 def generate_count_normalization(loom,
@@ -1484,7 +1540,13 @@ def generate_count_normalization(loom,
         1 / np.log(2))
     loom[output_layername] = sparselayer
 
-def generate_malignancy_score(loom, layername, cell_sort_key='CellSort', patient_id_key='patient_ID', malignant_sort_label='45neg', cell_name_key='cellname'):
+
+def generate_malignancy_score(loom,
+                              layername,
+                              cell_sort_key='CellSort',
+                              patient_id_key='patient_ID',
+                              malignant_sort_label='45neg',
+                              cell_name_key='cellname'):
     """
 
     For calculating malignancy scores for cells based on inferred CNV.  This subroutine isn't terribly future proof.  S Markson 6 June 2020.  
@@ -1518,7 +1580,7 @@ def generate_malignancy_score(loom, layername, cell_sort_key='CellSort', patient
     from sklearn.decomposition import PCA
     from tqdm import tqdm
     cnv_scores_dict = {}
-    cnv_quantiles_dict = {} 
+    cnv_quantiles_dict = {}
     for patient in tqdm(
             np.unique(loom.ca[patient_id_key]),
             desc='Computing per-patient, per-cell malignancy scores'):
@@ -1540,22 +1602,23 @@ def generate_malignancy_score(loom, layername, cell_sort_key='CellSort', patient
                 scores45neg = np.sum(
                     np.greater.outer(pca1[mask1], pca1[mask2]),
                     axis=1) / np.sum(mask2)
-                cnv_quantiles = (np.argsort(pca1)/np.sum(mask))
+                cnv_quantiles = (np.argsort(pca1) / np.sum(mask))
             elif pca1[mask1].mean() < pca1[mask2].mean():
                 scores45neg = np.sum(
                     np.less.outer(pca1[mask1], pca1[mask2]),
                     axis=1) / np.sum(mask2)
-                cnv_quantiles = (np.argsort(pca1)/np.sum(mask))[::-1]
+                cnv_quantiles = (np.argsort(pca1) / np.sum(mask))[::-1]
             else:
                 raise Exception(
                     "Unlikely event that CNV same for 45+/- has occurred")
-    
+
         else:
             scores45neg = []
-            cnv_quantiles = [np.nan]*np.sum(mask)
+            cnv_quantiles = [np.nan] * np.sum(mask)
         counter45neg = 0
-        for i, (cell_name, cell_sort) in enumerate(zip(loom.ca[cell_name_key][mask],
-                                        loom.ca[cell_sort_key][mask])):
+        for i, (cell_name, cell_sort) in enumerate(
+                zip(loom.ca[cell_name_key][mask],
+                    loom.ca[cell_sort_key][mask])):
             cnv_quantiles_dict[cell_name] = cnv_quantiles[i]
             if cell_sort == malignant_sort_label:
                 cnv_scores_dict[cell_name] = scores45neg[counter45neg]
@@ -1564,5 +1627,59 @@ def generate_malignancy_score(loom, layername, cell_sort_key='CellSort', patient
                 cnv_scores_dict[cell_name] = 0
         if counter45neg != len(scores45neg):
             raise Exception("Some 45- cells unaccounted for")
-    loom.ca['MalignantCNVScore'] = [cnv_scores_dict[x] for x in loom.ca[cell_name_key]]
-    loom.ca['MalignantCNVQuantile'] = [cnv_quantiles_dict[x] for x in loom.ca[cell_name_key]]
+    loom.ca['MalignantCNVScore'] = [
+        cnv_scores_dict[x] for x in loom.ca[cell_name_key]
+    ]
+    loom.ca['MalignantCNVQuantile'] = [
+        cnv_quantiles_dict[x] for x in loom.ca[cell_name_key]
+    ]
+
+
+def get_cosine_self_similarity(loom, layername, cluster, self_mean=None):
+    from sklearn.metrics.pairwise import cosine_similarity
+    clustering_level = len(str(cluster).split('-')) - 1
+    mask = loom.ca['ClusteringIteration{}'.format(clustering_level)] == cluster
+    if mask.sum() == 0:
+        raise Exception("Mask is empty")
+    if self_mean is None:
+        self_mean = loom[layername][:, mask].mean(axis=1)
+    return cosine_similarity(
+        loom[layername][:, mask].T, Y=np.array([self_mean]))
+
+
+def get_dictionary_of_cluster_means(loom, layername, clustering_level):
+    from tqdm import tqdm
+    mean_dict = {}
+    for cluster in tqdm(
+            np.unique(loom.ca[clustering_level]),
+            desc='looping over clusters'):
+        mask = loom.ca[clustering_level] == cluster
+        if mask.sum() < 5000:
+            mean_dict[cluster] = loom[layername][:, mask].mean(axis=1)
+        else:
+            mean_dict[cluster] = loom[layername].map([np.mean],
+                                                     selection=mask)[0]
+
+    return mean_dict
+
+
+def get_differential_expression_dict(loom, output=None):
+    from panopticon.utilities import cluster_differential_expression
+    from panopticon.utilities import we_can_pickle_it
+    diffex = {}
+    for i in range(5):
+        for cluster in np.unique(bm.ca['ClusteringIteration{}'.format(i)]):
+            print(cluster)
+            diffex[cluster] = cluster_differential_expression(
+                bm,
+                'ClusteringIteration3',
+                'log2(TP100k+1)',
+                ident1=cluster,
+                ident1_downsample_size=500,
+                ident2_downsample_size=500).query('MeanExpr1 >MeanExpr2').head(
+                    500)
+            print(diffex[cluster].head(20))
+            print('')
+    if output is not None:
+        we_can_pickle_it(diffex, output)
+    return diffex
