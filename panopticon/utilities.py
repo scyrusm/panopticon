@@ -39,7 +39,7 @@ def get_valid_gene_info(
 
     
     """
-    assembly = EnsemblRelease(75)
+    assembly = EnsemblRelease(93)
     gene_names = []
     gene_contigs = []
     gene_starts = []
@@ -47,7 +47,7 @@ def get_valid_gene_info(
     for gene in np.intersect1d(genes, [
             gene.gene_name
             for gene in assembly.genes() if gene.contig in valid_chromosomes
-    ]):  # Toss genes not in hg19
+    ]):  # Toss genes not in hg38 release 93
         gene_info = assembly.genes_by_name(gene)
         gene_info = gene_info[0]
         gene_names.append(gene)
@@ -60,7 +60,7 @@ def get_valid_gene_info(
 def get_module_score_loom(loom,
                           signature_name,
                           querymask=None,
-                          nbins=100,
+                          nbins=10,
                           ncontrol=5):
     """Calculates a module score over a loom file.  This routine is deprecated--use generate masked module score (S Markson 3 June 2020).
 
@@ -88,8 +88,10 @@ def get_module_score_loom(loom,
     nonsigdata = alldata[loom.ra[signature_name] == 0]
     sigdata = alldata[loom.ra[signature_name] == 1]
 
-    gene_quantiles = pd.qcut(
-        alldata.mean(axis=1), nbins, duplicates='drop', labels=False)
+    gene_quantiles = pd.qcut(alldata.mean(axis=1),
+                             nbins,
+                             duplicates='drop',
+                             labels=False)
     sigdata_quantiles = gene_quantiles[loom.ra[signature_name] == 1]
     nonsigdata_quantiles = gene_quantiles[loom.ra[signature_name] == 0]
     signature = sigdata.mean(axis=0)
@@ -98,17 +100,16 @@ def get_module_score_loom(loom,
         noccurrences = np.sum(sigdata_quantiles == quantile)
         # there's an edge case wherein if size is greater than the number of genes to be taken without replacement, this will generate an error.  Will be an issue in the few-gene regime
         control_group += list(
-            np.random.choice(
-                np.where(nonsigdata_quantiles == quantile)[0],
-                size=ncontrol * noccurrences,
-                replace=False))
+            np.random.choice(np.where(nonsigdata_quantiles == quantile)[0],
+                             size=ncontrol * noccurrences,
+                             replace=False))
 
     control_group = np.array(control_group)
     control = nonsigdata[control_group].mean(axis=0)
     return signature - control
 
 
-def get_module_score_matrix(alldata, signature_mask, nbins=100, ncontrol=5):
+def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
     """generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).
 
     Parameters
@@ -131,8 +132,10 @@ def get_module_score_matrix(alldata, signature_mask, nbins=100, ncontrol=5):
     nonsigdata = alldata[~signature_mask, :]
     sigdata = alldata[signature_mask, :]
 
-    gene_quantiles = pd.qcut(
-        alldata.mean(axis=1), nbins, duplicates='drop', labels=False)
+    gene_quantiles = pd.qcut(alldata.mean(axis=1),
+                             nbins,
+                             duplicates='drop',
+                             labels=False)
     sigdata_quantiles = gene_quantiles[signature_mask]
     nonsigdata_quantiles = gene_quantiles[~signature_mask]
     signature = sigdata.mean(axis=0)
@@ -141,10 +144,9 @@ def get_module_score_matrix(alldata, signature_mask, nbins=100, ncontrol=5):
         noccurrences = np.sum(sigdata_quantiles == quantile)
         # there's an edge case wherein if size is greater than the number of genes to be taken without replacement, this will generate an error.  Will be an issue in the few-gene regime
         control_group += list(
-            np.random.choice(
-                np.where(nonsigdata_quantiles == quantile)[0],
-                size=ncontrol * noccurrences,
-                replace=False))
+            np.random.choice(np.where(nonsigdata_quantiles == quantile)[0],
+                             size=ncontrol * noccurrences,
+                             replace=False))
 
     control_group = np.array(control_group)
     control = nonsigdata[control_group].mean(axis=0)
@@ -169,8 +171,8 @@ def intify(df_init):
         if col.endswith('_ad'):
             raise Exception(
                 "Don't append you column names with _ad! -- Samuel")
-        df[col] = df[col].apply(lambda x: int(
-            binascii.hexlify(x.encode()), 16))
+        df[col] = df[col].apply(
+            lambda x: int(binascii.hexlify(x.encode()), 16))
     while np.sum(df.max() > sys.maxsize) > 0:
         for col in df.columns:
             if df[col].max() > sys.maxsize:
@@ -203,8 +205,8 @@ def deintify(df_init):
                 df.drop(col, axis=1, inplace=True)
 
     for col in df.columns:
-        df[col] = df[col].apply(lambda x: binascii.unhexlify(
-            hex(x)[2::].encode()).decode())
+        df[col] = df[col].apply(
+            lambda x: binascii.unhexlify(hex(x)[2::].encode()).decode())
     return df
 
 
@@ -257,8 +259,8 @@ def seurat_to_loom(seuratrds, patient_id_column, celltype_column,
         metadata['complexity'] = metadata[complexity_column]
         metadata.drop(complexity_column, inplace=True)
     data_df = pandas2ri.rpy2py_dataframe(seurat_grab.rx2('data'))
-    sparsedata = sparse.coo_matrix((data_df['x'], (data_df['i'] - 1,
-                                                   data_df['j'] - 1))).tocsc()
+    sparsedata = sparse.coo_matrix(
+        (data_df['x'], (data_df['i'] - 1, data_df['j'] - 1))).tocsc()
     sparsedata.resize((genes.shape[0], metadata.shape[0]))
 
     loompy.create(loomfile, sparsedata, genes.to_dict("list"),
@@ -283,8 +285,8 @@ def intify(df_init):
         if col.endswith('_ad'):
             raise Exception(
                 "Don't append you column names with _ad! -- Samuel")
-        df[col] = df[col].apply(lambda x: int(
-            binascii.hexlify(x.encode()), 16))
+        df[col] = df[col].apply(
+            lambda x: int(binascii.hexlify(x.encode()), 16))
     while np.sum(df.max() > sys.maxsize) > 0:
         for col in df.columns:
             if df[col].max() > sys.maxsize:
@@ -318,11 +320,11 @@ def deintify(df_init):
 
     for col in df.columns:
         try:
-            df[col] = df[col].apply(lambda x: binascii.unhexlify(
-                hex(x)[2::].encode()).decode())
+            df[col] = df[col].apply(
+                lambda x: binascii.unhexlify(hex(x)[2::].encode()).decode())
         except:
-            print(df[col].apply(lambda x: binascii.unhexlify(
-                hex(x)[2::].encode()).decode()))
+            print(df[col].apply(
+                lambda x: binascii.unhexlify(hex(x)[2::].encode()).decode()))
             raise Exception("whoops")
     return df
 
@@ -363,7 +365,11 @@ def recover_meta(db, do_deint=False):
     return rowmeta, colmeta
 
 
-def generate_incremental_pca(loom, layername, batch_size=512, n_components=50):
+def generate_incremental_pca(loom,
+                             layername,
+                             batch_size=512,
+                             n_components=50,
+                             min_size_for_incrementalization=5000):
     """
 
     Parameters
@@ -384,18 +390,27 @@ def generate_incremental_pca(loom, layername, batch_size=512, n_components=50):
     """
 
     from tqdm import tqdm
-    from sklearn.decomposition import IncrementalPCA
-    pca = IncrementalPCA(n_components=n_components)
-    for (ix, selection, view) in tqdm(
-            loom.scan(axis=1, batch_size=batch_size),
-            total=loom.shape[1] // batch_size):
-        #pca.partial_fit(view[:, :].transpose())
-        pca.partial_fit(view[layername][:, :].T)
+    from sklearn.decomposition import IncrementalPCA, PCA
+    from panopticon.utilities import generate_pca_loadings
+    if loom.shape[1] < min_size_for_incrementalization:
+        print(
+            "Loom size below threshold for incremental PCA; running conventional PCA"
+        )
+        pca = PCA(n_components=n_components)
+        pca.fit(loom[layername][:, :].T)
+    else:
+        pca = IncrementalPCA(n_components=n_components)
+        for (ix, selection, view) in tqdm(loom.scan(axis=1,
+                                                    batch_size=batch_size),
+                                          total=loom.shape[1] // batch_size):
+            #pca.partial_fit(view[:, :].transpose())
+            pca.partial_fit(view[layername][:, :].T)
     for i in range(50):
         loom.ra['{} PC {}'.format(layername, i + 1)] = pca.components_[i]
     loom.attrs['NumberPrincipalComponents_{}'.format(layername)] = n_components
     loom.attrs['PCAExplainedVarianceRatio_{}'.format(
         layername)] = pca.explained_variance_ratio_
+    generate_pca_loadings(loom, layername)
 
 
 def generate_pca_loadings(loom, layername, dosparse=False, batch_size=512):
@@ -442,14 +457,14 @@ def generate_pca_loadings(loom, layername, dosparse=False, batch_size=512):
         compresseddata = (sparsedata.transpose() @ cellpca)
     else:
         compresseddatalist = []
-        for (ix, selection, view) in tqdm(
-                loom.scan(axis=1, batch_size=batch_size),
-                total=loom.shape[1] // batch_size):
+        for (ix, selection, view) in tqdm(loom.scan(axis=1,
+                                                    batch_size=batch_size),
+                                          total=loom.shape[1] // batch_size):
             compresseddatalist.append(view[layername][:, :].T @ cellpca)
     compresseddata = np.vstack(compresseddatalist)
     for iloading in range(compresseddata.shape[1]):
-        loom.ca['{} PC {} Loading'.format(
-            layername, iloading + 1)] = compresseddata[:, iloading]
+        loom.ca['{} PC {} Loading'.format(layername, iloading +
+                                          1)] = compresseddata[:, iloading]
 
 
 def generate_embedding(loom,
@@ -530,13 +545,12 @@ def generate_embedding(loom,
                 nmf_loadings.append(loom.ca[col])
         print(len(nmf_loadings))
         compressed = np.vstack(nmf_loadings).T
-    reducer = umap.UMAP(
-        random_state=None,
-        min_dist=min_dist,
-        n_neighbors=n_neighbors,
-        metric=metric,
-        verbose=True,
-        n_epochs=n_epochs)
+    reducer = umap.UMAP(random_state=None,
+                        min_dist=min_dist,
+                        n_neighbors=n_neighbors,
+                        metric=metric,
+                        verbose=True,
+                        n_epochs=n_epochs)
     embedding = reducer.fit_transform(compressed)
     loom.ca['{} UMAP embedding 1'.format(mode.upper())] = embedding[:, 0]
     loom.ca['{} UMAP embedding 2'.format(mode.upper())] = embedding[:, 1]
@@ -546,7 +560,8 @@ def get_subclustering(X,
                       score_threshold,
                       max_clusters=50,
                       min_input_size=10,
-                      silhouette_threshold=0.1):
+                      silhouette_threshold=0.2,
+                      regularization_factor=0.01):
     """
 
     Parameters
@@ -574,26 +589,28 @@ def get_subclustering(X,
     if X.shape[0] < min_input_size:
         return np.array([0] * X.shape[0])
     else:
-        clustering = AgglomerativeClustering(
-            n_clusters=2,
-            memory='clusteringcachedir/',
-            affinity='cosine',
-            compute_full_tree=True,
-            linkage='average')
+        clustering = AgglomerativeClustering(n_clusters=2,
+                                             memory='clusteringcachedir/',
+                                             affinity='cosine',
+                                             compute_full_tree=True,
+                                             linkage='average')
         scores = []
         minnk = 2
         for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1)):
             clustering.set_params(n_clusters=nk)
             clustering.fit(X)
 
-            score = silhouette_score(
-                X,
-                clustering.labels_,
-                metric='cosine',
-                sample_size=np.min([5000, X.shape[0]]))
+            score = silhouette_score(X,
+                                     clustering.labels_,
+                                     metric='cosine',
+                                     sample_size=None)
+            # sample_size=np.min([5000, X.shape[0]]))
             scores.append(score)
             #break
-        print(np.array(scores))
+        print("scores", np.array(scores))
+        print("ignoring regularization factor")
+        #        scores = scores - np.arange(len(scores))*regularization_factor
+        #        print("corrected scores",np.array(scores))
         if np.max(scores) >= score_threshold:
             print("Number of clusters:", np.argmax(scores) + minnk)
             clustering.set_params(n_clusters=np.argmax(scores) + minnk)
@@ -637,8 +654,9 @@ def generate_clustering(loom,
         raise Exception(
             "clustering_depth and starting_clustering_depth must be natural numbers."
         )
-    if (starting_clustering_depth > 0) and ('ClusteringIteration{}'.format(
-            starting_clustering_depth - 1) not in loom.ca.keys()):
+    if (starting_clustering_depth > 0) and (
+            'ClusteringIteration{}'.format(starting_clustering_depth - 1)
+            not in loom.ca.keys()):
         raise Exception(
             "starting_clustering_depth not yet computed; please run with lower starting_clustering depth, or 0"
         )
@@ -720,10 +738,9 @@ def generate_clustering(loom,
             print("processing cluster", cluster, "; time to load: ",
                   time() - start, ", mask size: ", np.sum(mask))
             if mode == 'nmf':
-                model = NMF(
-                    n_components=np.min([50, data_c.shape[1]]),
-                    init='random',
-                    random_state=0)
+                model = NMF(n_components=np.min([50, data_c.shape[1]]),
+                            init='random',
+                            random_state=0)
                 X = model.fit_transform(data_c.T)
             elif mode == 'pca':
 
@@ -734,17 +751,17 @@ def generate_clustering(loom,
                 if data_c.shape[0] > 5000:
                     model = IncrementalPCA(n_components=10)
                     for chunk in tqdm(
-                            np.array_split(
-                                data_c, data_c.shape[0] // 512, axis=0),
+                            np.array_split(data_c,
+                                           data_c.shape[0] // 512,
+                                           axis=0),
                             desc='partial fitting over chunks of masked data'):
                         model.partial_fit(chunk)
                     X = model.transform(data_c)
                     print("EV", model.explained_variance_)
                     print("EVR", model.explained_variance_ratio_)
                 else:
-                    model = PCA(
-                        n_components=np.min([10, data_c.shape[0]]),
-                        random_state=0)
+                    model = PCA(n_components=np.min([10, data_c.shape[0]]),
+                                random_state=0)
 
                     X = model.fit_transform(data_c)
                     print("EV", model.explained_variance_)
@@ -777,6 +794,55 @@ import numpy as np
 from tqdm import tqdm
 
 
+def get_masked_clustering(loom, layername, mask, silhouette_threshold=0.1):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    clustering_depth :
+        (Default value = 3)
+    starting_clustering_depth :
+        (Default value = 0)
+    max_clusters :
+        (Default value = 200)
+    layername :
+        
+    mode :
+        (Default value = 'pca')
+
+    Returns
+    -------
+
+    
+    """
+    from time import time
+    from sklearn.decomposition import IncrementalPCA
+    from sklearn.preprocessing import StandardScaler
+    from tqdm import tqdm
+    from panopticon.utilities import get_subclustering
+
+    start = time()
+    data_c = loom[layername][:, mask]
+    print("processing cluster", cluster, "; time to load: ",
+          time() - start, ", mask size: ", np.sum(mask))
+    data_c = data_c.T  # gross, S. Markson 29 June 2020
+    model = PCA(n_components=np.min([10, data_c.shape[0]]), random_state=0)
+
+    X = model.fit_transform(data_c)
+    print("EV", model.explained_variance_)
+    print("EVR", model.explained_variance_ratio_)
+
+    nopath_clustering = get_subclustering(
+        X, silhouette_threshold, max_clusters=max_clusters
+    )  # This shouldn't be hard-coded S Markson 9 June 2020
+
+    nopath_clustering = get_subclustering(
+        X, score_threshold=silhouette_threshold
+    )  #Really shouldn't be hard-coded S Markson 9 June 2020
+
+
 def cluster_differential_expression(loom,
                                     cluster_level,
                                     layername,
@@ -786,7 +852,8 @@ def cluster_differential_expression(loom,
                                     mask2=None,
                                     verbose=False,
                                     ident1_downsample_size=None,
-                                    ident2_downsample_size=None):
+                                    ident2_downsample_size=None,
+                                    min_cluster_size=0):
     """
 
     Parameters
@@ -863,7 +930,8 @@ def cluster_differential_expression(loom,
                 ident2 = [ident2]
             mask2 = np.isin(loom.ca[cluster_level], ident2)
         print("Comparison of", ident1, "against", ident2)
-    if (np.sum(mask1) == 0) or (np.sum(mask2) == 0):
+    if (np.sum(mask1) < min_cluster_size) or (np.sum(mask2) <
+                                              min_cluster_size):
         return np.nan
     if ident1_downsample_size:
         p = np.min([ident1_downsample_size, np.sum(mask1)]) / np.sum(mask1)
@@ -880,6 +948,8 @@ def cluster_differential_expression(loom,
     genes = []
     meanexpr1 = []
     meanexpr2 = []
+    fracexpr1 = []
+    fracexpr2 = []
     start = time()
     data1 = loom[layername][:, mask1]
     if verbose:
@@ -898,11 +968,15 @@ def cluster_differential_expression(loom,
                 mannwhitneyu(data1[igene, :], data2[igene, :]).pvalue)
         meanexpr1.append(data1[igene, :].mean())
         meanexpr2.append(data2[igene, :].mean())
+        fracexpr1.append((data1[igene, :] > 0).mean())
+        fracexpr2.append((data2[igene, :] > 0).mean())
     output = pd.DataFrame(genes)
     output.columns = ['gene']
     output['pvalue'] = pvalues
     output['MeanExpr1'] = meanexpr1
     output['MeanExpr2'] = meanexpr2
+    output['FracExpr1'] = fracexpr1
+    output['FracExpr2'] = fracexpr2
     return output.sort_values('pvalue', ascending=True)
 
 
@@ -979,11 +1053,9 @@ def we_can_unpickle_it(thingname: str):
     
     """
     import pickle
-    with open('diffex_level1.pkl', 'rb') as f:
+    with open(thingname, 'rb') as f:
         thing = pickle.load(f)
     return thing
-    with open(thingname, 'wb') as f:
-        pickle.dump(thing, f, pickle.HIGHEST_PROTOCOL)
 
 
 def get_gsea_with_selenium(diffi):
@@ -1062,7 +1134,9 @@ def get_cluster_embedding(loom,
                           min_dist=0.01,
                           n_neighbors=None,
                           verbose=False,
-                          mask=None):
+                          mask=None,
+                          genemask=None,
+                          n_components_pca=50):
     """
 
     Parameters
@@ -1098,18 +1172,20 @@ def get_cluster_embedding(loom,
         print("Clustering over custom mask--ignoring cluster argument")
     if n_neighbors is None:
         n_neighbors = int(np.sqrt(np.sum(mask)))
-    data = loom[layername][:, mask]
+    if genemask is None:
+        data = loom[layername][:, mask]
+    else:
+        data = loom[layername][genemask, :][:, mask]
 
-    pca = PCA(n_components=np.min([50, data.shape[1]]))
+    pca = PCA(n_components=np.min([n_components_pca, data.shape[1]]))
     pca.fit(data[:, :].transpose())
 
     cellpca = (data.T @ pca.components_.T)
-    reducer = umap.UMAP(
-        random_state=17,
-        verbose=verbose,
-        min_dist=min_dist,
-        n_neighbors=n_neighbors,
-        metric='correlation')
+    reducer = umap.UMAP(random_state=17,
+                        verbose=verbose,
+                        min_dist=min_dist,
+                        n_neighbors=n_neighbors,
+                        metric='correlation')
     reducer.fit(cellpca, )
     embedding = reducer.transform(cellpca)
     return embedding
@@ -1121,7 +1197,9 @@ def plot_subclusters(loom,
                      sublayers=1,
                      plot_output=None,
                      label_clusters=True,
-                     complexity_cutoff=0):
+                     complexity_cutoff=0,
+                     downsample_to=500,
+                     blacklist=[]):
     """
 
     Parameters
@@ -1130,7 +1208,7 @@ def plot_subclusters(loom,
         
     layername :
         
-    cluster :
+    cluster : Cluster, or list of clusters
         
     sublayers :
         (Default value = 1)
@@ -1148,23 +1226,41 @@ def plot_subclusters(loom,
     """
     from panopticon.utilities import get_cluster_embedding
     import matplotlib.pyplot as plt
-    current_layer = len(str(cluster).split('-')) - 1
-    if complexity_cutoff > 0:
-        print("Using complexity cutoff")
-        supermask = (loom.ca['ClusteringIteration{}'.format(current_layer)] ==
-                     cluster) & (loom.ca['nGene'] >= complexity_cutoff
-                                 )  # I kinda hate this (30 Apr 2020 smarkson)
-        embedding = get_cluster_embedding(
-            loom, layername, cluster, mask=supermask)
-    else:
-        embedding = get_cluster_embedding(loom, layername, cluster)
-        supermask = loom.ca['ClusteringIteration{}'.format(
-            current_layer)] == cluster
-    subclusters = [
-        x for x in np.unique(loom.ca['ClusteringIteration{}'.format(
-            current_layer + sublayers)])
-        if str(x).startswith(str(cluster) + '-')
-    ]
+    if type(cluster) == str or type(cluster) == int:
+        current_layer = len(str(cluster).split('-')) - 1
+        supermask = (loom.ca['ClusteringIteration{}'.format(current_layer)]
+                     == cluster) & (loom.ca['nGene'] >= complexity_cutoff)
+    elif type(cluster) == list or type(cluster) == np.ndarray:
+        current_layer_options = [len(str(x).split('-')) - 1 for x in cluster]
+        if len(np.unique(current_layer_options)) != 1:
+            raise Exception("All clusters of interest must be from same layer")
+        else:
+            current_layer = np.unique(current_layer_options)[0]
+        supermask = np.isin(
+            loom.ca['ClusteringIteration{}'.format(current_layer)],
+            cluster) & (loom.ca['nGene'] >= complexity_cutoff)
+    print(np.sum(supermask))
+    keep_probability = np.min([1, downsample_to / np.sum(supermask)])
+    supermask *= np.random.choice([False, True],
+                                  size=len(supermask),
+                                  p=[1 - keep_probability, keep_probability])
+    # I kinda hate this (30 Apr 2020 smarkson)
+    embedding = get_cluster_embedding(loom, layername, cluster, mask=supermask)
+    if type(cluster) == str or type(cluster) == int:
+        subclusters = [
+            x for x in np.unique(loom.ca['ClusteringIteration{}'.format(
+                current_layer + sublayers)])
+            if str(x).startswith(str(cluster) + '-') and (x not in blacklist)
+        ]
+    elif (type(cluster) == list) or (type(cluster) == np.ndarray):
+        subclusters = []
+        for cluster_part in cluster:
+            subclusters += [
+                x for x in np.unique(loom.ca['ClusteringIteration{}'.format(
+                    current_layer + sublayers)])
+                if str(x).startswith(str(cluster_part) +
+                                     '-') and (x not in blacklist)
+            ]
     for subcluster in subclusters:
         mask = loom.ca['ClusteringIteration{}'.format(
             current_layer + sublayers)][supermask] == subcluster
@@ -1173,11 +1269,78 @@ def plot_subclusters(loom,
             plt.annotate(
                 subcluster,
                 (np.mean(embedding[mask, 0]), np.mean(embedding[mask, 1])))
-    plt.legend()
+    plt.legend(ncol=len(subclusters) // 14 + 1, bbox_to_anchor=(1.05, 0.95))
     if plot_output is not None:
-        plt.savefig(plot_output)
+        plt.savefig(plot_output, bbox_inches='tight')
     else:
         plt.show()
+    return embedding
+
+
+def plot_cluster_umap(loom,
+                      layername,
+                      cluster,
+                      mask=None,
+                      plot_output=None,
+                      label_clusters=True,
+                      complexity_cutoff=0,
+                      downsample_to=500,
+                      blacklist=[]):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    cluster : Cluster, or list of clusters
+        
+    sublayers :
+        (Default value = 1)
+    plot_output :
+        (Default value = None)
+    label_clusters :
+        (Default value = True)
+    complexity_cutoff :
+        (Default value = 0)
+
+    Returns
+    -------
+
+    
+    """
+    from panopticon.utilities import get_cluster_embedding
+    import matplotlib.pyplot as plt
+    if mask is not None:
+        supermask = mask
+    elif type(cluster) == str or type(cluster) == int:
+        current_layer = len(str(cluster).split('-')) - 1
+        supermask = (loom.ca['ClusteringIteration{}'.format(current_layer)]
+                     == cluster) & (loom.ca['nGene'] >= complexity_cutoff)
+    elif type(cluster) == list or type(cluster) == np.ndarray:
+        current_layer_options = [len(str(x).split('-')) - 1 for x in cluster]
+        if len(np.unique(current_layer_options)) != 1:
+            raise Exception("All clusters of interest must be from same layer")
+        else:
+            current_layer = np.unique(current_layer_options)[0]
+        supermask = np.isin(
+            loom.ca['ClusteringIteration{}'.format(current_layer)],
+            cluster) & (loom.ca['nGene'] >= complexity_cutoff)
+    print(np.sum(supermask))
+    keep_probability = np.min([1, downsample_to / np.sum(supermask)])
+    supermask *= np.random.choice([False, True],
+                                  size=len(supermask),
+                                  p=[1 - keep_probability, keep_probability])
+    # I kinda hate this (30 Apr 2020 smarkson)
+    embedding = get_cluster_embedding(loom, layername, cluster, mask=supermask)
+    if plot_output is not None:
+        plt.savefig(plot_output, bbox_inches='tight')
+    else:
+        from IPython.core.debugger import set_trace
+        set_trace()
+        plt.show()
+    return embedding
 
 
 def get_metafield_breakdown(loom,
@@ -1207,8 +1370,8 @@ def get_metafield_breakdown(loom,
     """
     cluster_level = len(str(cluster).split('-')) - 1
     if mask is None:
-        mask = (loom.ca['ClusteringIteration{}'.format(cluster_level)] ==
-                cluster) & (loom.ca['nGene'] >= complexity_cutoff)
+        mask = (loom.ca['ClusteringIteration{}'.format(cluster_level)]
+                == cluster) & (loom.ca['nGene'] >= complexity_cutoff)
     else:
         print("ignoring cluster, using custom mask")
         mask = (mask) & (loom.ca['nGene'] >= complexity_cutoff)
@@ -1220,15 +1383,15 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
 
     Parameters
     ----------
-    loom :
+    loom : Name of loom object of interest.  
         
-    layername :
+    layername :  Layername on which the module score will be calculated.
         
-    mask :
+    mask :  Mask over cells over which the score will be calculated ("None" for all cells)
         
-    genelist :
+    genelist :  list of gene names in signature
         
-    ca_name :
+    ca_name :  Desired name of signature to be made into a column attribute.  
         
 
     Returns
@@ -1237,6 +1400,8 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
     
     """
     from panopticon.utilities import get_module_score_matrix
+    if mask is None:
+        mask = np.array([True] * loom.shape[1])
     matrix = loom[layername][:, mask]
     sigmask = np.isin(loom.ra['gene'], genelist)
     sig_score = get_module_score_matrix(matrix, sigmask)
@@ -1302,11 +1467,10 @@ def generate_nmf_and_loadings(loom,
     vargenemask = loom.ra['GeneVar'] > np.sort(
         loom.ra['GeneVar'])[::-1][nvargenes]
     X = loom[layername][vargenemask, :]
-    model = NMF(
-        n_components=n_components,
-        init='random',
-        random_state=0,
-        verbose=verbose)
+    model = NMF(n_components=n_components,
+                init='random',
+                random_state=0,
+                verbose=verbose)
     W = model.fit_transform(X)
     H = model.components_
 
@@ -1415,8 +1579,9 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
     return np.array(mask)
 
 
-def create_subsetted_loom(loom, output_loom, cellmask, genemask):
+def create_subsetted_loom(loom, output_loom, cellmask):
     """
+    Deprecated.
 
     Parameters
     ----------
@@ -1435,12 +1600,44 @@ def create_subsetted_loom(loom, output_loom, cellmask, genemask):
     
     """
     from panopticon.utilities import recover_meta
+    with loompy.new(output_loom) as dsout:
+        cells = np.where(cellmask)[
+            0]  # Select the cells that passed QC (totals > 500)
+        for (ix, selection, view) in loom.scan(items=cells, axis=1,
+                                               key="gene"):
+            dsout.add_columns(view.layers,
+                              col_attrs=view.ca,
+                              row_attrs=view.ra)
+
+
+def create_subsetted_loom_with_genemask(loom, output_loom, cellmask, genemask):
+    """
+    Deprecated.
+
+    Parameters
+    ----------
+    loom :
+        
+    output_loom :
+        
+    cellmask :
+        
+    genemask :
+        
+
+    Returns
+    -------
+
+    
+    """
+    print("THIS FUNCTION IS DEPRECATED, USE loompy.new INSTEAD!!!")
+    from panopticon.utilities import recover_meta
     if '' not in loom.layers.keys():
         raise Exception("Expecting '' layer, yet none found")
     rowmeta, colmeta = recover_meta(loom)
-    loompy.create(
-        output_loom, loom[''].sparse().tocsr()[:, cellmask][genemask, :],
-        rowmeta[genemask].to_dict("list"), colmeta[cellmask].to_dict("list"))
+    loompy.create(output_loom, loom[''][genemask, :][:, cellmask],
+                  rowmeta[genemask].to_dict("list"),
+                  colmeta[cellmask].to_dict("list"))
     with loompy.connect(output_loom) as smallerloom:
         for layer in [x for x in loom.layer.keys() if x != '']:
             smallerloom[layer] = loom[layer][:, cellmask][genemask, :]
@@ -1519,6 +1716,7 @@ def generate_count_normalization(loom,
                                  output_layername,
                                  denominator=10**5):
     """
+    Generates a new layer with log2 (TP_something)
 
     Parameters
     ----------
@@ -1533,6 +1731,7 @@ def generate_count_normalization(loom,
 
     Returns
     -------
+
 
     """
     import numpy as np
@@ -1590,27 +1789,33 @@ def generate_malignancy_score(loom,
         if malignant_sort_label in loom.ca[cell_sort_key][mask]:
             gene_windows = get_list_of_gene_windows(loom.ra['gene'])
             single_patient_expression = loom[layername][:, mask]
-            mwe = robust_mean_windowed_expressions(
-                loom.ra['gene'],
-                gene_windows,
-                single_patient_expression,
-                upper_cut=2)
+            mwe = robust_mean_windowed_expressions(loom.ra['gene'],
+                                                   gene_windows,
+                                                   single_patient_expression,
+                                                   upper_cut=2)
             pca = PCA(n_components=1)
             pca1 = pca.fit_transform(mwe.T)[:, 0]
             mask1 = loom.ca[cell_sort_key][mask] == malignant_sort_label
             mask2 = loom.ca[cell_sort_key][mask] != malignant_sort_label
             #if loom.ca[cell_sort_key][mask]
             if pca1[mask1].mean() > pca1[mask2].mean():
-                scores45neg = np.sum(
-                    np.greater.outer(pca1[mask1], pca1[mask2]),
-                    axis=1) / np.sum(mask2)
+                scores45neg = np.sum(np.greater.outer(pca1[mask1],
+                                                      pca1[mask2]),
+                                     axis=1) / np.sum(mask2)
                 cnv_quantiles = (np.argsort(pca1) / np.sum(mask))
             elif pca1[mask1].mean() < pca1[mask2].mean():
-                scores45neg = np.sum(
-                    np.less.outer(pca1[mask1], pca1[mask2]),
-                    axis=1) / np.sum(mask2)
+                scores45neg = np.sum(np.less.outer(pca1[mask1], pca1[mask2]),
+                                     axis=1) / np.sum(mask2)
                 cnv_quantiles = (np.argsort(pca1) / np.sum(mask))[::-1]
+            elif np.sum(
+                    mask2
+            ) == 0:  #  Case where we have no non-malignant reference cells
+                scores45neg = [np.nan] * np.sum(mask)
+                cnv_quantiles = [np.nan] * np.sum(mask)
+
             else:
+                from IPython.core.debugger import set_trace
+                set_trace()
                 raise Exception(
                     "Unlikely event that CNV same for 45+/- has occurred")
 
@@ -1645,16 +1850,15 @@ def get_cosine_self_similarity(loom, layername, cluster, self_mean=None):
         raise Exception("Mask is empty")
     if self_mean is None:
         self_mean = loom[layername][:, mask].mean(axis=1)
-    return cosine_similarity(
-        loom[layername][:, mask].T, Y=np.array([self_mean]))
+    return cosine_similarity(loom[layername][:, mask].T,
+                             Y=np.array([self_mean]))
 
 
 def get_dictionary_of_cluster_means(loom, layername, clustering_level):
     from tqdm import tqdm
     mean_dict = {}
-    for cluster in tqdm(
-            np.unique(loom.ca[clustering_level]),
-            desc='looping over clusters'):
+    for cluster in tqdm(np.unique(loom.ca[clustering_level]),
+                        desc='looping over clusters'):
         mask = loom.ca[clustering_level] == cluster
         if mask.sum() < 5000:
             mean_dict[cluster] = loom[layername][:, mask].mean(axis=1)
@@ -1668,11 +1872,14 @@ def get_dictionary_of_cluster_means(loom, layername, clustering_level):
 def get_differential_expression_dict(loom,
                                      layername,
                                      output=None,
-                                     downsample_size=500):
+                                     downsample_size=500,
+                                     starting_iteration=0,
+                                     final_iteration=3,
+                                     min_cluster_size=50):
     from panopticon.utilities import cluster_differential_expression
     from panopticon.utilities import we_can_pickle_it
     diffex = {}
-    for i in range(5):
+    for i in range(starting_iteration, final_iteration + 1):
         for cluster in np.unique(loom.ca['ClusteringIteration{}'.format(i)]):
             print(cluster)
             diffex[cluster] = cluster_differential_expression(
@@ -1681,7 +1888,8 @@ def get_differential_expression_dict(loom,
                 layername,
                 ident1=cluster,
                 ident1_downsample_size=downsample_size,
-                ident2_downsample_size=downsample_size)
+                ident2_downsample_size=downsample_size,
+                min_cluster_size=min_cluster_size)
             if type(diffex[cluster]) != float:
                 diffex[cluster] = diffex[cluster].query(
                     'MeanExpr1 >MeanExpr2').head(500)
@@ -1690,3 +1898,91 @@ def get_differential_expression_dict(loom,
     if output is not None:
         we_can_pickle_it(diffex, output)
     return diffex
+
+
+def scrna2tracer_mapping(scrna_cellnames, tracer_cellnames):
+    # I hate everything about this--S Markson 7 September 2020
+    tracer2scrna_name = {}
+    for tracer_cellname in tracer_cellnames:
+        if tracer_cellname in scrna_cellnames:
+            tracer2scrna_name[tracer_cellname] = tracer_cellname
+        else:
+            for pattern in ['_Lym', '_nucseq', '_45pos', '_45neg']:
+                if tracer_cellname + pattern in scrna_cellnames:
+                    tracer2scrna_name[
+                        tracer_cellname] = tracer_cellname + pattern
+        if tracer_cellname not in tracer2scrna_name.keys(
+        ) and tracer_cellname.startswith('M'):
+            #print(tracer_cellname)
+            pass
+    return tracer2scrna_name
+
+
+def get_cluster_differential_expression_heatmap(loom,
+                                                layer,
+                                                clusteringlevel,
+                                                diffex={},
+                                                output=None):
+    """
+    There is no way this will work out of the gate.  -- S Markson 14 September 2020
+    """
+    from panopticon.utilities import cluster_differential_expression
+    import seaborn as sns
+    import pandas as pd
+
+    clusteredmask = []
+    for cluster in np.unique(loom.ca[clusteringlevel]):
+        mask = loom.ca[clusteringlevel] == cluster
+        if mask.sum() > 2:
+            clusteredmask.append(np.where(mask)[0])
+    clusteredmask = np.hstack(clusteredmask)
+    allgenes = []
+    rawX = []
+    for cluster in np.unique(t.ca[clusteringlevel]):
+        mask = loom.ca[clusteringlevel] == cluster
+        if mask.sum() > 2:
+            if cluster not in diffex.keys():
+                diffex[cluster] = cluster_differential_expression(
+                    t, clusteringlevel, layer, cluster)
+            if np.sum(loom.ca[clusteringlevel] == cluster) > 1:
+                genes = diffex[cluster][~diffex[cluster]['gene'].isin(
+                    allgenes)].query('MeanExpr1 > MeanExpr2').query(
+                        'FracExpr2<.9').head(10)['gene'].values
+                genemask = np.isin(loom.ra['gene'], genes)
+                rawX.append(loom[layer][genemask, :][:, clusteredmask])
+                allgenes.append(genes)
+
+    clusteredmask = np.hstack(clusteredmask)
+
+    hmdf = pd.DataFrame(np.vstack(rawX))
+    hmdf.index = np.hstack(allgenes)
+    fig, ax = plt.subplots(figsize=(5, 12))
+    sns.heatmap(hmdf, cmap='coolwarm', yticklabels=1, xticklabels=False)
+    plt.ylabel('Gene')
+    plt.xlabel('Cell')
+    #fig, ax = plt.subplots(figsize=(5,12))
+    fig = plt.figure(figsize=(5, 12))
+    ax = fig.add_axes([0.4, 0.1, 0.4, .8])
+    sns.heatmap(hmdf,
+                cmap='coolwarm',
+                yticklabels=1,
+                xticklabels=False,
+                ax=ax,
+                cbar_kws={'label': r'log${}_2$(TP100k+1) Expression'})
+    plt.ylabel('Gene')
+    plt.xlabel('Cell')
+    for i, cluster in enumerate(clusters):
+        ax.annotate(cluster,
+                    xy=(-hmdf.shape[1] * 0.8, hmdf.shape[0]-3.5 - i * 7),
+                    xytext=(-hmdf.shape[1] * 0.9, hmdf.shape[0]-3.5 - i * 7),
+                    ha='right',
+                    va='center',
+                    bbox=dict(boxstyle='square', fc='white'),
+                    arrowprops=dict(arrowstyle='-[, widthB=3.5, lengthB=1.5',
+                                    lw=2.0),
+                    annotation_clip=False)
+    plt.savefig("./figures/AllCD8TCellClustersHeatmap14Sept2020.pdf")
+    plt.show()
+    if output is not None:
+        plt.savefig(output)
+    plt.show()
