@@ -1000,14 +1000,17 @@ def get_cluster_markers(loom, layername, cluster_level):
     from panopticon.utilities import cluster_differential_expression
     diffex = {}
     for cluster in np.unique(loom.ca[cluster_level]):
-        diffex[cluster] = cluster_differential_expression(
-            loom,
-            cluster_level,
-            layername,
-            ident1=cluster,
-            verbose=True,
-            ident1_downsample_size=500,
-            ident2_downsample_size=500).query('MeanExpr1 > MeanExpr2')
+        try:
+            diffex[cluster] = cluster_differential_expression(
+                loom,
+                cluster_level,
+                layername,
+                ident1=cluster,
+                verbose=True,
+                ident1_downsample_size=500,
+                ident2_downsample_size=500).query('MeanExpr1 > MeanExpr2')
+        except:
+            print("Some issue processing cluster {}".format(cluster))
     return diffex
 
 
@@ -1186,8 +1189,8 @@ def get_cluster_embedding(loom,
                         min_dist=min_dist,
                         n_neighbors=n_neighbors,
                         metric='correlation')
-    reducer.fit(cellpca, )
-    embedding = reducer.transform(cellpca)
+    #    reducer.fit(cellpca, )
+    embedding = reducer.fit_transform(cellpca)
     return embedding
 
 
@@ -1922,10 +1925,11 @@ def get_cluster_differential_expression_heatmap(loom,
                                                 layer,
                                                 clusteringlevel,
                                                 diffex={},
-                                                output=None):
-    """
-    There is no way this will work out of the gate.  -- S Markson 14 September 2020
-    """
+                                                output=None,
+                                                bracketwidth=3.5,
+                                                ff_offset=0,
+                                                ff_scale=7,
+                                                bracket_width=3.5):
     from panopticon.utilities import cluster_differential_expression
     import seaborn as sns
     import pandas as pd
@@ -1938,12 +1942,13 @@ def get_cluster_differential_expression_heatmap(loom,
     clusteredmask = np.hstack(clusteredmask)
     allgenes = []
     rawX = []
-    for cluster in np.unique(t.ca[clusteringlevel]):
+    clusters = np.unique(loom.ca[clusteringlevel])
+    for cluster in clusters:
         mask = loom.ca[clusteringlevel] == cluster
         if mask.sum() > 2:
             if cluster not in diffex.keys():
                 diffex[cluster] = cluster_differential_expression(
-                    t, clusteringlevel, layer, cluster)
+                    loom, clusteringlevel, layer, cluster)
             if np.sum(loom.ca[clusteringlevel] == cluster) > 1:
                 genes = diffex[cluster][~diffex[cluster]['gene'].isin(
                     allgenes)].query('MeanExpr1 > MeanExpr2').query(
@@ -1956,10 +1961,7 @@ def get_cluster_differential_expression_heatmap(loom,
 
     hmdf = pd.DataFrame(np.vstack(rawX))
     hmdf.index = np.hstack(allgenes)
-    fig, ax = plt.subplots(figsize=(5, 12))
-    sns.heatmap(hmdf, cmap='coolwarm', yticklabels=1, xticklabels=False)
-    plt.ylabel('Gene')
-    plt.xlabel('Cell')
+
     #fig, ax = plt.subplots(figsize=(5,12))
     fig = plt.figure(figsize=(5, 12))
     ax = fig.add_axes([0.4, 0.1, 0.4, .8])
@@ -1971,18 +1973,98 @@ def get_cluster_differential_expression_heatmap(loom,
                 cbar_kws={'label': r'log${}_2$(TP100k+1) Expression'})
     plt.ylabel('Gene')
     plt.xlabel('Cell')
+
     for i, cluster in enumerate(clusters):
-        ax.annotate(cluster,
-                    xy=(-hmdf.shape[1] * 0.8, hmdf.shape[0]-3.5 - i * 7),
-                    xytext=(-hmdf.shape[1] * 0.9, hmdf.shape[0]-3.5 - i * 7),
-                    ha='right',
-                    va='center',
-                    bbox=dict(boxstyle='square', fc='white'),
-                    arrowprops=dict(arrowstyle='-[, widthB=3.5, lengthB=1.5',
-                                    lw=2.0),
-                    annotation_clip=False)
-    plt.savefig("./figures/AllCD8TCellClustersHeatmap14Sept2020.pdf")
-    plt.show()
+        ax.annotate(
+            cluster,
+            xy=(-hmdf.shape[1] * 0.8,
+                hmdf.shape[0] - ff_offset - 3.5 - i * ff_scale),
+            xytext=(-hmdf.shape[1] * 0.9,
+                    hmdf.shape[0] - ff_offset - 3.5 - i * ff_scale),
+            ha='right',
+            va='center',
+            bbox=dict(boxstyle='square', fc='white'),
+            arrowprops=dict(
+                arrowstyle='-[, widthB={}, lengthB=1.5'.format(bracket_width),
+                lw=2.0),
+            annotation_clip=False)
+    #plt.savefig("./figures/AllCD8TCellClustersHeatmap14Sept2020.pdf")
     if output is not None:
         plt.savefig(output)
     plt.show()
+    return diffex
+
+def plot_dotmap(loom,
+                diffex,
+                clusterlevel,
+                topn=10,
+                scale=1,
+                output=None,
+                title=None,
+                keyblacklist=[],
+                geneblacklist=[]):                                                                                                                                                                                                                                                                                                   
+    import matplotlib.pyplot as plt                                                                                                                                                                                                                                                                                            
+    import numpy as np                                                                                                                                                                                                                                                                                                         
+    fig, ax = plt.subplots(figsize=(25, 5))                                                                                                                                                                                                                                                                                    
+    markers = np.hstack([                                                                                                                                                                                                                                                                                                      
+        diffex[key][~np.isin(diffex[key]['gene'],geneblacklist) &                                                                                                                                                                                                                                                              
+            (~diffex[key]['gene'].apply(lambda x: '.' in x))].query(                                                                                                                                                                                                                                                   
+                        'MeanExpr1 > MeanExpr2')['gene'].head(topn).values                                                                                                                                                                                                                                                     
+        for key in diffex.keys()                                                                                                                                                                                                                                                                                               
+    ])                                                                                                                                                                                                                                                                                                                         
+    markernames = markers                                                                                                                                                                                                                                                    
+    key2x = {                                                                                                                                                                                                                                                                                                                  
+        key: x                                                                                                                                                                                                                                                                                                                
+        for key, x in zip(diffex.keys(), range(len(diffex.keys())))                                                                                                                                                                                                                                                            
+    }                                                                                                                                                                                                                                                                                                                          
+    marker2y = {marker: x for marker, x in zip(markers, range(len(markers)))}                                                                                                                                                                                                                                                  
+    exprs = []                                                                                                                                                                                                                                                                                                                 
+    for marker in markers:                                                                                                                                                                                                                                                                                                     
+        markerindex = np.where(loom.ra['gene'] == marker)[0][0]                                                                                                                                                                                                                                                                
+        for key in [key for key in diffex.keys() if key not in keyblacklist]:                                                                                                                                                                                                                                                             
+                                                                                                                                                                                                                                                                                                                               
+            expr = loom['log2(TP100k+1)'][markerindex, ][loom.ca[clusterlevel]                                                                                                                                                                                                                                                 
+                                                         == key].mean()                                                                                                                                                                                                                                                        
+            exprs.append(expr)                                                                                                                                                                                                                                                                                                 
+            #plt.scatter(key2x[key],marker2y[marker],s=expr*scale,cmap='coolwarm',c=expr, )                                                                                                                                                                                                                                    
+            #print(expr)                                                                                                                                                                                                                                                                                                       
+    ## This is very dumb -- S. Markson 8 October 2020                                                                                                                                                                                                                                                                          
+    flag = True                                                                                                                                                                                                                                                                                                                
+    for marker in markers:                                                                                                                                                                                                                                                                                                     
+        markerindex = np.where(loom.ra['gene'] == marker)[0][0]                                                                                                                                                                                                                                                                
+        #for key in [key for key in diffex.keys() if key!='1-0']:                                                                                                                                                                                                                                                              
+        for key in diffex.keys():                                                                                                                                                                                                                                                                                              
+                                                                                                                                                                                                                                                                                                                               
+            expr = loom['log2(TP100k+1)'][markerindex, ][loom.ca[clusterlevel]
+                                                         == key].mean()
+            sc = plt.scatter(marker2y[marker],
+                             key2x[key],
+                             s=expr * scale,
+                             cmap='coolwarm',
+                             c=expr,
+                             vmin=np.min(exprs),
+                             vmax=np.max(exprs))
+            #print(expr)
+
+    ax.set_xticklabels(markernames)
+    ax.set_xticks(range(len(markers)))
+    ax.set_yticklabels([key for key in key2x.keys() if key not in keyblacklist])
+    #print(np.array([val for val in diffex.values() if key not in keyblacklist]))
+    ax.set_yticks(np.array([val for val in key2x.values() if key not in keyblacklist]))
+    ax.set_xlim([-0.5, len(markers)-0.5])
+    ax.set_ylim([-0.5, len(key2x)-0.5])
+    for i in np.arange(-0.5, len(markers) - 0.5, topn)[1::]:
+        plt.axvline(ls='--', x=i, color='k')
+        #if flag:
+    cbar = plt.colorbar(sc, )
+    cbar.set_label(
+        'Mean log(TP100k+1) Expression',
+        rotation=90,
+    )
+    plt.xticks(rotation=90)
+    if output is not None:
+        plt.savefig(output)
+    if title is not None:
+        plt.title(title)
+    plt.show()
+ 
