@@ -14,58 +14,61 @@ def scrna_wizard_main():
     filename = click.prompt("Name of .loom file")
     if not filename.endswith('.loom'):
         filename += '.loom'
-    matrixpath = click.prompt(
-        "Data/counts matrix (sparse npz or dense txt)", type=click.File('rb'))
+    matrixpath = click.prompt("Data/counts matrix (sparse npz or dense txt)",
+                              type=click.File('rb'))
     if matrixpath.name.endswith('.npz'):
         matrix = sparse.load_npz(matrixpath)
-    elif (matrixpath.name.endswith('.csv')) or (matrixpath.name.endswith('.tsv')) or (matrixpath.name.endswith('.txt')):
-        hasheader = click.prompt(
-            'Does that file have a header?',
-            type=click.Choice(['n', 'y']),
-            default='n')
+    elif (matrixpath.name.endswith('.csv')) or (matrixpath.name.endswith(
+            '.tsv')) or (matrixpath.name.endswith('.txt')):
+        hasheader = click.prompt('Does that file have a header?',
+                                 type=click.Choice(['n', 'y']),
+                                 default='n')
         if (matrixpath.name.endswith('.csv')):
             sep = ','
         else:
-            sep='\t'
+            sep = '\t'
         if hasheader == 'n':
             matrix = pd.read_table(matrixpath, header=None, sep=sep)
         elif hasheader == 'y':
             matrix = pd.read_table(matrixpath, sep=sep)
-        from IPython.core.debugger import set_trace; set_trace()
 
-        if len(matrix.dtypes == object)>0:
-            print("Number of str columns:",len(matrix.dtypes == object))
-            potentialgenes = matrix.iloc[:,(matrix.dtypes == object).values]
+        if len(matrix.dtypes == object) > 0:
+            print("Number of str columns:", len(matrix.dtypes == object))
+            potentialgenes = matrix.iloc[:, (matrix.dtypes == object).values]
             print("Potential gene list:")
             print(potentialgenes.head())
             savepotentialgenes = click.prompt(
                 'Potential gene list identified.  Would you like to save?',
                 type=click.Choice(['n', 'y']))
             if savepotentialgenes:
-               potentialgenesfile = click.prompt(
-                       'Gene list filename:',
-                   default='genelist_'+matrixpath.name)
-               np.savetxt(potentialgenesfile, potentialgenes, delimiter=',', fmt='%s')
+                potentialgenesfile = click.prompt('Gene list filename:',
+                                                  default='genelist_' +
+                                                  matrixpath.name)
+                np.savetxt(potentialgenesfile,
+                           potentialgenes,
+                           delimiter=',',
+                           fmt='%s')
         potentialcells = matrix.columns
         savepotentialcells = click.prompt(
             'Potential cell list identified.  Would you like to save?',
             type=click.Choice(['n', 'y']))
         if savepotentialcells:
-           potentialcellsfile = click.prompt(
-                   'Cell list filename:',
-               default='celllist_'+matrixpath.name)
-           print("assuming first column is genelist...")
-           potentialcells = pd.DataFrame(potentialcells[1::])
-           potentialcells.columns = ['cellname']
-           potentialcells.to_csv(potentialcellsfile)
+            potentialcellsfile = click.prompt('Cell list filename:',
+                                              default='celllist_' +
+                                              matrixpath.name)
+            print("assuming first column is genelist...")
+            potentialcells = pd.DataFrame(potentialcells[1::])
+            potentialcells.columns = ['cellname']
+            potentialcells.to_csv(potentialcellsfile)
+
+
 #           np.savetxt(potentialcellsfile, potentialcells, delimiter=',', fmt='%s')
         matrix = matrix.iloc[:, (matrix.dtypes != object).values]
         matrix = matrix.values
     else:
-        hasheader = click.prompt(
-            'Does that file have a header?',
-            type=click.Choice(['n', 'y']),
-            default='n')
+        hasheader = click.prompt('Does that file have a header?',
+                                 type=click.Choice(['n', 'y']),
+                                 default='n')
         if hasheader == 'n':
             matrix = pd.read_table(matrixpath, header=None)
         elif hasheader == 'y':
@@ -74,7 +77,8 @@ def scrna_wizard_main():
         matrix = matrix.values
 
     metadatapath = click.prompt(
-        "Cell metadata (pandas-loadable)", type=click.File('rb'))
+        "Cell metadata (pandas-loadable) (if no provided cell metadata, just use cell list)",
+        type=click.File('rb'))
     if metadatapath.name.endswith('.csv'):
         metadata = pd.read_table(metadatapath, sep=',')
     else:
@@ -113,12 +117,11 @@ def scrna_wizard_main():
         if cell_type_col != 'cell_type':
             metadata['cell_type'] = metadata[cell_type_col]
             metadata.drop(cell_type_col, inplace=True, axis=1)
-    genepath = click.prompt(
-        "Gene metadata (or simply genelist)", type=click.File('rb'))
-    isheader = click.prompt(
-        "Does this file have a header?",
-        type=click.Choice(['n', 'y']),
-        default='n')
+    genepath = click.prompt("Gene metadata (or simply genelist)",
+                            type=click.File('rb'))
+    isheader = click.prompt("Does this file have a header?",
+                            type=click.Choice(['n', 'y']),
+                            default='n')
     if isheader == 'n':
         genes = pd.read_table(genepath, header=None)
         genes.columns = ['gene']
@@ -130,7 +133,6 @@ def scrna_wizard_main():
         if gene_col != 'gene':
             genes['gene'] = genes[gene_col]
             genes.drop(gene_col, inplace=True, axis=1)
-    from IPython.core.debugger import set_trace; set_trace()
     loompy.create(filepath + '/' + filename, matrix, genes.to_dict("list"),
                   metadata.to_dict("list"))
     print("Loom file creation complete.")
@@ -234,10 +236,9 @@ def gene_signature_wizard_main(loomfile=None, signaturefile=None):
         if len(np.intersect1d(signature, loom.ra['gene'])) < len(signature):
             proceed = click.prompt(
                 "The following genes ({} in total) in the given signature\n{}\nare not in the loom file.  Would you like to proceed with those that are ({} genes in total)?"
-                .format(
-                    len(np.setdiff1d(signature, loom.ra['gene'])), ", ".join(
-                        np.setdiff1d(signature, loom.ra['gene'])),
-                    len(np.intersect1d(signature, loom.ra['gene']))),
+                .format(len(np.setdiff1d(signature, loom.ra['gene'])),
+                        ", ".join(np.setdiff1d(signature, loom.ra['gene'])),
+                        len(np.intersect1d(signature, loom.ra['gene']))),
                 type=click.Choice(['n', 'y']),
                 default='y')
         if proceed == 'y':
