@@ -73,6 +73,30 @@ plt.show()
 ```
 This will plot your basic UMAP of all your cells, with cells clusters and colored based on the first iteration of the panopticon's agglomerative iterative subclustering procedure.
 
+# Development
+
+## Development
+
+If you would like to report a bug or request a feature, please do so using the [issues page](https://github.com/scyrusm/panopticon/issues)
+
+## Dependencies
+All code has been tested on python 3.7.7.  Package dependencies below.  
+
+```
+numpy
+pandas
+scipy
+matplotlib
+umap-learn
+click
+pyensembl
+tqdm
+seaborn
+loompy
+pymannkendall
+
+```
+
 
 
 # To do
