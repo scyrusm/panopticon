@@ -31,6 +31,8 @@ def get_valid_gene_info(
         
     genes : List[str] :
         
+    genes : List[str] :
+        
     genes: List[str] :
         
 
@@ -382,6 +384,8 @@ def generate_incremental_pca(loom,
         (Default value = 512)
     n_components :
         (Default value = 50)
+    min_size_for_incrementalization :
+         (Default value = 5000)
 
     Returns
     -------
@@ -576,6 +580,10 @@ def get_subclustering(X,
         
     min_input_size :
         (Default value = 5)
+    silhouette_threshold :
+         (Default value = 0.2)
+    regularization_factor :
+         (Default value = 0.01)
 
     Returns
     -------
@@ -643,6 +651,8 @@ def generate_clustering(loom,
         
     mode :
         (Default value = 'pca')
+    silhouette_threshold :
+         (Default value = 0.1)
 
     Returns
     -------
@@ -811,6 +821,10 @@ def get_masked_clustering(loom, layername, mask, silhouette_threshold=0.1):
         
     mode :
         (Default value = 'pca')
+    mask :
+        
+    silhouette_threshold :
+         (Default value = 0.1)
 
     Returns
     -------
@@ -878,6 +892,8 @@ def cluster_differential_expression(loom,
         (Default value = None)
     mask2 :
         (Default value = None)
+    min_cluster_size :
+         (Default value = 0)
 
     Returns
     -------
@@ -1025,6 +1041,8 @@ def we_can_pickle_it(thing, thingname: str):
         
     thingname : str :
         
+    thingname : str :
+        
     thingname: str :
         
 
@@ -1043,6 +1061,8 @@ def we_can_unpickle_it(thingname: str):
 
     Parameters
     ----------
+    thingname : str :
+        
     thingname : str :
         
     thingname : str :
@@ -1158,6 +1178,10 @@ def get_cluster_embedding(loom,
         (Default value = False)
     mask :
         (Default value = None)
+    genemask :
+         (Default value = None)
+    n_components_pca :
+         (Default value = 50)
 
     Returns
     -------
@@ -1221,6 +1245,10 @@ def plot_subclusters(loom,
         (Default value = True)
     complexity_cutoff :
         (Default value = 0)
+    downsample_to :
+         (Default value = 500)
+    blacklist :
+         (Default value = [])
 
     Returns
     -------
@@ -1307,6 +1335,12 @@ def plot_cluster_umap(loom,
         (Default value = True)
     complexity_cutoff :
         (Default value = 0)
+    mask :
+         (Default value = None)
+    downsample_to :
+         (Default value = 500)
+    blacklist :
+         (Default value = [])
 
     Returns
     -------
@@ -1386,15 +1420,15 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
 
     Parameters
     ----------
-    loom : Name of loom object of interest.  
+    loom : Name of loom object of interest.
         
-    layername :  Layername on which the module score will be calculated.
+    layername : Layername on which the module score will be calculated.
         
-    mask :  Mask over cells over which the score will be calculated ("None" for all cells)
+    mask : Mask over cells over which the score will be calculated ("None" for all cells)
         
-    genelist :  list of gene names in signature
+    genelist : list of gene names in signature
         
-    ca_name :  Desired name of signature to be made into a column attribute.  
+    ca_name : Desired name of signature to be made into a column attribute.
         
 
     Returns
@@ -1583,8 +1617,7 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
 
 
 def create_subsetted_loom(loom, output_loom, cellmask):
-    """
-    Deprecated.
+    """Deprecated.
 
     Parameters
     ----------
@@ -1614,8 +1647,7 @@ def create_subsetted_loom(loom, output_loom, cellmask):
 
 
 def create_subsetted_loom_with_genemask(loom, output_loom, cellmask, genemask):
-    """
-    Deprecated.
+    """Deprecated.
 
     Parameters
     ----------
@@ -1690,6 +1722,8 @@ def generate_standardized_layer(loom, layername, variance_axis='cell'):
         
     layername :
         
+    variance_axis :
+         (Default value = 'cell')
 
     Returns
     -------
@@ -1718,8 +1752,7 @@ def generate_count_normalization(loom,
                                  raw_count_layername,
                                  output_layername,
                                  denominator=10**5):
-    """
-    Generates a new layer with log2 (TP_something)
+    """Generates a new layer with log2 (TP_something)
 
     Parameters
     ----------
@@ -1730,12 +1763,12 @@ def generate_count_normalization(loom,
     output_layername :
         
     denominator :
-         (Default value = 10**5)
+        (Default value = 10**5)
 
     Returns
     -------
 
-
+    
     """
     import numpy as np
     colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]
@@ -1751,9 +1784,7 @@ def generate_malignancy_score(loom,
                               patient_id_key='patient_ID',
                               malignant_sort_label='45neg',
                               cell_name_key='cellname'):
-    """
-
-    For calculating malignancy scores for cells based on inferred CNV.  This subroutine isn't terribly future proof.  S Markson 6 June 2020.  
+    """For calculating malignancy scores for cells based on inferred CNV.  This subroutine isn't terribly future proof.  S Markson 6 June 2020.
 
     Parameters
     ----------
@@ -1762,23 +1793,26 @@ def generate_malignancy_score(loom,
     layername :
         
     cell_sort_key :
-         (Default value = 'CellSort')
+        (Default value = 'CellSort')
     patient_id_key :
-         (Default value = 'patient_ID')
+        (Default value = 'patient_ID')
     malignant_sort_label :
-         (Default value = '45neg')
+        (Default value = '45neg')
     cellname_key :
-         (Default value = 'cellname')from panopticon.wme import get_list_of_gene_windows)
+        (Default value = 'cellname')from panopticon.wme import get_list_of_gene_windows)
     robust_mean_windowed_expressionsfrom sklearn.decomposition import PCAfrom tqdm import tqdmcnv_scores_dict :
-         (Default value = {}for patient in tqdm(np.unique(bm.ca[patient_id_key]))
+        (Default value = {}for patient in tqdm(np.unique(bm.ca[patient_id_key]))
     desc :
-         (Default value = 'Computing per-patient)
+        (Default value = 'Computing per-patient)
     per-cell malignancy scores' :
         
+    cell_name_key :
+         (Default value = 'cellname')
 
     Returns
     -------
 
+    
     """
     from panopticon.wme import get_list_of_gene_windows, robust_mean_windowed_expressions
     from sklearn.decomposition import PCA
@@ -1846,6 +1880,23 @@ def generate_malignancy_score(loom,
 
 
 def get_cosine_self_similarity(loom, layername, cluster, self_mean=None):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    cluster :
+        
+    self_mean :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     from sklearn.metrics.pairwise import cosine_similarity
     clustering_level = len(str(cluster).split('-')) - 1
     mask = loom.ca['ClusteringIteration{}'.format(clustering_level)] == cluster
@@ -1858,6 +1909,21 @@ def get_cosine_self_similarity(loom, layername, cluster, self_mean=None):
 
 
 def get_dictionary_of_cluster_means(loom, layername, clustering_level):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    clustering_level :
+        
+
+    Returns
+    -------
+
+    """
     from tqdm import tqdm
     mean_dict = {}
     for cluster in tqdm(np.unique(loom.ca[clustering_level]),
@@ -1879,6 +1945,29 @@ def get_differential_expression_dict(loom,
                                      starting_iteration=0,
                                      final_iteration=3,
                                      min_cluster_size=50):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    output :
+         (Default value = None)
+    downsample_size :
+         (Default value = 500)
+    starting_iteration :
+         (Default value = 0)
+    final_iteration :
+         (Default value = 3)
+    min_cluster_size :
+         (Default value = 50)
+
+    Returns
+    -------
+
+    """
     from panopticon.utilities import cluster_differential_expression
     from panopticon.utilities import we_can_pickle_it
     diffex = {}
@@ -1904,6 +1993,19 @@ def get_differential_expression_dict(loom,
 
 
 def scrna2tracer_mapping(scrna_cellnames, tracer_cellnames):
+    """
+
+    Parameters
+    ----------
+    scrna_cellnames :
+        
+    tracer_cellnames :
+        
+
+    Returns
+    -------
+
+    """
     # I hate everything about this--S Markson 7 September 2020
     tracer2scrna_name = {}
     for tracer_cellname in tracer_cellnames:
@@ -1930,6 +2032,33 @@ def get_cluster_differential_expression_heatmap(loom,
                                                 ff_offset=0,
                                                 ff_scale=7,
                                                 bracket_width=3.5):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layer :
+        
+    clusteringlevel :
+        
+    diffex :
+         (Default value = {})
+    output :
+         (Default value = None)
+    bracketwidth :
+         (Default value = 3.5)
+    ff_offset :
+         (Default value = 0)
+    ff_scale :
+         (Default value = 7)
+    bracket_width :
+         (Default value = 3.5)
+
+    Returns
+    -------
+
+    """
     from panopticon.utilities import cluster_differential_expression
     import seaborn as sns
     import pandas as pd
@@ -2003,6 +2132,33 @@ def plot_dotmap(loom,
                 title=None,
                 keyblacklist=[],
                 geneblacklist=[]):                                                                                                                                                                                                                                                                                                   
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    diffex :
+        
+    clusterlevel :
+        
+    topn :
+         (Default value = 10)
+    scale :
+         (Default value = 1)
+    output :
+         (Default value = None)
+    title :
+         (Default value = None)
+    keyblacklist :
+         (Default value = [])
+    geneblacklist :
+         (Default value = [])
+
+    Returns
+    -------
+
+    """
     import matplotlib.pyplot as plt                                                                                                                                                                                                                                                                                            
     import numpy as np                                                                                                                                                                                                                                                                                                         
     fig, ax = plt.subplots(figsize=(25, 5))                                                                                                                                                                                                                                                                                    

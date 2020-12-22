@@ -3,7 +3,7 @@ import re
 import loompy
 import matplotlib.pyplot as plt
 from panopticon.dna import multireference_dna_correspondence
-from panopticon.utilities import get_module_score
+from panopticon.utilities import get_module_score_loom
 from tqdm import tqdm
 import seaborn as sns
 
@@ -60,7 +60,7 @@ def multireference_dna_correspondence_main(loomfile,
             stratum_masks.append(np.array([True] * loom.shape[1])[querymask])
 
         if modulescore_signature is not None:
-            module_score = get_module_score(
+            module_score = get_module_score_loom(
                 loom, modulescore_signature, querymask=querymask)
 
 
