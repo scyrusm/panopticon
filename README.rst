@@ -17,10 +17,15 @@ functionality is in ``panopticon/utilities.py``.
 
 This package is a set of tools that I developed to do a few novel and some not-so-novel things.
 Novel things include:
+
 * joint analysis of bulk DNA and single-cell
+
 * convenient iterative subclustering
+
 Not-so-novel things include:
+
 * basic pre-processing and quality-control
+
 * visualization
 
 This package is designed to give me some functionality I didn't find in other general single-cell RNA analysis tools, such as
@@ -148,7 +153,7 @@ using the `issues page <https://github.com/scyrusm/panopticon/issues>`__
 Dependencies
 ~~~~~~~~~~~~
 
-All code has been tested on python 3.7.7. Package dependencies below.
+All code has been tested on python 3.7.7. As of this writing, it will not work on python 3.9, due to numba dependency in umap-learn. Package dependencies below.
 
 ::
 
