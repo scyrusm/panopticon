@@ -73,6 +73,10 @@ plt.show()
 ```
 This will plot your basic UMAP of all your cells, with cells clusters and colored based on the first iteration of the panopticon's agglomerative iterative subclustering procedure.
 
+# Additional Documentation
+
+For more in-depth documentation, see panopticon's [Read the Docs](https://panopticon-single-cell.readthedocs.io) page.
+
 # Development
 
 ## Development
