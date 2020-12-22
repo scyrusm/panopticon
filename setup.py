@@ -33,6 +33,6 @@ setup(
     license='MIT',
     description='for combined DNA/RNA analysis in a longitudinal context',
     include_package_data = True,
-    long_description=open('README.md').read(),
+    long_description=open('README.rst').read(),
 )
 

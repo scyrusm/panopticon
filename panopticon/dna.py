@@ -71,13 +71,14 @@ def multireference_dna_correspondence(loom: Any,
                                       *segmentations: Any) -> Any:
 
     list_of_correlations = []
+    loomquery = np.where(loomquery)[0] # Indexing by Bool vector is not supported by loompy v. 3.0.6 for some reason
     for segmentation in tqdm(segmentations, desc='Processing segmentations'):
         crd = loom.ra[segmentation]
         expressions = loom[:, loomquery]
 
         genemask = ~np.isnan(crd)#np.isin(loom.ra['gene'], list(crd.keys()))
         expressions = expressions[genemask, :]
-        validgenes = loom.ra['gene'][genemask]
+        # validgenes = loom.ra['gene'][genemask] # Variable is not used
 #        tcrs = np.array([crd[gene] for gene in validgenes])  #[low_dropout]
         tcrs = crd[genemask]
 

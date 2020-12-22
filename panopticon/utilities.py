@@ -1,14 +1,18 @@
+import sys
+import os
+from tqdm import tqdm
+
 from typing import List, Tuple
 import binascii
-import sys
-from pyensembl import EnsemblRelease
+
 import numpy as np
 import pandas as pd
-import os
-import loompy
-import binascii
-from tqdm import tqdm
 import umap
+
+from pyensembl import EnsemblRelease
+
+# import loompy after the main packages, because sometimes it breaks packages that are imported further:
+import loompy
 
 valid_chromosomes = [str(x) for x in range(1, 23)] + ['X']
 

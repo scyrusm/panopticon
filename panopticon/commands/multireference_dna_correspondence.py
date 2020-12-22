@@ -1,12 +1,15 @@
-import numpy as np
-import re
-import loompy
-import matplotlib.pyplot as plt
-from panopticon.dna import multireference_dna_correspondence
-from panopticon.utilities import get_module_score
 from tqdm import tqdm
-import seaborn as sns
 
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import re
+
+from panopticon.dna import multireference_dna_correspondence
+from panopticon.utilities import get_module_score_loom
+
+# import loompy after the main packages, because sometimes it breaks packages that are imported further:
+import loompy
 
 def multireference_dna_correspondence_main(loomfile,
                                            queries,
@@ -60,7 +63,7 @@ def multireference_dna_correspondence_main(loomfile,
             stratum_masks.append(np.array([True] * loom.shape[1])[querymask])
 
         if modulescore_signature is not None:
-            module_score = get_module_score(
+            module_score = get_module_score_loom(
                 loom, modulescore_signature, querymask=querymask)
 
 
@@ -73,12 +76,12 @@ def multireference_dna_correspondence_main(loomfile,
         fig, ax = plt.subplots(
             2 + module_score_tick,
             (len(segmentations) - 1) * len(segmentations) // 2,
-            figsize=(len(segmentations) * (1 - len(segmentations) * 2), 8))
+            figsize=(len(segmentations) * (len(segmentations) * 2 - 1), 8))
     else:
         fig, ax = plt.subplots(
             (2 + module_score_tick) * len(stratum_masks),
             (len(segmentations) - 1) * len(segmentations) // 2,
-            figsize=(len(segmentations) * (1 - len(segmentations) * 2),
+            figsize=(len(segmentations) * (len(segmentations) * 2 - 1),
                      8 * len(stratum_masks)))
     ## Getting the figsize right is annoying, perhaps there's a better solution
 

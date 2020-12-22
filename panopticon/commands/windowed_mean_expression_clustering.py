@@ -1,16 +1,20 @@
 #! /usr/bin/env python
 
-import argparse
-from panopticon import wme
-import umap
-import numpy as np
+import click
 import os
+import argparse
+from warnings import warn
+
+import numpy as np
 import pandas as pd
 from scipy import sparse
-from warnings import warn
 import matplotlib.pyplot as plt
-import click
+import umap
+
+from panopticon import wme
 from panopticon.clustering import kt_cluster
+
+# import loompy after the main packages, because sometimes it breaks packages that are imported further:
 import loompy
 
 
@@ -19,7 +23,7 @@ def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, compl
     with loompy.connect(loomfile, validate=False) as loom:
     
         genes = loom.ra['gene']
-        metadata = pd.DataFrame(loom.ca['patient_ID'])
+        metadata = pd.DataFrame(loom.ca['patient_ID']).astype(str)
         metadata.columns = ['patient_ID']
         metadata['complexity'] = loom.ca['complexity']
         metadata['cell_type'] = loom.ca['cell_type']
@@ -72,7 +76,7 @@ def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, compl
             plt.savefig(figure_output)
         else:
             plt.show()
-        print("Save cluster functionality temporarily eliminated")
+        warn("Save cluster functionality temporarily eliminated")
     
 #        clusters_save_choice = click.prompt(
 #            'Would you like to save these clusters?',

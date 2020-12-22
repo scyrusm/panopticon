@@ -19,5 +19,5 @@ for {set x 1} {$x<5} {incr x} {
     expect "like to label"
     send "Seg$x\n"
     expect "complete"
-
+    set timeout 120
 }
