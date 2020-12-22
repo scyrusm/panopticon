@@ -16,7 +16,7 @@ Design-wise, panopticon is a bit similar to scanpy, in that it relies heavily on
 
 You can install the panopticon on the command line by cloning this git repository.  Because this package is in a rather alpha mode, I recommend installing with the `--editable` flag.
 ```
-    git clone https://smarkson@bitbucket.org/carterlab/panopticon.git
+    git clone https://github.com/scyrusm/panopticon.git
     cd panopticon
     pip install --editable .
     pyensembl install --release 75 --species homo_sapiens
