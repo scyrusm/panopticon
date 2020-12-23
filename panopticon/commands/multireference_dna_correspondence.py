@@ -1,9 +1,9 @@
 from tqdm import tqdm
+import re
 
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-import re
 
 from panopticon.dna import multireference_dna_correspondence
 from panopticon.utilities import get_module_score_loom
