@@ -6,6 +6,9 @@ panopticon: better, easier surveillance over your single cells
 
 .. include:: ../README.rst
 
+.. automodule:: panopticon.utilities
+    :members:
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
