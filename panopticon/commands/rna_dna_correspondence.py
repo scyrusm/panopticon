@@ -1,23 +1,27 @@
 #! /usr/bin/env python
+
 from tqdm import tqdm
 import argparse
+from warnings import warn
+
+import numpy as np
 import pandas as pd
-from panopticon import wme, dna
 import seaborn as sns
 import matplotlib.pyplot as plt
-import numpy as np
-from scipy import stats
-from scipy import sparse
-import pymannkendall as mk
-import loompy
+from scipy import stats, sparse
 from scipy.stats.mstats import theilslopes
+import pymannkendall as mk
 
+from panopticon import wme, dna
+
+# import loompy after the main packages, because sometimes it breaks packages that are imported further:
+import loompy
 
 def rna_dna_correspondence_main(loomfile, args_seg_file, args_patient_column,
                                 args_patient, args_time_point, output=None):
     with loompy.connect(loomfile, validate=False) as loom:
         genes = loom.ra['gene']
-        metadata = pd.DataFrame(loom.ca['patient_ID'])
+        metadata = pd.DataFrame(loom.ca['patient_ID']).astype(str)
         metadata.columns = ['patient_ID']
         metadata['complexity'] = loom.ca['complexity']
         metadata['cell_type'] = loom.ca['cell_type']
@@ -130,11 +134,16 @@ def rna_dna_correspondence_main(loomfile, args_seg_file, args_patient_column,
         sns.distplot(ps_tumor, label='high complexity_tumor', color='k')
         sns.distplot(ps_tumor_low_complexity, label='low complexity tumor', color='b')
         plt.legend()
-        from IPython.core.debugger import set_trace; set_trace()
+        #from IPython.core.debugger import set_trace; set_trace()
+        # The IPython is not in the dependencies and the output is disabled from Feb 2020.
+        # Ipython debug mode should be removed.
         #if output:
-        print("Output disabled!  20 Feb 2020")
-        if False:
 
-            plt.savefig(output)
-        else:
-            plt.show()
+        warn(f"Output is disabled from 20 Feb 2020. Saving to {output}")
+
+        plt.savefig(output)
+
+        #if False:
+        #    plt.savefig(output)
+        #else:
+        #    plt.show()

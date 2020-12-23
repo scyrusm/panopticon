@@ -1,11 +1,14 @@
 import click
 import os
-import loompy
+
 import numpy as np
 import pandas as pd
 from scipy import sparse
 from panopticon.dna import segmentation_to_copy_ratio_dict
 from panopticon.utilities import get_valid_gene_info
+
+# import loompy after the main packages, because sometimes it breaks packages that are imported further:
+import loompy
 
 
 def scrna_wizard_main():

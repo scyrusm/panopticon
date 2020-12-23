@@ -1,9 +1,3 @@
-#!/usr/bin/env expect
+#!/usr/bin/env bash
 
-set timeout 120
-eval spawn panopticon wmec --patient 43 --cell_type tumor --complexity_cutoff 1000 --figure_output example.pdf example_data/example.loom
-expect "save these clusters"
-send "n\n"
-
-
-
+panopticon wmec --patient 43 --cell_type tumor --complexity_cutoff 1000 --figure_output example.pdf example_data/example.loom
