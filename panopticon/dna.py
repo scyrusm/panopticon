@@ -15,11 +15,10 @@ def segmentation_to_copy_ratio_dict(genes: List[str],
                                     log2: bool = False) -> Any:
     """
 
-
     Parameters
     ----------
     segmentation : File containing the segmentation.  Should be readable with pandas.read_table.
-
+        
     chrom_col : Column name indicating chromosomes (bed file column name is default)
         (Default value = 'chrom')
     start_col : Column name indicating region start (bed file column name is default)
@@ -28,12 +27,27 @@ def segmentation_to_copy_ratio_dict(genes: List[str],
         (Default value = 'chromEnd')
     score_col : Column name indicating the copy number of that region (or log_2 of the copy number, if log2 == True
         (Default value = 'score')
-    log2 :  Indicates whether the score_col column indicates the copy ratio, or the base-2 log of the copy ratio
+    log2 : Indicates whether the score_col column indicates the copy ratio, or the base-2 log of the copy ratio
+        (Default value = False)
+    genes: List[str] :
+        
+    segmentation: Any :
+        
+    chrom_col: str :
+         (Default value = 'chrom')
+    start_col: str :
+         (Default value = 'chromStart')
+    end_col: str :
+         (Default value = 'chromEnd')
+    score_col: str :
+         (Default value = 'copyRatio')
+    log2: bool :
          (Default value = False)
 
     Returns
     -------
-    A dictionary of genes to their copy ratios
+
+    
     """
 
     gene_names, gene_contigs, gene_starts, gene_ends = get_valid_gene_info(
@@ -69,6 +83,21 @@ def segmentation_to_copy_ratio_dict(genes: List[str],
 def multireference_dna_correspondence(loom: Any,
                                       loomquery: Any,
                                       *segmentations: Any) -> Any:
+    """
+
+    Parameters
+    ----------
+    loom: Any :
+        
+    loomquery: Any :
+        
+    *segmentations: Any :
+        
+
+    Returns
+    -------
+
+    """
 
     list_of_correlations = []
     loomquery = np.where(loomquery)[0] # Indexing by Bool vector is not supported by loompy v. 3.0.6 for some reason

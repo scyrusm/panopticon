@@ -17,6 +17,27 @@ def multireference_dna_correspondence_main(loomfile,
                                            stratifyby=None,
                                            output=None,
                                            modulescore_signature=None):
+    """
+
+    Parameters
+    ----------
+    loomfile :
+        
+    queries :
+        
+    segmentations :
+        
+    stratifyby :
+         (Default value = None)
+    output :
+         (Default value = None)
+    modulescore_signature :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     if len(segmentations) < 2:
         raise Exception(
             "Must name two difference CNV segmentations to perform multireference comparison"

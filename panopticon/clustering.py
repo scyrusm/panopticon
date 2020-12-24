@@ -8,19 +8,23 @@ from typing import Any
 
 
 def kt_cluster(mean_window_expression_ranks: np.ndarray, t: int = 4) -> Any:
-    """
-    For clustering points (ideally mean window expression vectors) via 1 - KT, where KT is the Kendall-Tau correlation of those vectors
+    """For clustering points (ideally mean window expression vectors) via 1 - KT, where KT is the Kendall-Tau correlation of those vectors
 
     Parameters
     ----------
     mean_window_expression_ranks :
-
+        
     t : Number of clusters to look for
+        (Default value = 4)
+    mean_window_expression_ranks: np.ndarray :
+        
+    t: int :
          (Default value = 4)
 
     Returns
     -------
 
+    
     """
 
     def kt(a: np.ndarray, b: np.ndarray) -> float:
@@ -29,13 +33,18 @@ def kt_cluster(mean_window_expression_ranks: np.ndarray, t: int = 4) -> Any:
         Parameters
         ----------
         a : First vector
-
-        b :  Second vector
-
+            
+        b : Second vector
+            
+        a: np.ndarray :
+            
+        b: np.ndarray :
+            
 
         Returns
         -------
 
+        
         """
         assert len(a) == len(b)
         pbar.update(1)
