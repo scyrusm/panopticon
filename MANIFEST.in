@@ -1,4 +1,4 @@
 include README.rst
 include LICENSE
 include scripts/*
-
+include examples/example_data/example.loom

@@ -1,7 +1,6 @@
 *.tar.gz
-*.loom
-*.ipynb
 *.pdf
+*.loom
 *.py[cod]
 
 # Packages

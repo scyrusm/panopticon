@@ -351,7 +351,8 @@ def get_subclustering(X,
                       max_clusters=50,
                       min_input_size=10,
                       silhouette_threshold=0.2,
-                      regularization_factor=0.01):
+                      regularization_factor=0.01,
+                      clusteringcachedir='clusteringcachedir/'):
     """
 
     Parameters
@@ -384,7 +385,7 @@ def get_subclustering(X,
         return np.array([0] * X.shape[0])
     else:
         clustering = AgglomerativeClustering(n_clusters=2,
-                                             memory='clusteringcachedir/',
+                                             memory=clusteringcachedir,
                                              affinity='cosine',
                                              compute_full_tree=True,
                                              linkage='average')
@@ -420,7 +421,8 @@ def generate_clustering(loom,
                         starting_clustering_depth=0,
                         max_clusters='sqrt_rule',
                         mode='pca',
-                        silhouette_threshold=0.1):
+                        silhouette_threshold=0.1,
+                        clusteringcachedir='clusteringcachedir/'):
     """
 
     Parameters
@@ -492,11 +494,15 @@ def generate_clustering(loom,
             clustering = get_subclustering(
                 X,
                 silhouette_threshold,
-                max_clusters=int(np.floor(np.sqrt(X.shape[0])))
+                max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
+                                 clusteringcachedir=clusteringcachedir
             )  # This shouldn't be hard-coded S Markson 9 June 2020
         else:
             clustering = get_subclustering(
-                X, silhouette_threshold, max_clusters=max_clusters
+                X,
+                silhouette_threshold,
+                max_clusters=max_clusters,
+                clusteringcachedir=clusteringcachedir
             )  # This shouldn't be hard-coded S Markson 9 June 2020
 
         loom.ca['ClusteringIteration0'] = clustering
@@ -551,11 +557,15 @@ def generate_clustering(loom,
                 nopath_clustering = get_subclustering(
                     X,
                     silhouette_threshold,
-                    max_clusters=int(np.floor(np.sqrt(X.shape[0])))
+                    max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
+                    clusteringcachedir=clusteringcachedir
                 )  # This shouldn't be hard-coded S Markson 9 June 2020
             else:
                 nopath_clustering = get_subclustering(
-                    X, silhouette_threshold, max_clusters=max_clusters
+                    X,
+                    silhouette_threshold,
+                    max_clusters=max_clusters,
+                    clusteringcachedir=clusteringcachedir
                 )  # This shouldn't be hard-coded S Markson 9 June 2020
 
 
