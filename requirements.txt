@@ -7,6 +7,5 @@ click
 pyensembl
 tqdm
 seaborn
-wheel
 loompy
 pymannkendall
