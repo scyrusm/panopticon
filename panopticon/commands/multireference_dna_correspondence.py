@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 from panopticon.dna import multireference_dna_correspondence
-from panopticon.utilities import get_module_score_loom
+from panopticon.legacy import get_module_score_loom
 
 # import loompy after the main packages, because sometimes it breaks packages that are imported further:
 import loompy

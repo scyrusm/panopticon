@@ -49,7 +49,8 @@ where the ``''`` layer represents raw transcript counts.
 ::
 
     import loompy
-    from panopticon.utilities import generate_incremental_pca, generate_embedding, generate_clustering, generate_count_normalization, generate_masked_module_score
+    from panopticon.preprocessing import generate_count_normalization
+    from panopticon.analysis import generate_incremental_pca, generate_embedding, generate_clustering, generate_masked_module_score
     import matplotlib.pyplot as plt
     import numpy as np
 
