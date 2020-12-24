@@ -12,7 +12,6 @@ import loompy
 
 
 def scrna_wizard_main():
-    """ """
 
     filepath = click.prompt("Location of .loom file", type=click.Path('wb'))
     filename = click.prompt("Name of .loom file")
@@ -143,7 +142,6 @@ def scrna_wizard_main():
 
 
 def cnv_wizard_main():
-    """ """
     loomfile = click.prompt(
         "Loom file that you would like to augment with cnv/segmentation data: "
     )
@@ -196,17 +194,6 @@ def cnv_wizard_main():
 
 
 def gene_position_augmentation_main(loomfile):
-    """
-
-    Parameters
-    ----------
-    loomfile :
-        
-
-    Returns
-    -------
-
-    """
     with loompy.connect(loomfile, validate=False) as loom:
         gene_names, gene_contigs, gene_starts, gene_ends = get_valid_gene_info(
             loom.ra['gene'])
@@ -234,19 +221,6 @@ def gene_position_augmentation_main(loomfile):
 
 
 def gene_signature_wizard_main(loomfile=None, signaturefile=None):
-    """
-
-    Parameters
-    ----------
-    loomfile :
-         (Default value = None)
-    signaturefile :
-         (Default value = None)
-
-    Returns
-    -------
-
-    """
     print(loomfile)
     if loomfile is None:
         loomfile = click.prompt(

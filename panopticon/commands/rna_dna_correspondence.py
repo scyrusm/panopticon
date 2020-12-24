@@ -19,27 +19,6 @@ import loompy
 
 def rna_dna_correspondence_main(loomfile, args_seg_file, args_patient_column,
                                 args_patient, args_time_point, output=None):
-    """
-
-    Parameters
-    ----------
-    loomfile :
-        
-    args_seg_file :
-        
-    args_patient_column :
-        
-    args_patient :
-        
-    args_time_point :
-        
-    output :
-         (Default value = None)
-
-    Returns
-    -------
-
-    """
     with loompy.connect(loomfile, validate=False) as loom:
         genes = loom.ra['gene']
         metadata = pd.DataFrame(loom.ca['patient_ID']).astype(str)

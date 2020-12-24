@@ -19,27 +19,6 @@ import loompy
 
 
 def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
-    """
-
-    Parameters
-    ----------
-    loomfile :
-        
-    patient :
-        
-    cell_type :
-        
-    complexity_cutoff :
-        
-    n_clusters :
-        
-    figure_output :
-        
-
-    Returns
-    -------
-
-    """
     print(patient)
     with loompy.connect(loomfile, validate=False) as loom:
     
