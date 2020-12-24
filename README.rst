@@ -1,10 +1,10 @@
 
 
-.. include:: ./docs/source/overview.rst
+.. include:: ./docs/overview.rst
 
-.. include:: ./docs/source/installation.rst
+.. include:: ./docs/installation.rst
 
-.. include:: ./docs/source/dependencies.rst
+.. include:: ./docs/dependencies.rst
 
 Additional Documentation
 ========================
