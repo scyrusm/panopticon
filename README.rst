@@ -3,7 +3,7 @@
     :target: https://panopticon-single-cell.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
 
-.. image:: https://github.com/scyrusm/panopticon/workflows/Python%20package/badge.svg 
+.. image:: https://github.com/scyrusm/panopticon/workflows/build/badge.svg 
     :target: https://github.com/scyrusm/panopticon 
     :alt: Build Status
 
