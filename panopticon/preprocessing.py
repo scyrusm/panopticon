@@ -2,17 +2,18 @@ import numpy as np
 
 def generate_gene_variances(loom, layername):
     """
+    Computes the variance (across cells) of genes, and assigns this to the row attribute "GeneVar" 
 
     Parameters
     ----------
-    loom :
-        
-    layername :
+    loom : The LoomConnection instance upon which gene variance will be calculated
+    
+    layername : The name of the layer of the LoomConnection upon which the gene variance will be calculated.
         
 
     Returns
     -------
-
+    None
     
     """
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
@@ -23,13 +24,14 @@ def generate_cell_and_gene_quality_metrics(loom, layername):
 
     Parameters
     ----------
-    loom :
+    loom : The LoomConnection instance upon which cell and gene quality metrics will be annotated
         
-    layername :
+    layername : The name of the layer upon which cell and gene quality metrics will be calculated.
         
 
     Returns
     -------
+    None
 
     
     """
