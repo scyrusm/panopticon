@@ -304,12 +304,16 @@ def plot_dotmap(loom,
     import matplotlib.pyplot as plt
     import numpy as np
     fig, ax = plt.subplots(figsize=(25, 5))
-    markers = np.hstack([
-        diffex[key][~np.isin(diffex[key]['gene'], geneblacklist)
-                    & (~diffex[key]['gene'].apply(lambda x: '.' in x))].query(
-                        'MeanExpr1 > MeanExpr2')['gene'].head(topn).values
-        for key in diffex.keys()
-    ])
+    print(diffex.keys())
+    markers = [[]]
+    for key in diffex.keys():
+        markers.append(
+            diffex[key][(~np.isin(diffex[key]['gene'], geneblacklist))
+                        & (~np.isin(diffex[key]['gene'], np.hstack(markers)))
+                        & (~diffex[key]['gene'].apply(lambda x: '.' in x))].
+            query('MeanExpr1 > MeanExpr2')['gene'].head(topn).values)
+    markers = np.hstack(markers)
+    print(markers)
     markernames = markers
     key2x = {
         key: x

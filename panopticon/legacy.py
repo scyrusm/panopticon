@@ -113,7 +113,7 @@ def create_subsetted_loom(loom, output_loom, cellmask):
 
     with loompy.new(output_loom) as dsout:
         cells = np.where(cellmask)[
-            0]  # Select the cells that passed QC (totals > 500)
+            0]  
         for (ix, selection, view) in loom.scan(items=cells, axis=1,
                                                key="gene"):
             dsout.add_columns(view.layers,
@@ -121,9 +121,8 @@ def create_subsetted_loom(loom, output_loom, cellmask):
                               row_attrs=view.ra)
 
 
-def get_gsea_with_selenium(diffi,
-                           download_folder,
-                           email='doesnotactually@matter.edu'):
+def get_gsea_with_selenium(diffex,
+                           email='s'):
     """If you aren't Sam, probably don't use this.
 
     Parameters
@@ -136,52 +135,68 @@ def get_gsea_with_selenium(diffi,
 
     
     """
-    from selenium import webdriver
 
-    driver = webdriver.Firefox()
+    from selenium import webdriver
+    from selenium.webdriver.support.ui import Select
+    profile = webdriver.FirefoxProfile()
+    profile.set_preference('browser.download.folderList', 2) # custom location
+    profile.set_preference('browser.download.manager.showWhenStarting', False)
+    profile.set_preference('browser.download.dir', '/tmp')
+    profile.set_preference('browser.helperApps.neverAsk.saveToDisk', 'text/tsv')
+    profile.set_preference('browser.helperApps.neverAsk.saveToDisk', 'text/txt')
+    
+    driver = webdriver.Firefox(profile)
+    download_folder = '/tmp/'
     genelisthitdict = {}
     flag = True
-    for diffex in diffi:
-        for key in diffex.keys():
-            driver.get("https://www.gsea-msigdb.org/gsea/msigdb/annotate.jsp")
-            if flag:
-                elem = driver.find_element_by_name("j_username")
-                elem.send_keys(email)
-                elem = driver.find_element_by_name('login')
-                elem.click()
-                flag = False
-            elem = driver.find_element_by_id("geneList")
-            elem.send_keys('\n'.join(diffex[key]['gene'][0:10].values))
-            for genelistcheckbox in ["H", "C2", "C5", "C6", "C7"]:
-                elem = driver.find_element_by_id(
-                    "{}checkbox".format(genelistcheckbox))
-                elem.click()
-            #driver.close()
-            elem = driver.find_element_by_name("viewOverlaps")
+    email = 's'
+    for key in diffex.keys():
+    
+        driver.get("https://www.gsea-msigdb.org/gsea/msigdb/annotate.jsp")
+        if flag:
+            elem = driver.find_element_by_name("j_username")
+            elem.send_keys(email)
+            elem = driver.find_element_by_name('login')
             elem.click()
+            flag = False
+        elem = driver.find_element_by_id("geneList")
+        elem.send_keys('\n'.join(diffex[key].query('MeanExpr1 > MeanExpr2')['gene'][0:200].values))
+        for genelistcheckbox in ["H", "C2", "C5", "C6", "C7","C8"]:
+            elem = driver.find_element_by_id(
+                "{}checkbox".format(genelistcheckbox))
+            elem.click()
+        #driver.close()
+        #elem.find_element_by_xpath("/html/body/div[2]/div[4]/div/table/tbody/tr/td[3]/table/tbody/tr/td[2]/form/table/tbody/tr[30]/td/p[1]/nobr/select[@name='element_name']/option[text()='100']")
+        #elem.click()
+        select = Select(driver.find_element_by_xpath('/html/body/div[2]/div[4]/div/table/tbody/tr/td[3]/table/tbody/tr/td[2]/form/table/tbody/tr[30]/td/p[1]/nobr/select'))
+        select.select_by_value('100')
+    
+        elem = driver.find_element_by_name("viewOverlaps")
+        elem.click()
+        #try:
+        elem = driver.find_element_by_link_text("Text")
+        elem.click()
+        #driver.close()
+        footersize = 0
+        while True:
             try:
-                elem = driver.find_element_by_link_text("Text")
-                elem.click()
-                #driver.close()
-                footersize = 0
-                while True:
-                    try:
-                        genelisthits = pd.read_table(
-                            "{}/overlap.tsv".format(download_folder),
-                            skiprows=10,
-                            skipfooter=footersize,
-                            header=None)
-                        break
-                    except:
-                        footersize += 1
                 genelisthits = pd.read_table(
                     "{}/overlap.tsv".format(download_folder),
                     skiprows=10,
-                    skipfooter=footersize + 2,
+                    skipfooter=footersize,
                     header=None)
-                genelisthitdict[key] = genelisthits
-                os.system("rm {}/overlap.tsv".format(download_folder))
+                break
             except:
-                genelisthitdict[key] = 'no hits'
-            #print(genelisthitdict[key])
+                footersize += 1
+        genelisthits = pd.read_table(
+            "{}/overlap.tsv".format(download_folder),
+            skiprows=10,
+            skipfooter=footersize + 2,
+            header=None)
+        genelisthitdict[key] = genelisthits
+        os.system("rm {}/overlap.tsv".format(download_folder))
+        #except:
+        #    genelisthitdict[key] = 'no hits'
+        #print(genelisthitdict[key])
+    driver.close()
     return genelisthitdict

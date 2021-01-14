@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def generate_gene_variances(loom, layername):
     """
     Computes the variance (across cells) of genes, and assigns this to the row attribute "GeneVar" 
@@ -21,10 +22,17 @@ def generate_gene_variances(loom, layername):
 
 def generate_cell_and_gene_quality_metrics(loom, layername):
     """
+    Calculates five quantities and writes them to the LoomConnection instance specified in loom:
+
+    - RibosomalRelativeMeanAbsolutionDeviation:  this is madrp / meanrp, where madrp is the mean absolute deviation of ribosomal protein genes (RP*) and meanrp is the mean expression of ribosomal protein genes (RP*) (means, mads compute on a cell-by-cell basis).
+    - RibosomalMaxOverMean: this is maxrp / meanrp, where maxrp is the maximum RP* expression over all RP* genes; meanrp is as above (max, mean on a cell-by-cell basis).
+    - AllGeneRelativeMeanAbsoluteDeviation: this is madall / meanall, where madall is the MAD over all genes, and meanall is the mean over all genes (mad, mean on a cell-by-cell basis).  
+    - nGene: number of unique genes expressed (>0) on a cell-by-cell basis.
+    - nCell: number of unique cells expressing a gene (>0), on a gene-by-gene basis.  
 
     Parameters
     ----------
-    loom : The LoomConnection instance upon which cell and gene quality metrics will be annotated
+    loom : The LoomConnection instance upon which cell and gene quality metrics will be annotated.
         
     layername : The name of the layer upon which cell and gene quality metrics will be calculated.
         
@@ -87,6 +95,7 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
 
     Returns
     -------
+    None
 
     
     """
@@ -99,31 +108,64 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
             mask.append(metric_val > default_cutoff)
     return np.array(mask)
 
-def generate_count_normalization(loom,                                                                                                                                                                                                         
-                                 raw_count_layername,                                                                                                                                                                                          
-                                 output_layername,                                                                                                                                                                                             
-                                 denominator=10**5):                                                                                                                                                                                           
-    """Generates a new layer with log2 (TP_something)                                                                                                                                                                                          
+
+def generate_count_normalization(loom,
+                                 raw_count_layername,
+                                 output_layername,
+                                 denominator=10**5):
+    """Generates a new layer with log2(transcripts per denominator).  By default this will produce a log2(TP100k+1) layer; adjusting the denominator will permit e.g. a log2(TP10k+1) or log2(TPM+1), etc.                                                                                                                                                                                             
                                                                                                                                                                                                                                                
     Parameters                                                                                                                                                                                                                                 
     ----------                                                                                                                                                                                                                                 
-    loom :                                                                                                                                                                                                                                     
-                                                                                                                                                                                                                                               
-    raw_count_layername :                                                                                                                                                                                                                      
-                                                                                                                                                                                                                                               
-    output_layername :                                                                                                                                                                                                                         
-                                                                                                                                                                                                                                               
-    denominator :                                                                                                                                                                                                                              
+    loom : The LoomConnection instance upon which a count normalized layer will be computed.                                                                                                                                                                                                                                     
+    raw_count_layername : The layername corresponding to raw counts, or normalized log counts (counts of TPM).                                                                                                                                                                                                                       
+    output_layername :  The desired output layername.                                                                                                                                                                                                                         
+    denominator : The denominator for transcript count normalization (e.g. transcripts per denominator).                                                                                                                                                                                                                           
         (Default value = 10**5)                                                                                                                                                                                                                
                                                                                                                                                                                                                                                
     Returns                                                                                                                                                                                                                                    
     -------                                                                                                                                                                                                                                    
+    None                                                                                                                                                                                                                                               
                                                                                                                                                                                                                                                
-                                                                                                                                                                                                                                               
-    """                                                                                                                                                                                                                                        
-    import numpy as np                                                                                                                                                                                                                         
-    colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]                                                                                                                                                                               
-    sparselayer = loom[raw_count_layername].sparse()                                                                                                                                                                                           
-    sparselayer = sparselayer.multiply(denominator / colsums).log1p().multiply(                                                                                                                                                                
-        1 / np.log(2))                                                                                                                                                                                                                         
+    """
+    import numpy as np
+    colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]
+    sparselayer = loom[raw_count_layername].sparse()
+    sparselayer = sparselayer.multiply(denominator / colsums).log1p().multiply(
+        1 / np.log(2))
     loom[output_layername] = sparselayer
+
+
+def generate_standardized_layer(loom, layername, variance_axis='cell'):
+    """                                                                                                                                                                                                                                        
+                                                                                                                                                                                                                                               
+    Parameters                                                                                                                                                                                                                                 
+    ----------                                                                                                                                                                                                                                 
+    loom : The LoomConnection instance upon which the standardized layer will be added.
+                                                                                                                                                                                                                                               
+    layername : The name of the layer which will be standardized.                                                                                                                                                           
+                                                                                                                                                                                                                                               
+    variance_axis : The axis over which the standardization will proceed (i.e. over cells or over genes).                                                                                                                                                                                                                             
+         (Default value = 'cell')                                                                                                                                                                                                              
+                                                                                                                                                                                                                                               
+    Returns                                                                                                                                                                                                                                    
+    -------                                                                                                                                                                                                                                    
+    None 
+    
+    """
+    if layername.endswith('_standardized'):
+        raise Exception(
+            "It appears that layer is already standardized; note that _standardized suffix is reserved"
+        )
+    if variance_axis not in ['gene', 'cell']:
+        raise Exception(
+            "Can only set variance to be 1 along cell axis or gene axis")
+    from sklearn.preprocessing import StandardScaler
+    if variance_axis == 'gene':
+        loom[layername +
+             '_gene_standardized'] = StandardScaler().fit_transform(
+                 loom[layername][:, :].T).T
+    elif variance_axis == 'cell':
+        loom[layername +
+             '_cell_standardized'] = StandardScaler().fit_transform(
+                 loom[layername][:, :])
