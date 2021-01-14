@@ -18,6 +18,7 @@ def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
 
     Returns
     -------
+    None
 
     
     """
@@ -154,12 +155,21 @@ def generate_incremental_pca(loom,
                              n_components=50,
                              min_size_for_incrementalization=5000):
     """
+    Computes a principal component analysis (PCA) over a layer of interest.  Defaults to incremental PCA (using IncrementalPCA from sklearn.decomposition) but will switch to conventional PCA for LoomConnections with cell
+    numbers below a min_size_for_incrementalization.  Will write the n_components principal components as row attributes:
+    - (layer) PC (PC number, 1-indexed) 
+    
+    The following are written as attributes:
+    - NumberPrincipalComponents_(layername).  This is simply n_components.  
+    - PCExplainedVariancedRatio_(layername).  This is explained_variance_ratio_ from the PCA model.   
+
+    Will also run panopticon.analysis.generate_pca_loadings.  
 
     Parameters
     ----------
-    loom :
+    loom : The LoomConnection instance upon which PCA will be calculated.  
         
-    layername :
+    layername : The layer of the loom file over which the PCs will be computed.  
         
     batch_size :
         (Default value = 512)
@@ -170,6 +180,7 @@ def generate_incremental_pca(loom,
 
     Returns
     -------
+    None
 
     
     """
