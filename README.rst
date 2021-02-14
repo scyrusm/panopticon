@@ -2,11 +2,14 @@
 .. image:: https://readthedocs.org/projects/panopticon-single-cell/badge/?version=latest
     :target: https://panopticon-single-cell.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
-
+    
 .. image:: https://github.com/scyrusm/panopticon/workflows/build/badge.svg 
     :target: https://github.com/scyrusm/panopticon 
     :alt: Build Status
-
+    
+.. image:: https://zenodo.org/badge/215686178.svg
+   :target: https://zenodo.org/badge/latestdoi/215686178
+   :alt: DOI
 
 Panopticon
 ==========
