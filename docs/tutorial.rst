@@ -56,10 +56,14 @@ where the ``''`` layer represents raw transcript counts.
 
     db = loompy.connect("WhateverYouNamedIt.loom")
 
-    generate_count_normalization(db, '','log2(TP100k+1)')
-    generate_incremental_pca(db, 'log2(TP100k+1)')
-    generate_embedding(db, 'log2(TP100k+1)' )
-    generate_clustering(db, 'log2(TP100k+1)', clustering_depth=3)
+    layername = 'log2(TP100k+1)'
+    # Generates a new layer with log2(transcripts per
+    # denominator).
+    generate_count_normalization(db, '', layername)
+
+    generate_incremental_pca(db, layername)
+    generate_embedding(db, layername)
+    generate_clustering(db, layername, clustering_depth=3)
 
     fig, ax = plt.subplots(figsize=(6,6))
     for cluster in np.unique(db.ca['ClusteringIteration0']):
