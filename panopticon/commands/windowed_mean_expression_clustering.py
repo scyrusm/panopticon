@@ -18,7 +18,7 @@ from panopticon.clustering import kt_cluster
 import loompy
 
 
-def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
+def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output):
     """
 
     Parameters
@@ -78,21 +78,16 @@ def windowed_mean_expression_clustering_main(loomfile, patient, cell_type, compl
         ax.tick_params(labeltop=False)
         ax.get_xaxis().set_ticks([])
         ax.get_yaxis().set_ticks([])
-#        plt.tick_params(
-#            axis='x',          # changes apply to the x-axis
-#            which='both',      # both major and minor ticks are affected
-#            bottom=False,      # ticks along the bottom edge are off
-#            top=False,         # ticks along the top edge are off
-#            labelbottom=False)
-#        plt.tick_params(
-#            axis='y',          # changes apply to the x-axis
-#            which='both',      # both major and minor ticks are affected
-#            bottom=False,      # ticks along the bottom edge are off
-#            top=False,         # ticks along the top edge are off
-#            labelbottom=False)
         ax.set_xlabel('UMAP 1', fontsize=22)
         ax.set_ylabel('UMAP 2', fontsize=22)
 #        plt.legend()
+        if raw_data_output:
+            raw_data = pd.DataFrame(embedding)
+            raw_data.columns = ['UMAP 1','UMAP 2']
+            if raw_data_output.endswith('tsv'):
+                raw_data.to_csv(raw_data_output,sep='\t')
+            else:
+                raw_data.to_csv(raw_data_output)
         if figure_output:
             plt.savefig(figure_output)
         else:

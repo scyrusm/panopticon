@@ -21,10 +21,12 @@ def cli():
         '--n_clusters', help='Number of clusters to look for', default=1, type=int)
 @click.option(
         '--figure_output', help='Output file for umap, should end in e.g. .pdf, .jpg, .png, .svg', default=None)
+@click.option(
+        '--raw_data_output', help='Output file for raw data from umap, defaults to csv unless argument ends in tsv, in which case output will be tab-delimited', default=None)
 @click.argument('loomfile')
-def wmec(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output):
+def wmec(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output):
     from panopticon.commands import windowed_mean_expression_clustering as wmec
-    wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output)
+    wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output)
 
 @cli.command(short_help="For checking the malignancy status of cells with a paired DNA-derived"
                         "segmentation file (returns a Mann-Whitney Z score and the p-value for"
