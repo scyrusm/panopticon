@@ -90,20 +90,19 @@ def create_subsetted_loom_with_genemask(loom, output_loom, cellmask, genemask):
             smallerloom[layer] = loom[layer][:, cellmask][genemask, :]
 
 
-def create_subsetted_loom(loom, output_loom, cellmask):
+def create_subsetted_loom(loom, output_loom_filename, cellmask):
     """Deprecated.
+
+    Will create a new loom file with cells specified according to a Boolean vector mask.
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object which will be subsetted
         
-    output_loom :
+    output_loom_filename : string denoting the path and filename of the output loom file.  
         
-    cellmask :
+    cellmask : Boolean numpy vector with length equal to the number of cells in "loom"
         
-    genemask :
-        
-
     Returns
     -------
 
@@ -111,7 +110,7 @@ def create_subsetted_loom(loom, output_loom, cellmask):
     """
     import loompy
 
-    with loompy.new(output_loom) as dsout:
+    with loompy.new(output_loom_filename) as dsout:
         cells = np.where(cellmask)[
             0]  
         for (ix, selection, view) in loom.scan(items=cells, axis=1,
