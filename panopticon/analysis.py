@@ -933,27 +933,28 @@ def get_differential_expression_dict(loom,
                                      final_iteration=3,
                                      min_cluster_size=50):
     """
+    Runs cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.  
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
-    layername :
+    layername : layer key of loom, over which differential expression will be computed
         
-    output :
+    output : Optional filename whereto a .pkl object will be written with dictionary output
         (Default value = None)
-    downsample_size :
+    downsample_size : Number of cells from each cluster to downsample to prior to running differential expression
         (Default value = 500)
-    starting_iteration :
+    starting_iteration : if 0, will start with ClusteringIteration0, for example
         (Default value = 0)
-    final_iteration :
+    final_iteration :  if 3, will continue to ClusteringIteration3, for example
         (Default value = 3)
-    min_cluster_size :
+    min_cluster_size : minimum size of clusters to consider (if one of clusters if below this threshold, will output nan instead of a differential expression dataframe for that particular key)
         (Default value = 50)
 
     Returns
     -------
-
+    dictionary, with each key representing a cluster, and each value a pandas dataframe with differential expression results (truncated at 500 top genes except for ClusteringIteration0, which is untruncated)
     
     """
     from panopticon.analysis import cluster_differential_expression

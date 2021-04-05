@@ -25,6 +25,8 @@ def get_valid_gene_info(
         
     genes : List[str] :
         
+    genes : List[str] :
+        
     genes: List[str] :
         
 
@@ -222,6 +224,8 @@ def we_can_pickle_it(thing, thingname: str):
         
     thingname : str :
         
+    thingname : str :
+        
     thingname: str :
         
 
@@ -246,6 +250,8 @@ def we_can_unpickle_it(thingname: str):
         
     thingname : str :
         
+    thingname : str :
+        
     thingname: str :
         
 
@@ -260,8 +266,22 @@ def we_can_unpickle_it(thingname: str):
     return thing
 
 def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
-    """
-    Much credit to https://thehumangeo.wordpress.com/2014/05/12/drawing-boundaries-in-python/
+    """Much credit to https://thehumangeo.wordpress.com/2014/05/12/drawing-boundaries-in-python/
+
+    Parameters
+    ----------
+    xcoords :
+        
+    ycoords :
+        
+    alpha :
+         (Default value = 0.1)
+    buffer :
+         (Default value = 1)
+
+    Returns
+    -------
+
     """
     
     
@@ -271,15 +291,22 @@ def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
     import math
 
     def alpha_shape(points, alpha):
-        """
-        Compute the alpha shape (concave hull) of a set
+        """Compute the alpha shape (concave hull) of a set
         of points.
 
-        @param points: Iterable container of points.
-        @param alpha: alpha value to influence the
+        Parameters
+        ----------
+        points :
+            Iterable container of points.
+        alpha :
+            alpha value to influence the
             gooeyness of the border. Smaller numbers
             don't fall inward as much as larger numbers.
             Too large, and you lose everything!
+
+        Returns
+        -------
+
         """
         if len(points) < 4:
             # When you have a triangle, there is no sense
@@ -287,9 +314,25 @@ def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
             return geometry.MultiPoint(list(points)).convex_hull
 
         def add_edge(edges, edge_points, coords, i, j):
-            """
-            Add a line between the i-th and j-th points,
+            """Add a line between the i-th and j-th points,
             if not in the list already
+
+            Parameters
+            ----------
+            edges :
+                
+            edge_points :
+                
+            coords :
+                
+            i :
+                
+            j :
+                
+
+            Returns
+            -------
+
             """
             if (i, j) in edges or (j, i) in edges:
                     # already added
@@ -343,12 +386,44 @@ def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
     return concave_hull.buffer(buffer)
 
 def get_outlier_removal_mask(xcoords, ycoords, nth_neighbor=10, quantile=.9):
+    """
+
+    Parameters
+    ----------
+    xcoords :
+        
+    ycoords :
+        
+    nth_neighbor :
+         (Default value = 10)
+    quantile :
+         (Default value = .9)
+
+    Returns
+    -------
+
+    """
     from scipy.spatial.distance import pdist,squareform
     D = squareform(pdist(np.vstack((xcoords,ycoords)).T))
     distances = D[np.argsort(D,axis=0)[nth_neighbor-1,:],0]
     return distances <= np.quantile(distances,quantile)
 
 def cohensd(g1,g2):
+    """
+    Returns Cohen's D for the effect size of group 1 values (g1) over group 2 values (g2).  
+
+    Parameters
+    ----------
+    g1 : group 1 values (list or numpy vector)
+        
+    g2 : group 2 values (list or numpy vector)
+        
+
+    Returns
+    -------
+    (mean(g1) - mean(g2) )/s, where s is the pooled standard deviation of the two groups with Bessel's correction
+
+    """
     n1 = len(g1)
     n2 = len(g2)
     s1 = np.std(g1,ddof=1)
