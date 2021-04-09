@@ -1140,7 +1140,7 @@ def cluster_differential_expression(loom,
             pvalues.append(1)
         else:
             pvalues.append(
-                mannwhitneyu(data1[igene, :], data2[igene, :]).pvalue)
+                mannwhitneyu(data1[igene, :], data2[igene, :], alternative='two-sided').pvalue)
         meanexpr1.append(data1[igene, :].mean())
         meanexpr2.append(data2[igene, :].mean())
         meanexpexpr1.append(np.mean(2**data1[igene, :]))
@@ -1240,7 +1240,7 @@ def get_differential_expression_custom(X1,X2,genes,axis=0):
             pvalues.append(1)
         else:
             pvalues.append(
-                mannwhitneyu(X1[igene, :], X2[igene, :]).pvalue)
+                mannwhitneyu(X1[igene, :], X2[igene, :], alternative='two-sided').pvalue)
         meanexpr1.append(X1[igene, :].mean())
         meanexpr2.append(X2[igene, :].mean())
         meanexpexpr1.append(np.mean(2**X1[igene, :]))
