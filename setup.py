@@ -23,15 +23,14 @@ install_requires = get_requirements('requirements.txt')
 setup(
     name='panopticon',
     version='0.1dev',
-    author='Samuel Markson',
-    author_email='SamuelC_Markson@dfci.harvard.edu',
-#    packages=['frogment' ],
+    author='Samuel C. Markson',
+    author_email='smarkson@alum.mit.edu',
     install_requires=install_requires, 
     packages=find_packages(),
 #    scripts=['scripts/WindowedMeanExpressionClustering', 'scripts/RnaDnaCorrespondence'],
     scripts=['scripts/panopticon'],
     license='BSD',
-    description='for combined DNA/RNA analysis in a longitudinal context',
+    description='for general analysis of single-cell RNA data',
     include_package_data = True,
     long_description=open('README.rst').read(),
 )
