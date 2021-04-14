@@ -30,7 +30,7 @@ setup(
     packages=find_packages(),
 #    scripts=['scripts/WindowedMeanExpressionClustering', 'scripts/RnaDnaCorrespondence'],
     scripts=['scripts/panopticon'],
-    license='MIT',
+    license='BSD',
     description='for combined DNA/RNA analysis in a longitudinal context',
     include_package_data = True,
     long_description=open('README.rst').read(),
