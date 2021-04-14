@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'panopticon'
-copyright = '2020, Samuel C. Markson'
+copyright = '2021, Samuel C. Markson'
 author = 'Samuel C. Markson'
 
 # The full version, including alpha/beta/rc tags

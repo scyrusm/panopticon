@@ -1,4 +1,4 @@
 ============
 Dependencies
 ============
-All code has been tested on python 3.6-3.8. As of this writing, it will not work on python 3.9, due to numba dependency in umap-learn. Package dependencies can be found at https://github.com/scyrusm/panopticon/blob/master/requirements.txt
+All code has been tested on python 3.6-3.9. Package dependencies can be found at https://github.com/scyrusm/panopticon/blob/master/requirements.txt
