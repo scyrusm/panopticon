@@ -12,7 +12,7 @@ def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
     signature_mask : indices corresponding to signature
         
     nbins : Number of quantile bins to use
-        (Default value = 100)
+        (Default value = 10)
     ncontrol : Number of genes in each matched quantile
         (Default value = 5)
 
@@ -46,7 +46,7 @@ def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
     return signature - control
 
 
-def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
+def generate_masked_module_score(loom, layername, mask, genelist, ca_name, nbins=10, ncontrol=5):
     """
 
     Parameters
@@ -72,7 +72,7 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name):
         mask = np.array([True] * loom.shape[1])
     matrix = loom[layername][:, mask]
     sigmask = np.isin(loom.ra['gene'], genelist)
-    sig_score = get_module_score_matrix(matrix, sigmask)
+    sig_score = get_module_score_matrix(matrix, sigmask, nbins=nbins, ncontrol=ncontrol)
     maskedscores = []
     counter = 0
     for flag in mask:

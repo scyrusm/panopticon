@@ -370,3 +370,74 @@ def plot_dotmap(loom,
     if title is not None:
         plt.title(title)
     plt.show()
+
+
+def swarmviolin(data,
+                x,
+                y,
+                hue,
+                ax,
+                split=True,
+                alpha=0.2,
+                violinplot_kwargs={},
+                swarmplot_kwargs={}):
+    """
+
+    Parameters
+    ----------
+    data : pandas dataframe in form that would be acceptable input to seaborn violin, swarmplots
+        
+    diffex :
+    x : column of data to be used for violin, swarmplot x argument 
+        
+    y : column of data to be used for violin, swarmplot y argument 
+        
+    hue : column of data to be used for violin, swarmplot hue argument 
+         (Default value = 10)
+    
+    ax : matplotlib axis 
+    
+    split : split argument to be passed to violin, swarmplot
+         (Default value = True)
+    alpha : alpha to be used for seaborn violinplot
+         (Default value = 0.2)
+
+    Returns
+    -------
+
+    matplotlib axis
+
+    """
+    import seaborn as sns
+    sns.violinplot(data=data,
+                   x=x,
+                   hue=hue,
+                   y=y,
+                   split=split,
+                   inner='quartile',
+                   cut=0,
+                   alpha=alpha,
+                   ax=ax,
+                   width=.8,
+                   **violinplot_kwargs)
+    for violin in ax.collections:
+        violin.set_alpha(0.1)
+    sns.swarmplot(data=data,
+                  x=x,
+                  hue=hue,
+                  y=y,
+                  split=split,
+                  alpha=1,
+                  ax=ax,
+                  dodge=True,
+                  size=2.5,
+                  **swarmplot_kwargs)
+
+    def legend_without_duplicate_labels(ax):
+        handles, labels = ax.get_legend_handles_labels()
+        unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels))
+                  if l not in labels[:i]]
+        ax.legend(*zip(*unique), title='', loc=(1.05, .8))
+
+    legend_without_duplicate_labels(ax)
+    return ax
