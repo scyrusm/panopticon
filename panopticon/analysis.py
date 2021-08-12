@@ -46,7 +46,13 @@ def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
     return signature - control
 
 
-def generate_masked_module_score(loom, layername, mask, genelist, ca_name, nbins=10, ncontrol=5):
+def generate_masked_module_score(loom,
+                                 layername,
+                                 mask,
+                                 genelist,
+                                 ca_name,
+                                 nbins=10,
+                                 ncontrol=5):
     """
 
     Parameters
@@ -61,6 +67,10 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name, nbins
         
     ca_name : Desired name of signature to be made into a column attribute.
         
+    nbins :
+         (Default value = 10)
+    ncontrol :
+         (Default value = 5)
 
     Returns
     -------
@@ -72,7 +82,10 @@ def generate_masked_module_score(loom, layername, mask, genelist, ca_name, nbins
         mask = np.array([True] * loom.shape[1])
     matrix = loom[layername][:, mask]
     sigmask = np.isin(loom.ra['gene'], genelist)
-    sig_score = get_module_score_matrix(matrix, sigmask, nbins=nbins, ncontrol=ncontrol)
+    sig_score = get_module_score_matrix(matrix,
+                                        sigmask,
+                                        nbins=nbins,
+                                        ncontrol=ncontrol)
     maskedscores = []
     counter = 0
     for flag in mask:
@@ -93,7 +106,7 @@ def generate_nmf_and_loadings(loom,
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layername :
         
@@ -185,6 +198,9 @@ def generate_incremental_pca(loom,
     from tqdm import tqdm
     from sklearn.decomposition import IncrementalPCA, PCA
     from panopticon.analysis import generate_pca_loadings
+    if loom.shape[1] % batch_size < n_components:
+        batch_size += 1
+        print("Batch size increased to {} so that smallest batch will be greater than n_components".format(batch_size))
     if loom.shape[1] < min_size_for_incrementalization:
         print(
             "Loom size below threshold for incremental PCA; running conventional PCA"
@@ -211,7 +227,7 @@ def generate_pca_loadings(loom, layername, dosparse=False, batch_size=512):
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layername :
         
@@ -262,6 +278,39 @@ def generate_pca_loadings(loom, layername, dosparse=False, batch_size=512):
                                           1)] = compresseddata[:, iloading]
 
 
+def get_pca_loadings_matrix(loom, layername, components_to_use=None):
+    """
+
+    Parameters
+    ----------
+    loom : LoomConnection object
+        
+    layername : corresponding layer from which to retrieve PCA loadings matrix
+        
+    components_to_use :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
+    n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(layername)]
+    pca_loadings = []
+    if components_to_use != None:
+        for col in [
+                '{} PC {} Loading'.format(layername, x)
+                for x in components_to_use
+        ]:
+            pca_loadings.append(loom.ca[col])
+    else:
+        for col in [
+                '{} PC {} Loading'.format(layername, x)
+                for x in range(1, n_pca_cols + 1)
+        ]:
+            pca_loadings.append(loom.ca[col])
+    return np.vstack(pca_loadings).T
+
+
 def generate_embedding(loom,
                        layername,
                        min_dist=0.0001,
@@ -275,7 +324,7 @@ def generate_embedding(loom,
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     pca_type :
         (Default value = 'log_tpm')
@@ -309,22 +358,8 @@ def generate_embedding(loom,
     if mode not in ['pca', 'nmf']:
         raise Exception("Currently only two modes implemented:  nmf and pca")
     if mode == 'pca':
-        n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(
-            layername)]
-        pca_loadings = []
-        if components_to_use != None:
-            for col in [
-                    '{} PC {} Loading'.format(layername, x)
-                    for x in components_to_use
-            ]:
-                pca_loadings.append(loom.ca[col])
-        else:
-            for col in [
-                    '{} PC {} Loading'.format(layername, x)
-                    for x in range(1, n_pca_cols + 1)
-            ]:
-                pca_loadings.append(loom.ca[col])
-        compressed = np.vstack(pca_loadings).T
+        from panopticon.analysis import get_pca_loadings_matrix
+        compressed = get_pca_loadings_matrix(loom, layername, components_to_use=components_to_use)
     elif mode == 'nmf':
         n_nmf_cols = loom.attrs['NumberNMFComponents']
         print(n_nmf_cols)
@@ -380,7 +415,7 @@ def get_subclustering(X,
     regularization_factor :
         (Default value = 0.01)
     clusteringcachedir :
-         (Default value = 'clusteringcachedir/')
+        (Default value = 'clusteringcachedir/')
 
     Returns
     -------
@@ -427,21 +462,26 @@ def get_subclustering(X,
 
 def generate_clustering(loom,
                         layername,
-                        clustering_depth=3,
+                        final_clustering_depth=3,
                         starting_clustering_depth=0,
                         max_clusters='sqrt_rule',
                         mode='pca',
+                        n_components=10,
                         silhouette_threshold=0.1,
-                        clusteringcachedir='clusteringcachedir/'):
+                        clusteringcachedir='clusteringcachedir/',
+                        out_of_core_batch_size=512,
+                        first_round_leiden=False,
+                        leiden_nneighbors=20,
+                        leiden_iterations=10):
     """
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
-    clustering_depth :
+    final_clustering_depth : The clustering iteration on which to terminate; final_clustering_depth=3 will assign values through column attribute ClusteringIteration3
         (Default value = 3)
-    starting_clustering_depth :
+    starting_clustering_depth : The clustering iteration on which to begin; starting_clustering_depth=0 will assign values to column attribute ClusteringIteration0
         (Default value = 0)
     max_clusters :
         (Default value = 200)
@@ -452,17 +492,22 @@ def generate_clustering(loom,
     silhouette_threshold :
         (Default value = 0.1)
     clusteringcachedir :
-         (Default value = 'clusteringcachedir/')
+        (Default value = 'clusteringcachedir/')
+    n_components :
+         (Default value = 10)
+    out_of_core_batch_size :
+         (Default value = 512)
 
     Returns
     -------
 
     
     """
-    if type(clustering_depth) != int or clustering_depth < 1 or type(
-            starting_clustering_depth) != int:
+    if type(final_clustering_depth
+            ) != int or final_clustering_depth < 1 or type(
+                starting_clustering_depth) != int:
         raise Exception(
-            "clustering_depth and starting_clustering_depth must be natural numbers."
+            "final_clustering_depth and starting_clustering_depth must be natural numbers."
         )
     if (starting_clustering_depth > 0) and (
             'ClusteringIteration{}'.format(starting_clustering_depth - 1)
@@ -483,44 +528,47 @@ def generate_clustering(loom,
         from sklearn.decomposition import NMF
 
     if starting_clustering_depth == 0:
-        if mode == 'nmf':
-            n_nmf_cols = loom.attrs['NumberNMFComponents']
-            nmf_loadings = []
-            for col in [
-                    '{} NMF Loading Component {}'.format(layername, x)
-                    for x in range(1, n_nmf_cols + 1)
-            ]:
-                nmf_loadings.append(loom.ca[col])
-            X = np.vstack(nmf_loadings).T
-        elif mode == 'pca':
-            n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(
-                layername)]
-            pca_loadings = []
-            for col in [
-                    '{} PC {} Loading'.format(layername, x)
-                    for x in range(1, n_pca_cols + 1)
-            ]:
-                pca_loadings.append(loom.ca[col])
-            X = np.vstack(pca_loadings).T
-        if max_clusters == 'sqrt_rule':
-            clustering = get_subclustering(
-                X,
-                silhouette_threshold,
-                max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
-                clusteringcachedir=clusteringcachedir
-            )  # This shouldn't be hard-coded S Markson 9 June 2020
+        if first_round_leiden:
+            from sklearn.neighbors import kneighbors_graph
+            from panopticon.analysis import get_pca_loadings_matrix
+            from panopticon.utilities import get_igraph_from_adjacency
+            import leidenalg
+
+            X = get_pca_loadings_matrix(loom, layername)
+            A = kneighbors_graph(X, leiden_nneighbors, mode='connectivity', include_self=True, metric='cosine')
+            ig = get_igraph_from_adjacency(A)
+            part = leidenalg.find_partition(ig, leidenalg.RBConfigurationVertexPartition, n_iterations=leiden_iterations)
+            clustering = part.membership
         else:
-            clustering = get_subclustering(
-                X,
-                silhouette_threshold,
-                max_clusters=max_clusters,
-                clusteringcachedir=clusteringcachedir
-            )  # This shouldn't be hard-coded S Markson 9 June 2020
+            if mode == 'nmf':
+                n_nmf_cols = loom.attrs['NumberNMFComponents']
+                nmf_loadings = []
+                for col in [
+                        '{} NMF Loading Component {}'.format(layername, x)
+                        for x in range(1, n_nmf_cols + 1)
+                ]:
+                    nmf_loadings.append(loom.ca[col])
+                X = np.vstack(nmf_loadings).T
+            elif mode == 'pca':
+                from panopticon.analysis import get_pca_loadings_matrix
+                X = get_pca_loadings_matrix(loom, layername, n_components=n_components)
+            if max_clusters == 'sqrt_rule':
+                clustering = get_subclustering(
+                    X,
+                    silhouette_threshold,
+                    max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
+                    clusteringcachedir=clusteringcachedir)
+            else:
+                clustering = get_subclustering(
+                    X,
+                    silhouette_threshold,
+                    max_clusters=max_clusters,
+                    clusteringcachedir=clusteringcachedir)
 
         loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
 
-    for subi in range(starting_clustering_depth, clustering_depth):
+    for subi in range(starting_clustering_depth, final_clustering_depth + 1):
 
         loom.ca['ClusteringIteration{}'.format(subi)] = ['U'] * len(
             loom.ca['ClusteringIteration{}'.format(subi - 1)])
@@ -533,30 +581,44 @@ def generate_clustering(loom,
                 subi -
                 1)] == cluster  #first mask, check for top level clustering
             #break
-            start = time()
-            data_c = loom[layername][:, mask]
-            print("processing cluster", cluster, "; time to load: ",
-                  time() - start, ", mask size: ", np.sum(mask))
+            #            mask = np.nonzero(mask) # workaround to accommodate h5py 3.* bug -- S. Markson 5 Aug 2021
             if mode == 'nmf':
+                print(
+                    "NMF operation currently requires loading full layer into memory"
+                )
+                start = time()
+                data_c = loom[layername][:, mask]
+                print("processing cluster", cluster, "; time to load: ",
+                      time() - start, ", mask size: ", np.sum(mask))
                 model = NMF(n_components=np.min([50, data_c.shape[1]]),
                             init='random',
                             random_state=0)
                 X = model.fit_transform(data_c.T)
             elif mode == 'pca':
 
-                data_c = data_c.T
-                if data_c.shape[0] > 5000:
-                    model = IncrementalPCA(n_components=10)
-                    for chunk in tqdm(
-                            np.array_split(data_c,
-                                           data_c.shape[0] // 512,
-                                           axis=0),
-                            desc='partial fitting over chunks of masked data'):
-                        model.partial_fit(chunk)
-                    X = model.transform(data_c)
-                    print("EV", model.explained_variance_)
-                    print("EVR", model.explained_variance_ratio_)
+                if mask.sum() > 5000:
+                    pca = IncrementalPCA(n_components=n_components)
+                    for (ix, selection, view) in tqdm(
+                            loom.scan(axis=1,
+                                      batch_size=out_of_core_batch_size,
+                                      items=mask,
+                                      layers=[layername]),
+                            total=loom.shape[1] // out_of_core_batch_size):
+                        #pca.partial_fit(view[:, :].transpose())
+                        pca.partial_fit(view[layername][:, :].T)
+
+                    compresseddatalist = []
+                    for (ix, selection, view) in tqdm(
+                            loom.scan(axis=1,
+                                      batch_size=out_of_core_batch_size,
+                                      items=mask,
+                                      layers=[layername]),
+                            total=loom.shape[1] // out_of_core_batch_size):
+                        compresseddatalist.append(
+                            view[layername][:, :].T @ pca.components_.T)
+                    X = np.vstack(compresseddatalist)
                 else:
+                    data_c = loom[layername][:, mask].T
                     model = PCA(n_components=np.min([10, data_c.shape[0]]),
                                 random_state=0)
 
@@ -597,7 +659,7 @@ def get_cluster_markers(loom, layername, cluster_level):
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layername :
         
@@ -639,7 +701,7 @@ def get_cluster_embedding(loom,
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layername :
         
@@ -702,7 +764,7 @@ def get_metafield_breakdown(loom,
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     cluster :
         
@@ -736,7 +798,7 @@ def get_patient_averaged_table(loom,
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     patient_key :
         (Default value = 'patient_ID')
@@ -773,7 +835,7 @@ def generate_malignancy_score(loom,
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layername :
         
@@ -869,7 +931,7 @@ def get_cosine_self_similarity(loom, layername, cluster, self_mean=None):
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layername :
         
@@ -899,7 +961,7 @@ def get_dictionary_of_cluster_means(loom, layername, clustering_level):
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layername :
         
@@ -932,8 +994,7 @@ def get_differential_expression_dict(loom,
                                      starting_iteration=0,
                                      final_iteration=3,
                                      min_cluster_size=50):
-    """
-    Runs cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.  
+    """Runs cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.
 
     Parameters
     ----------
@@ -947,14 +1008,14 @@ def get_differential_expression_dict(loom,
         (Default value = 500)
     starting_iteration : if 0, will start with ClusteringIteration0, for example
         (Default value = 0)
-    final_iteration :  if 3, will continue to ClusteringIteration3, for example
+    final_iteration : if 3, will continue to ClusteringIteration3, for example
         (Default value = 3)
     min_cluster_size : minimum size of clusters to consider (if one of clusters if below this threshold, will output nan instead of a differential expression dataframe for that particular key)
         (Default value = 50)
 
     Returns
     -------
-    dictionary, with each key representing a cluster, and each value a pandas dataframe with differential expression results (truncated at 500 top genes except for ClusteringIteration0, which is untruncated)
+
     
     """
     from panopticon.analysis import cluster_differential_expression
@@ -1028,7 +1089,7 @@ def cluster_differential_expression(loom,
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     cluster_level :
         
@@ -1140,7 +1201,9 @@ def cluster_differential_expression(loom,
             pvalues.append(1)
         else:
             pvalues.append(
-                mannwhitneyu(data1[igene, :], data2[igene, :], alternative='two-sided').pvalue)
+                mannwhitneyu(data1[igene, :],
+                             data2[igene, :],
+                             alternative='two-sided').pvalue)
         meanexpr1.append(data1[igene, :].mean())
         meanexpr2.append(data2[igene, :].mean())
         meanexpexpr1.append(np.mean(2**data1[igene, :]))
@@ -1158,12 +1221,17 @@ def cluster_differential_expression(loom,
     output['FracExpr2'] = fracexpr2
     return output.sort_values('pvalue', ascending=True)
 
-def get_differential_expression_over_continuum(loom, layer, mask, covariate, method='spearman'):
+
+def get_differential_expression_over_continuum(loom,
+                                               layer,
+                                               mask,
+                                               covariate,
+                                               method='spearman'):
     """
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection object
         
     layer :
         
@@ -1172,19 +1240,23 @@ def get_differential_expression_over_continuum(loom, layer, mask, covariate, met
     covariate :
         
     method :
-         (Default value = 'spearman')
+        (Default value = 'spearman')
 
     Returns
     -------
 
-    """
-    if method not in ['spearman','kendall']:
-        raise Exception("Requested method not implemented.  Only `kendall` or `spearman` currently available.")
-    if np.sum(mask) != len(covariate):
-        raise Exception("Length of covariate vector does not match mask length.")
-        
-    from tqdm import tqdm
     
+    """
+    if method not in ['spearman', 'kendall']:
+        raise Exception(
+            "Requested method not implemented.  Only `kendall` or `spearman` currently available."
+        )
+    if np.sum(mask) != len(covariate):
+        raise Exception(
+            "Length of covariate vector does not match mask length.")
+
+    from tqdm import tqdm
+
     if method == 'spearman':
         from scipy.stats import spearmanr
         method_module = spearmanr
@@ -1194,20 +1266,20 @@ def get_differential_expression_over_continuum(loom, layer, mask, covariate, met
     corrs = []
     pvals = []
     genes = []
-    X = loom[layer][:,mask]
+    X = loom[layer][:, mask]
     for i, gene in enumerate(tqdm(loom.ra['gene'], desc='looping over genes')):
         #try:
-        if np.std(X[i,:]) < 1e-14:
+        if np.std(X[i, :]) < 1e-14:
             pvals.append(1)
             corrs.append(0)
         else:
-    
-            result = method_module(X[i,:], covariate, nan_policy='omit')
+
+            result = method_module(X[i, :], covariate, nan_policy='omit')
             pvals.append(result.pvalue)
             corrs.append(result.correlation)
         genes.append(gene)
-            #except:
-            #    pass
+        #except:
+        #    pass
     print(result)
     df = pd.DataFrame(genes)
     df.columns = ['gene']
@@ -1216,12 +1288,31 @@ def get_differential_expression_over_continuum(loom, layer, mask, covariate, met
 
     return df.sort_values('pval')
 
-def get_differential_expression_custom(X1,X2,genes,axis=0):
+
+def get_differential_expression_custom(X1, X2, genes, axis=0):
+    """
+
+    Parameters
+    ----------
+    X1 :
+        
+    X2 :
+        
+    genes :
+        
+    axis :
+         (Default value = 0)
+
+    Returns
+    -------
+
+    """
     from tqdm import tqdm
     from scipy.stats import mannwhitneyu
-    if (len(genes)!=X1.shape[axis]) or ((len(genes)!=X1.shape[axis])):
-        raise Exception("(len(genes)!=X1.shape[axis]) or ((len(genes)!=X1.shape[axis]))")
-    if axis not in [0,1]:
+    if (len(genes) != X1.shape[axis]) or ((len(genes) != X1.shape[axis])):
+        raise Exception(
+            "(len(genes)!=X1.shape[axis]) or ((len(genes)!=X1.shape[axis]))")
+    if axis not in [0, 1]:
         raise Exception("axis must be 0 or 1")
     if axis == 1:
         X1 = X1.T
@@ -1233,14 +1324,16 @@ def get_differential_expression_custom(X1,X2,genes,axis=0):
     meanexpexpr2 = []
     fracexpr1 = []
     fracexpr2 = []
-    
+
     for igene, gene in enumerate(
             tqdm(genes, desc='Computing Mann-Whitney p-values')):
         if np.std(X1[igene, :]) + np.std(X2[igene, :]) < 1e-14:
             pvalues.append(1)
         else:
             pvalues.append(
-                mannwhitneyu(X1[igene, :], X2[igene, :], alternative='two-sided').pvalue)
+                mannwhitneyu(X1[igene, :],
+                             X2[igene, :],
+                             alternative='two-sided').pvalue)
         meanexpr1.append(X1[igene, :].mean())
         meanexpr2.append(X2[igene, :].mean())
         meanexpexpr1.append(np.mean(2**X1[igene, :]))
@@ -1257,3 +1350,19 @@ def get_differential_expression_custom(X1,X2,genes,axis=0):
     output['FracExpr1'] = fracexpr1
     output['FracExpr2'] = fracexpr2
     return output.sort_values('pvalue', ascending=True)
+
+
+def simpson(x):
+    """
+
+    Parameters
+    ----------
+    x :
+        
+
+    Returns
+    -------
+
+    """
+    total = np.sum(x)
+    return np.sum([(y / total) * ((y - 1) / (total - 1)) for y in x])

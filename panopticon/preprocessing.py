@@ -126,7 +126,6 @@ def generate_count_normalization(loom,
     Returns                                                                                                                                                                                                                                    
     -------                                                                                                                                                                                                                                    
     None                                                                                                                                                                                                                                               
-                                                                                                                                                                                                                                               
     """
     import numpy as np
     colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]
@@ -136,7 +135,7 @@ def generate_count_normalization(loom,
     loom[output_layername] = sparselayer
 
 
-def generate_standardized_layer(loom, layername, variance_axis='cell'):
+def generate_standardized_layer(loom, layername, variance_axis='cell', batch_size=512, out_of_core_cell_threshold=20000):
     """                                                                                                                                                                                                                                        
                                                                                                                                                                                                                                                
     Parameters                                                                                                                                                                                                                                 
@@ -153,6 +152,8 @@ def generate_standardized_layer(loom, layername, variance_axis='cell'):
     None 
     
     """
+    from tqdm import tqdm 
+
     if layername.endswith('_standardized'):
         raise Exception(
             "It appears that layer is already standardized; note that _standardized suffix is reserved"
@@ -162,10 +163,28 @@ def generate_standardized_layer(loom, layername, variance_axis='cell'):
             "Can only set variance to be 1 along cell axis or gene axis")
     from sklearn.preprocessing import StandardScaler
     if variance_axis == 'gene':
-        loom[layername +
-             '_gene_standardized'] = StandardScaler().fit_transform(
-                 loom[layername][:, :].T).T
+        if loom.shape[1] < out_of_core_cell_threshold:
+            loom[layername +
+                 '_gene_standardized'] = StandardScaler().fit_transform(
+                     loom[layername][:, :].T).T
+        else:
+            scaler = StandardScaler()
+            loom[layername+'_gene_standardized'] = "float64"
+            for (ix, selection, view) in tqdm(loom.scan(axis=0,
+                                                        batch_size=batch_size),
+                                              total=loom.shape[1] // batch_size):
+                loom[layername+'_gene_standardized'][selection,:] = scaler.fit_transform(view[layername][:,:].T).T
+
     elif variance_axis == 'cell':
-        loom[layername +
-             '_cell_standardized'] = StandardScaler().fit_transform(
-                 loom[layername][:, :])
+        if loom.shape[1] < out_of_core_cell_threshold:
+            loom[layername +
+                 '_cell_standardized'] = StandardScaler().fit_transform(
+                     loom[layername][:, :])
+        else:
+            scaler = StandardScaler()
+            loom[layername+'_cell_standardized'] = "float64"
+            for (ix, selection, view) in tqdm(loom.scan(axis=1,
+                                                        batch_size=batch_size),
+                                              total=loom.shape[1] // batch_size):
+                loom[layername+'_cell_standardized'][:,selection] = scaler.fit_transform(view[layername][:,:])
+    

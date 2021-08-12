@@ -458,3 +458,28 @@ def phi_coefficient(contingency_table):
                         (table2[1]+table1[1]))
     phi = phitop / phibottom
     return phi
+
+def get_igraph_from_adjacency(adjacency, directed=None):
+    """This is taken from scanpy._utils.__init__.py as of 12 August 2021
+    
+    
+    Get igraph graph from adjacency matrix."""
+    import igraph as ig
+
+    sources, targets = adjacency.nonzero()
+    weights = adjacency[sources, targets]
+    if isinstance(weights, np.matrix):
+        weights = weights.A1
+    g = ig.Graph(directed=directed)
+    g.add_vertices(adjacency.shape[0])  # this adds adjacency.shape[0] vertices
+    g.add_edges(list(zip(sources, targets)))
+    try:
+        g.es['weight'] = weights
+    except KeyError:
+        pass
+    if g.vcount() != adjacency.shape[0]:
+        logg.warning(
+            f'The constructed graph has only {g.vcount()} nodes. '
+            'Your adjacency matrix contained redundant nodes.'
+        )
+    return g
