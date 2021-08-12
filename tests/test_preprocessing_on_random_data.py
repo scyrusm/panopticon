@@ -17,7 +17,7 @@ def test_preprocess_random_data(tmp_path):
     generate_count_normalization(db, '','log2(TP100k+1)')
     generate_incremental_pca(db, 'log2(TP100k+1)')
     generate_embedding(db, 'log2(TP100k+1)' )
-    generate_clustering(db, 'log2(TP100k+1)', clusteringcachedir=str(d/"clusteringcachedir/"))
+    generate_clustering(db, 'log2(TP100k+1)', n_clustering_iterations=2, clusteringcachedir=str(d/"clusteringcachedir/"))
     print(db.ca.keys())
     print(db.ra.keys())
     assert 'cell' in db.ca.keys()

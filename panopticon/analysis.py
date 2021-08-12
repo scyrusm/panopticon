@@ -463,7 +463,7 @@ def get_subclustering(X,
 def generate_clustering(loom,
                         layername,
                         starting_clustering_depth=0,
-                        total_clustering_iterations=3,
+                        n_clustering_iterations=3,
                         max_clusters='sqrt_rule',
                         mode='pca',
                         n_components=10,
@@ -504,8 +504,7 @@ def generate_clustering(loom,
     
     """
 
-    if type(total_clustering_iterations)
-            ) != int or total_clustering_iterations < 1 or type(
+    if type(n_clustering_iterations) != int or n_clustering_iterations < 1 or type(
                 starting_clustering_depth) != int:
         raise Exception(
             "final_clustering_depth and starting_clustering_depth must be natural numbers."
@@ -528,7 +527,7 @@ def generate_clustering(loom,
     elif mode == 'nmf':
         from sklearn.decomposition import NMF
 
-    final_clustering_depth = starting_clustering_depth + total_clustering_iterations - 1
+    final_clustering_depth = starting_clustering_depth + n_clustering_iterations - 1
     if starting_clustering_depth == 0:
         if first_round_leiden:
             from sklearn.neighbors import kneighbors_graph
