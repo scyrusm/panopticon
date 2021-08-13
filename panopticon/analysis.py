@@ -318,7 +318,7 @@ def generate_embedding(loom,
                        n_epochs=1000,
                        metric='correlation',
                        random_state=None,
-                       components_to_use=None,
+                       n_pca_components=None,
                        mode='pca'):
     """
 
@@ -359,7 +359,7 @@ def generate_embedding(loom,
         raise Exception("Currently only two modes implemented:  nmf and pca")
     if mode == 'pca':
         from panopticon.analysis import get_pca_loadings_matrix
-        compressed = get_pca_loadings_matrix(loom, layername, n_components=n_components)
+        compressed = get_pca_loadings_matrix(loom, layername, n_components=n_pca_components)
     elif mode == 'nmf':
         n_nmf_cols = loom.attrs['NumberNMFComponents']
         print(n_nmf_cols)
