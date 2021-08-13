@@ -278,7 +278,7 @@ def generate_pca_loadings(loom, layername, dosparse=False, batch_size=512):
                                           1)] = compresseddata[:, iloading]
 
 
-def get_pca_loadings_matrix(loom, layername, components_to_use=None):
+def get_pca_loadings_matrix(loom, layername, n_components=None):
     """
 
     Parameters
@@ -294,18 +294,18 @@ def get_pca_loadings_matrix(loom, layername, components_to_use=None):
     -------
 
     """
-    n_pca_cols = loom.attrs['NumberPrincipalComponents_{}'.format(layername)]
     pca_loadings = []
-    if components_to_use != None:
+    if n_components != None:
         for col in [
                 '{} PC {} Loading'.format(layername, x)
-                for x in components_to_use
+                for x in range(1, n_components + 1)
         ]:
             pca_loadings.append(loom.ca[col])
     else:
+        n_components = loom.attrs['NumberPrincipalComponents_{}'.format(layername)]
         for col in [
                 '{} PC {} Loading'.format(layername, x)
-                for x in range(1, n_pca_cols + 1)
+                for x in range(1, n_components + 1)
         ]:
             pca_loadings.append(loom.ca[col])
     return np.vstack(pca_loadings).T
@@ -359,7 +359,7 @@ def generate_embedding(loom,
         raise Exception("Currently only two modes implemented:  nmf and pca")
     if mode == 'pca':
         from panopticon.analysis import get_pca_loadings_matrix
-        compressed = get_pca_loadings_matrix(loom, layername, components_to_use=components_to_use)
+        compressed = get_pca_loadings_matrix(loom, layername, n_components=n_components)
     elif mode == 'nmf':
         n_nmf_cols = loom.attrs['NumberNMFComponents']
         print(n_nmf_cols)
