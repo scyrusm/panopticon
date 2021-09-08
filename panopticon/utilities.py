@@ -459,6 +459,7 @@ def phi_coefficient(contingency_table):
     phi = phitop / phibottom
     return phi
 
+
 def get_igraph_from_adjacency(adjacency, directed=None):
     """This is taken from scanpy._utils.__init__.py as of 12 August 2021
     
@@ -478,8 +479,58 @@ def get_igraph_from_adjacency(adjacency, directed=None):
     except KeyError:
         pass
     if g.vcount() != adjacency.shape[0]:
-        logg.warning(
-            f'The constructed graph has only {g.vcount()} nodes. '
-            'Your adjacency matrix contained redundant nodes.'
-        )
+        logg.warning(f'The constructed graph has only {g.vcount()} nodes. '
+                     'Your adjacency matrix contained redundant nodes.')
     return g
+
+
+def convert_10x_h5(path_10x_h5, output_loom, labelkey=None,label=''):
+    import cellranger.matrix as cr_matrix
+    import loompy
+    filtered_feature_bc_matrix = cr_matrix.CountMatrix.load_h5_file(
+        path_10x_h5)
+    id2feature = {
+        val: key
+        for key, val in filtered_feature_bc_matrix.feature_ids_map.items()
+    }
+    features = [
+        id2feature[x].decode("utf-8")
+        for x in range(filtered_feature_bc_matrix.features_dim)
+    ]
+    features_common_names = filtered_feature_bc_matrix.feature_ref.get_feature_names(
+    )
+    barcodes = filtered_feature_bc_matrix.bcs.astype(str)
+    ca = {'cellname': barcodes}
+    if labelkey is not None:
+        ca[labelkey] = [label]*len(barcodes)
+    ra = {'gene': features, 'gene_common_name': features_common_names}
+    loompy.create(output_loom, filtered_feature_bc_matrix.m, ra, ca)
+
+def create_split_exon_gtf(input_gtf,output_gtf,gene):
+    gtf = pd.read_table(input_gtf,header=None, comment='#')
+    gtf.columns = ['seqname','source','feature','start','end','score','strand','frame','attribute']
+    gtf = gtf[gtf['feature']=='exon']
+    if type(gene)==str:
+        mask = gtf['attribute'].apply(lambda x: 'gene_name "{}"'.format(gene) in x)
+    elif type(gene) in [list, tuple, np.array]:
+        mask = np.array([False]*len(gtf))
+        for g in gene:
+            mask = mask | gtf['attribute'].apply(lambda x: 'gene_name "{}"'.format(g) in x)
+    gtf_unchanged = gtf[~mask]
+    gtf_changed = gtf[mask]
+
+    def append_exon_number_to_id_and_name(attribute):
+        exon_number = attribute.split('exon_number')[1].split(';')[0].split('\"')[-2]
+        old_gene_id_str = 'gene_id'+attribute.split('gene_id')[1].split(';')[0]
+        new_gene_id_str = '\"'.join(old_gene_id_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+        old_gene_name_str = 'gene_name'+attribute.split('gene_name')[1].split(';')[0]
+        new_gene_name_str = '\"'.join(old_gene_name_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+
+        attribute = attribute.replace(old_gene_id_str,new_gene_id_str)
+        attribute = attribute.replace(old_gene_name_str,new_gene_name_str)
+
+        return attribute
+
+    gtf_changed['attribute'] = gtf_changed['attribute'].apply(append_exon_number_to_id_and_name)
+    gtf = pd.concat([gtf_changed, gtf_unchanged])
+    gtf.to_csv(output_gtf,sep='\t',index=False,header=None)    

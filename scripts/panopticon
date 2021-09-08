@@ -8,109 +8,135 @@ import pkg_resources
 def cli():
     """Panopticon is a set of tools named after Jeremy Bentham's model for a prison, whereby multiple cells (!) could be observed with ease by a single individual.  
     """
+@cli.command(short_help="Combines multiple loom files together; convenience function to call loompy.combine")
+@click.argument('input_looms', type=click.Path(exists=True),nargs=-1)
+@click.argument('output_loom',nargs=1)
+def combine_looms(input_looms, output_loom):
+    import loompy
+    loompy.combine(input_looms, output_loom)
 
-@cli.command(short_help="Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof")
+@cli.command(short_help="Converts a 10x hdf5 file (e.g. filtered_feature_bc_matrix.h5, or raw_feature_bc_matrix) to a panopticon-compatible loom file")
+@click.argument('h5file', type=click.Path(exists=True))
+@click.argument('output_loom')
 @click.option(
-    '--patient', help='selected patient number', required=True, multiple=True)
-@click.option(
-    '--cell_type',
-    help='name of cell type of interest in the metadata')
-@click.option(
-    '--complexity_cutoff', help='Cutoff on cell complexity (i.e., include only cells with complexity equal to or above this value)', type=int, default=0)
-@click.option(
-        '--n_clusters', help='Number of clusters to look for', default=1, type=int)
-@click.option(
-        '--figure_output', help='Output file for umap, should end in e.g. .pdf, .jpg, .png, .svg', default=None)
-@click.option(
-        '--raw_data_output', help='Output file for raw data from umap, defaults to csv unless argument ends in tsv, in which case output will be tab-delimited', default=None)
-@click.argument('loomfile')
-def wmec(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output):
-    from panopticon.commands import windowed_mean_expression_clustering as wmec
-    wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output)
+    '--label',
+    help='Add a label (e.g. cohort label) as column attribute to all cells (loom.ca[key] = value). Usage: --label key value',
+    nargs=2, default=[None, ''])
+def convert_10x_h5(h5file, output_loom, label):
+    from panopticon.utilities import convert_10x_h5
+    convert_10x_h5(h5file, output_loom, label[0], label[1])
 
-@cli.command(short_help="For checking the malignancy status of cells with a paired DNA-derived"
-                        "segmentation file (returns a Mann-Whitney Z score and the p-value for"
-                        "the null hypothesis that there is no positive trend")
-@click.option(
-        '--seg_file',
-        help='path and filename of the segmentation file',
-        required=True)
-@click.option(
-        '--patient', help='selected patient number', required=True)
-@click.option(
-        '--time_point', help='selected time point', type=int)
-@click.option(
-        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
-@click.argument('loomfile')
-def rna_dna_correspondence(loomfile, seg_file, patient, time_point, output):
-    if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
-        raise Exception("File output must be in matplotlib-compatible format")
-    from panopticon.commands import rna_dna_correspondence as rdc
-    rdc.rna_dna_correspondence_main(loomfile, seg_file, 'patient_ID', patient, time_point, output=output)
-
-@cli.group(short_help="A well-functioning surveillance state requires some bureaucracy.")
-def book():
-    pass
-
-@book.command()
-def scrna_wizard():
-    """
-    A prompt-guided approach to generating a panopticon-compatible .loom file
-    """
-    from panopticon.commands import bookem
-    bookem.scrna_wizard_main()
-
-@book.command()
-def cnv_wizard():
-    """
-    A prompt-guided approach to generating a panopticon-compatible .loom file
-    """
-    from panopticon.commands import bookem
-    bookem.cnv_wizard_main()
-
-@book.command()
-@click.argument('loomfile')
-def gene_position_augmentation(loomfile):
-    from panopticon.commands import bookem
-    bookem.gene_position_augmentation_main(loomfile)
+@cli.command(short_help="Creates a new gtf where gene(s) of interest have been split into separate exonic regions and renamed accordingly")
+@click.argument('input_gtf',type=click.Path(exists=True))
+@click.argument('output_gtf')
+@click.argument('gene', nargs=-1)
+def create_split_exon_gtf(input_gtf, output_gtf,gene):
+    from panopticon.utilities import create_split_exon_gtf
+    create_split_exon_gtf(input_gtf,output_gtf,gene)
 
 
-@book.command()
-@click.option(
-        '--signaturefile',
-        help='gene signature file (headerless, single column)')
-@click.option(
-        '--loomfile',
-        help='gene signature file (headerless, single column)')
-def gene_signature_wizard(loomfile, signaturefile):
-    """
-    A prompt-guide approach to augmenting your loom file with gene signatures of interest.
-    """
-    bookem.gene_signature_wizard_main(loomfile=loomfile, signaturefile=signaturefile)
-
-
-
-@cli.command()
-@click.option(
-        '--seg',
-        help='name of the segmentation',multiple=True, required=True)
-@click.option(
-        '--query', help='query on loom file', multiple=True)
-@click.option(
-        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
-@click.option(
-        '--stratifyby', help='stratify results by some metadata column (e.g. time_point)', type=str)
-@click.option(
-        '--signature', help='Examine with gene signature (a la AddModuleScore)', type=str)
-@click.argument('loomfile')
-def multireference_dna_correspondence(loomfile, query, seg, output, stratifyby, signature):
-    if output is not None:
-        if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
-            raise Exception("File output must be in matplotlib-compatible format")
-    from panopticon.commands import multireference_dna_correspondence as mdc
-    mdc.multireference_dna_correspondence_main(loomfile, query, seg, output=output, stratifyby=stratifyby, modulescore_signature=signature)
-
-
-
+#@cli.command(short_help="Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof")
+#@click.option(
+#    '--patient', help='selected patient number', required=True, multiple=True)
+#@click.option(
+#    '--cell_type',
+#    help='name of cell type of interest in the metadata')
+#@click.option(
+#    '--complexity_cutoff', help='Cutoff on cell complexity (i.e., include only cells with complexity equal to or above this value)', type=int, default=0)
+#@click.option(
+#        '--n_clusters', help='Number of clusters to look for', default=1, type=int)
+#@click.option(
+#        '--figure_output', help='Output file for umap, should end in e.g. .pdf, .jpg, .png, .svg', default=None)
+#@click.option(
+#        '--raw_data_output', help='Output file for raw data from umap, defaults to csv unless argument ends in tsv, in which case output will be tab-delimited', default=None)
+#@click.argument('loomfile')
+#def wmec(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output):
+#    from panopticon.commands import windowed_mean_expression_clustering as wmec
+#    wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output)
+#
+#@cli.command(short_help="For checking the malignancy status of cells with a paired DNA-derived"
+#                        "segmentation file (returns a Mann-Whitney Z score and the p-value for"
+#                        "the null hypothesis that there is no positive trend")
+#@click.option(
+#        '--seg_file',
+#        help='path and filename of the segmentation file',
+#        required=True)
+#@click.option(
+#        '--patient', help='selected patient number', required=True)
+#@click.option(
+#        '--time_point', help='selected time point', type=int)
+#@click.option(
+#        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
+#@click.argument('loomfile')
+#def rna_dna_correspondence(loomfile, seg_file, patient, time_point, output):
+#    if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
+#        raise Exception("File output must be in matplotlib-compatible format")
+#    from panopticon.commands import rna_dna_correspondence as rdc
+#    rdc.rna_dna_correspondence_main(loomfile, seg_file, 'patient_ID', patient, time_point, output=output)
+#
+#@cli.group(short_help="A well-functioning surveillance state requires some bureaucracy.")
+#def book():
+#    pass
+#
+#@book.command()
+#def scrna_wizard():
+#    """
+#    A prompt-guided approach to generating a panopticon-compatible .loom file
+#    """
+#    from panopticon.commands import bookem
+#    bookem.scrna_wizard_main()
+#
+#@book.command()
+#def cnv_wizard():
+#    """
+#    A prompt-guided approach to generating a panopticon-compatible .loom file
+#    """
+#    from panopticon.commands import bookem
+#    bookem.cnv_wizard_main()
+#
+#@book.command()
+#@click.argument('loomfile')
+#def gene_position_augmentation(loomfile):
+#    from panopticon.commands import bookem
+#    bookem.gene_position_augmentation_main(loomfile)
+#
+#
+#@book.command()
+#@click.option(
+#        '--signaturefile',
+#        help='gene signature file (headerless, single column)')
+#@click.option(
+#        '--loomfile',
+#        help='gene signature file (headerless, single column)')
+#def gene_signature_wizard(loomfile, signaturefile):
+#    """
+#    A prompt-guide approach to augmenting your loom file with gene signatures of interest.
+#    """
+#    bookem.gene_signature_wizard_main(loomfile=loomfile, signaturefile=signaturefile)
+#
+#
+#
+#@cli.command()
+#@click.option(
+#        '--seg',
+#        help='name of the segmentation',multiple=True, required=True)
+#@click.option(
+#        '--query', help='query on loom file', multiple=True)
+#@click.option(
+#        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
+#@click.option(
+#        '--stratifyby', help='stratify results by some metadata column (e.g. time_point)', type=str)
+#@click.option(
+#        '--signature', help='Examine with gene signature (a la AddModuleScore)', type=str)
+#@click.argument('loomfile')
+#def multireference_dna_correspondence(loomfile, query, seg, output, stratifyby, signature):
+#    if output is not None:
+#        if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
+#            raise Exception("File output must be in matplotlib-compatible format")
+#    from panopticon.commands import multireference_dna_correspondence as mdc
+#    mdc.multireference_dna_correspondence_main(loomfile, query, seg, output=output, stratifyby=stratifyby, modulescore_signature=signature)
+#
+#
+#
 if __name__=='__main__':
     cli()

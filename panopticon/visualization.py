@@ -158,8 +158,6 @@ def plot_cluster_umap(loom,
     if plot_output is not None:
         plt.savefig(plot_output, bbox_inches='tight')
     else:
-        from IPython.core.debugger import set_trace
-        set_trace()
         plt.show()
     return embedding
 
@@ -328,12 +326,8 @@ def plot_dotmap(loom,
             expr = loom['log2(TP100k+1)'][markerindex, ][loom.ca[clusterlevel]
                                                          == key].mean()
             exprs.append(expr)
-            #plt.scatter(key2x[key],marker2y[marker],s=expr*scale,cmap='coolwarm',c=expr, )
-            #print(expr)
-    ## This is very dumb -- S. Markson 8 October 2020
     for marker in markers:
         markerindex = np.where(loom.ra['gene'] == marker)[0][0]
-        #for key in [key for key in diffex.keys() if key!='1-0']:
         for key in diffex.keys():
 
             expr = loom['log2(TP100k+1)'][markerindex, ][loom.ca[clusterlevel]
@@ -441,3 +435,123 @@ def swarmviolin(data,
 
     legend_without_duplicate_labels(ax)
     return ax
+
+
+import numpy as np
+
+
+def volcano(diffex,
+            ax=None,
+            gene_column='gene',
+            pval_column='pvalue',
+            mean_expr_left='MeanExpr1',
+            mean_expr_right='MeanExpr2',
+            left_name='',
+            right_name='',
+            genemarklist=[],
+            logfoldchange_importance_threshold=0.5,
+            neglogpval_importance_threshold=5,
+            title='',
+            output=None,
+            positions=None,
+            show=True,
+            gene_label_offset_scale=1):
+
+    import matplotlib.pyplot as plt
+    import matplotlib
+    import matplotlib.patheffects as pe
+
+    matplotlib.rcParams['axes.linewidth'] = 3
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(
+            5,
+            5,
+        ))
+    neglogpvalues = -np.log(diffex[pval_column].values) / np.log(10)
+    logfoldchange = diffex[mean_expr_left].values - diffex.MeanExpr2.values
+    important_mask = (np.abs(logfoldchange) >
+                      logfoldchange_importance_threshold)
+    important_mask = important_mask & (neglogpvalues >
+                                       neglogpval_importance_threshold)
+    ax.scatter(logfoldchange[important_mask],
+               neglogpvalues[important_mask],
+               alpha=1,
+               marker='.',
+               s=3,
+               c='b')
+    ax.scatter(logfoldchange[~important_mask],
+               neglogpvalues[~important_mask],
+               alpha=.1,
+               marker='.',
+               s=2,
+               c='b')
+    maxx = np.nanmax(np.abs(logfoldchange))
+    maxy = np.nanmax(neglogpvalues)
+    print(maxx, maxy)
+    xoffset = .1
+    yoffset = .1
+    offsetcounter = 0
+    offsetcounter2 = 0
+    #noteable_genes = diffex[diffex[gene_column].isin(genemarklist)].sort_values(pval_column)[gene_column].values
+    if positions is None:
+        positions = ['t'] * len(genemarklist)
+
+    for gene, position in zip(
+            genemarklist,
+            positions,
+    ):
+        genedf = diffex[diffex[gene_column] == gene]
+        negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
+        logfoldchange = genedf.iloc[0].MeanExpr1 - genedf.iloc[0].MeanExpr2
+        ax.scatter(logfoldchange, negpval, marker='.', color='k')
+        if position == 'b':
+            ax.annotate(
+                gene, (logfoldchange, negpval),
+                (logfoldchange, negpval + .015 * maxy * gene_label_offset_scale),
+                va='bottom',
+                ha='center',
+                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
+        elif position == 't':
+            ax.annotate(
+                gene, (logfoldchange, negpval),
+                (logfoldchange, negpval - .015 * maxy * gene_label_offset_scale),
+                va='top',
+                ha='center',
+                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
+        elif position == 'l':
+            ax.annotate(
+                gene, (logfoldchange, negpval),
+                (logfoldchange + .03 * maxx * gene_label_offset_scale, negpval),
+                va='center',
+                ha='left',
+                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
+        elif position == 'r':
+            ax.annotate(
+                gene, (logfoldchange, negpval),
+                (logfoldchange - .03 * maxx * gene_label_offset_scale, negpval),
+                va='center',
+                ha='right',
+                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
+        else:
+            raise Exception("invalid position character selection")
+    plt.axvline(0, ls='--')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.tick_params(axis='both', which='major', labelsize=14)
+    ax.tick_params(axis='both', which='minor', labelsize=14)
+    ax.set_xlabel('log fold change\n' + '$\leftarrow$' + left_name + '\n' +
+                  right_name + r'$\rightarrow$',
+                  fontsize=14)
+
+    ax.set_ylabel('-log' + r'${}_{10}$' + '(p-value)', fontsize=14)
+
+    ax.set_xlim([-maxx * 1.04, maxx * 1.04])
+    ax.set_ylim([0, maxy * 1.01])
+    plt.tight_layout()
+    ax.set_title(title)
+    if output is not None:
+        plt.savefig(output, bbox_inches='tight', transparent='true', dpi=300)
+    if show:
+        plt.show()
+
+

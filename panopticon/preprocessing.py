@@ -20,7 +20,7 @@ def generate_gene_variances(loom, layername):
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
 
 
-def generate_cell_and_gene_quality_metrics(loom, layername):
+def generate_cell_and_gene_quality_metrics(loom, layername, gene_ra='gene'):
     """
     Calculates five quantities and writes them to the LoomConnection instance specified in loom:
 
@@ -45,7 +45,7 @@ def generate_cell_and_gene_quality_metrics(loom, layername):
     """
     from statsmodels import robust
 
-    rpgenemask = np.array([x.startswith('RP') for x in loom.ra['gene']])
+    rpgenemask = np.array([x.startswith('RP') or x.startswith('Rp') for x in loom.ra[gene_ra]])
     madrp, meanrp, maxrp = loom[layername].map([robust.mad, np.mean, np.max],
                                                axis=1,
                                                selection=rpgenemask)

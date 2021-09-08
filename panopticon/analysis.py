@@ -994,7 +994,8 @@ def get_differential_expression_dict(loom,
                                      downsample_size=500,
                                      starting_iteration=0,
                                      final_iteration=3,
-                                     min_cluster_size=50):
+                                     min_cluster_size=50,
+                                     gene_alternate_name=None):
     """Runs cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.
 
     Parameters
@@ -1032,7 +1033,8 @@ def get_differential_expression_dict(loom,
                 ident1=cluster,
                 ident1_downsample_size=downsample_size,
                 ident2_downsample_size=downsample_size,
-                min_cluster_size=min_cluster_size)
+                min_cluster_size=min_cluster_size,
+                gene_alternate_name=gene_alternate_name)
             if type(diffex[cluster]) != float:
                 diffex[cluster] = diffex[cluster].query(
                     'MeanExpr1 >MeanExpr2').head(500)
@@ -1085,7 +1087,8 @@ def cluster_differential_expression(loom,
                                     verbose=False,
                                     ident1_downsample_size=None,
                                     ident2_downsample_size=None,
-                                    min_cluster_size=0):
+                                    min_cluster_size=0,
+                                    gene_alternate_name=None):
     """
 
     Parameters
@@ -1220,6 +1223,10 @@ def cluster_differential_expression(loom,
     output['MeanExpExpr2'] = meanexpexpr2
     output['FracExpr1'] = fracexpr1
     output['FracExpr2'] = fracexpr2
+    if gene_alternate_name is not None:
+        gene2altname = {gene:altname for gene, altname in zip(loom.ra['gene'],loom.ra[gene_alternate_name])}
+        altnames = [gene2altname[x] for x in genes]
+        output['GeneAlternateName'] = altnames
     return output.sort_values('pvalue', ascending=True)
 
 
@@ -1353,7 +1360,7 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
     return output.sort_values('pvalue', ascending=True)
 
 
-def simpson(x):
+def simpson(x, with_replacement=False):
     """
 
     Parameters
@@ -1366,4 +1373,7 @@ def simpson(x):
 
     """
     total = np.sum(x)
-    return np.sum([(y / total) * ((y - 1) / (total - 1)) for y in x])
+    if with_replacement:
+        return np.sum([(y / total) * (y  / total ) for y in x])
+    else:
+        return np.sum([(y / total) * ((y - 1) / (total - 1)) for y in x])
