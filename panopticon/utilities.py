@@ -484,7 +484,7 @@ def get_igraph_from_adjacency(adjacency, directed=None):
     return g
 
 
-def convert_10x_h5(path_10x_h5, output_loom, labelkey=None,label=''):
+def convert_10x_h5(path_10x_h5, output_loom, labelkey=None,label='', genes_as_ca=[]):
     import cellranger.matrix as cr_matrix
     import loompy
     filtered_feature_bc_matrix = cr_matrix.CountMatrix.load_h5_file(
@@ -499,12 +499,31 @@ def convert_10x_h5(path_10x_h5, output_loom, labelkey=None,label=''):
     ]
     features_common_names = filtered_feature_bc_matrix.feature_ref.get_feature_names(
     )
+
+
+
     barcodes = filtered_feature_bc_matrix.bcs.astype(str)
     ca = {'cellname': barcodes}
     if labelkey is not None:
         ca[labelkey] = [label]*len(barcodes)
+
+
+    m = filtered_feature_bc_matrix.m
+    if type(genes_as_ca)==str:
+        genes_as_ca = [genes_as_ca]
+    if len(genes_as_ca)>0:
+        mask = np.isin(features, genes_as_ca)
+        if len(genes_as_ca) != mask.sum():
+            raise Exception("Improper mapping of row attributes; perhaps gene of interest not in loom.ra[\'gene\']?")
+        for gene in genes_as_ca:
+            submask = features == gene 
+            ca[gene] = list(m[submask,:].toarray()[0])
+        m = m[~mask,:]
+        features = list(np.array(features)[~mask])
+        features_common_names = list(np.array(features_common_names)[~mask])
+
     ra = {'gene': features, 'gene_common_name': features_common_names}
-    loompy.create(output_loom, filtered_feature_bc_matrix.m, ra, ca)
+    loompy.create(output_loom, m, ra, ca)
 
 def create_split_exon_gtf(input_gtf,output_gtf,gene):
     gtf = pd.read_table(input_gtf,header=None, comment='#')
@@ -521,13 +540,27 @@ def create_split_exon_gtf(input_gtf,output_gtf,gene):
 
     def append_exon_number_to_id_and_name(attribute):
         exon_number = attribute.split('exon_number')[1].split(';')[0].split('\"')[-2]
+
         old_gene_id_str = 'gene_id'+attribute.split('gene_id')[1].split(';')[0]
         new_gene_id_str = '\"'.join(old_gene_id_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+
         old_gene_name_str = 'gene_name'+attribute.split('gene_name')[1].split(';')[0]
         new_gene_name_str = '\"'.join(old_gene_name_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
 
+        old_transcript_id_str = 'transcript_id'+attribute.split('transcript_id')[1].split(';')[0]
+        new_transcript_id_str = '\"'.join(old_transcript_id_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+
+        old_transcript_name_str = 'transcript_name'+attribute.split('transcript_name')[1].split(';')[0]
+        new_transcript_name_str = '\"'.join(old_transcript_name_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+
+        old_ccds_id_str = 'ccds_id'+attribute.split('ccds_id')[1].split(';')[0]
+        new_ccds_id_str = '\"'.join(old_ccds_id_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+
         attribute = attribute.replace(old_gene_id_str,new_gene_id_str)
         attribute = attribute.replace(old_gene_name_str,new_gene_name_str)
+        attribute = attribute.replace(old_transcript_id_str,new_transcript_id_str)
+        attribute = attribute.replace(old_transcript_name_str,new_transcript_name_str)
+        attribute = attribute.replace(old_ccds_id_str,new_ccds_id_str)
 
         return attribute
 

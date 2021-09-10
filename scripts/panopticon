@@ -13,7 +13,7 @@ def cli():
 @click.argument('output_loom',nargs=1)
 def combine_looms(input_looms, output_loom):
     import loompy
-    loompy.combine(input_looms, output_loom)
+    loompy.combine(input_looms, output_loom, key='gene')
 
 @cli.command(short_help="Converts a 10x hdf5 file (e.g. filtered_feature_bc_matrix.h5, or raw_feature_bc_matrix) to a panopticon-compatible loom file")
 @click.argument('h5file', type=click.Path(exists=True))
@@ -22,9 +22,12 @@ def combine_looms(input_looms, output_loom):
     '--label',
     help='Add a label (e.g. cohort label) as column attribute to all cells (loom.ca[key] = value). Usage: --label key value',
     nargs=2, default=[None, ''])
-def convert_10x_h5(h5file, output_loom, label):
+@click.option(
+    '--convert_to_ca',
+    help='Convert a row attribute key to column attribute (e.g. for when your raw data is mixed CITE and scRNA-seq).  Usage --convert_to_ca Hash123', multiple=True)
+def convert_10x_h5(h5file, output_loom, label, convert_to_ca):
     from panopticon.utilities import convert_10x_h5
-    convert_10x_h5(h5file, output_loom, label[0], label[1])
+    convert_10x_h5(h5file, output_loom, label[0], label[1], convert_to_ca)
 
 @cli.command(short_help="Creates a new gtf where gene(s) of interest have been split into separate exonic regions and renamed accordingly")
 @click.argument('input_gtf',type=click.Path(exists=True))
