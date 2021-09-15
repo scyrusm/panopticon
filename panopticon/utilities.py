@@ -516,7 +516,11 @@ def convert_10x_h5(path_10x_h5, output_loom, labelkey=None,label='', genes_as_ca
         if len(genes_as_ca) != mask.sum():
             raise Exception("Improper mapping of row attributes; perhaps gene of interest not in loom.ra[\'gene\']?")
         for gene in genes_as_ca:
-            submask = features == gene 
+            submask = np.array(features) == gene 
+            if np.sum(submask)>1:
+                raise Exception("Two or more features with this name")
+            elif np.sum(submask)==0:
+                raise Exception("No features with this name")
             ca[gene] = list(m[submask,:].toarray()[0])
         m = m[~mask,:]
         features = list(np.array(features)[~mask])

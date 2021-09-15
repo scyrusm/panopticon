@@ -198,9 +198,9 @@ def generate_incremental_pca(loom,
     from tqdm import tqdm
     from sklearn.decomposition import IncrementalPCA, PCA
     from panopticon.analysis import generate_pca_loadings
-    if loom.shape[1] % batch_size < n_components:
+    while loom.shape[1] % batch_size < n_components:
         batch_size += 1
-        print("Batch size increased to {} so that smallest batch will be greater than n_components".format(batch_size))
+    print("Batch size increased to {} so that smallest batch will be greater than n_components".format(batch_size))
     if loom.shape[1] < min_size_for_incrementalization:
         print(
             "Loom size below threshold for incremental PCA; running conventional PCA"
@@ -448,7 +448,6 @@ def get_subclustering(X,
             scores.append(score)
             #break
         print("scores", np.array(scores))
-        print("ignoring regularization factor")
         #        scores = scores - np.arange(len(scores))*regularization_factor
         #        print("corrected scores",np.array(scores))
         if np.max(scores) >= score_threshold:
@@ -624,11 +623,11 @@ def generate_clustering(loom,
                                 random_state=0)
 
                     X = model.fit_transform(data_c)
-                    print("EV", model.explained_variance_)
-                    print("EVR", model.explained_variance_ratio_)
+#                    print("EV", model.explained_variance_)
+#                    print("EVR", model.explained_variance_ratio_)
 
             if max_clusters == 'sqrt_rule':
-                print("xshape", X.shape)
+                print("No. cells in cluster", X.shape[0])
                 nopath_clustering = get_subclustering(
                     X,
                     silhouette_threshold,
