@@ -648,7 +648,7 @@ def samurai_sword_plot(x=None,y=None,data=None,hue=None,ax=None, fig=None, show=
             ax.annotate(label, (xposition,0), 
                         annotation_clip=False, 
                         ha='center',
-                        va='top', 
+                        va='bottom', 
                         xycoords=trans, fontsize=13)
             
         ax.set_ylabel('# cells in TCR-type (stacked bar plot)')

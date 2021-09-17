@@ -451,11 +451,12 @@ def get_subclustering(X,
         #        scores = scores - np.arange(len(scores))*regularization_factor
         #        print("corrected scores",np.array(scores))
         if np.max(scores) >= score_threshold:
-            print("Number of clusters:", np.argmax(scores) + minnk)
             clustering.set_params(n_clusters=np.argmax(scores) + minnk)
             clustering.fit(X)
+            print(np.argmax(scores) + minnk, "clusters, with", list(pd.DataFrame(clustering.labels_)[0].value_counts().values),"cells")
             return clustering.labels_
         else:
+            print("No score exceeded score threshold")
             return np.array([0] * X.shape[0])
 
 
@@ -469,6 +470,7 @@ def generate_clustering(loom,
                         silhouette_threshold=0.1,
                         clusteringcachedir='clusteringcachedir/',
                         out_of_core_batch_size=512,
+                        min_subclustering_size=50,
                         first_round_leiden=False,
                         leiden_nneighbors=20,
                         leiden_iterations=10):
@@ -582,6 +584,7 @@ def generate_clustering(loom,
                 1)] == cluster  #first mask, check for top level clustering
             #break
             #            mask = np.nonzero(mask) # workaround to accommodate h5py 3.* bug -- S. Markson 5 Aug 2021
+            print("No. cells in cluster", mask.sum())
             if mode == 'nmf':
                 print(
                     "NMF operation currently requires loading full layer into memory"
@@ -617,33 +620,33 @@ def generate_clustering(loom,
                         compresseddatalist.append(
                             view[layername][:, :].T @ pca.components_.T)
                     X = np.vstack(compresseddatalist)
-                else:
+                elif mask.sum() < min_subclustering_size:
+                    X = np.array([None]*mask.sum()) # This is a hack to avoid computing PCA in cases where no clustering will be performed
+                else:  
                     data_c = loom[layername][:, mask].T
                     model = PCA(n_components=np.min([10, data_c.shape[0]]),
                                 random_state=0)
 
                     X = model.fit_transform(data_c)
-#                    print("EV", model.explained_variance_)
-#                    print("EVR", model.explained_variance_ratio_)
 
             if max_clusters == 'sqrt_rule':
-                print("No. cells in cluster", X.shape[0])
                 nopath_clustering = get_subclustering(
                     X,
                     silhouette_threshold,
                     max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
-                    clusteringcachedir=clusteringcachedir
-                )  # This shouldn't be hard-coded S Markson 9 June 2020
+                    clusteringcachedir=clusteringcachedir,
+                    min_input_size=min_subclustering_size
+                )  
             else:
                 nopath_clustering = get_subclustering(
                     X,
                     silhouette_threshold,
                     max_clusters=max_clusters,
-                    clusteringcachedir=clusteringcachedir
-                )  # This shouldn't be hard-coded S Markson 9 June 2020
+                    clusteringcachedir=clusteringcachedir,
+                    min_input_size=min_subclustering_size
+                )  
 
 
-#            nopath_clustering = get_subclustering(X, score_threshold=silhouette_threshold)  #Really shouldn't be hard-coded S Markson 9 June 2020
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
             ]
