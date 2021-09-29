@@ -6,8 +6,11 @@ import pandas as pd
 
 
 def get_valid_gene_info(
-        genes: List[str]) -> Tuple[List[str], List[int], List[int], List[int]]:
-    """Returns gene locations for all genes in ensemble 93  --S Markson 3 June 2020
+    genes: List[str],
+    release=102,
+    species='homo sapiens'
+) -> Tuple[List[str], List[int], List[int], List[int]]:
+    """Returns gene locations for all genes in ensembl release 93  --S Markson 3 June 2020
 
     Parameters
     ----------
@@ -36,15 +39,14 @@ def get_valid_gene_info(
     
     """
     from pyensembl import EnsemblRelease
-    assembly = EnsemblRelease(93)
-    valid_chromosomes = [str(x) for x in range(1, 23)] + ['X']
+    assembly = EnsemblRelease(release, species=species)
     gene_names = []
     gene_contigs = []
     gene_starts = []
     gene_ends = []
     for gene in np.intersect1d(genes, [
-            gene.gene_name
-            for gene in assembly.genes() if gene.contig in valid_chromosomes
+            gene.gene_name for gene in assembly.genes()
+            if gene.contig.isnumeric() or gene.contig == 'X'
     ]):  # Toss genes not in hg38 release 93
         gene_info = assembly.genes_by_name(gene)
         gene_info = gene_info[0]
@@ -484,7 +486,11 @@ def get_igraph_from_adjacency(adjacency, directed=None):
     return g
 
 
-def convert_10x_h5(path_10x_h5, output_loom, labelkey=None,label='', genes_as_ca=[]):
+def convert_10x_h5(path_10x_h5,
+                   output_loom,
+                   labelkey=None,
+                   label='',
+                   genes_as_ca=[]):
     import cellranger.matrix as cr_matrix
     import loompy
     filtered_feature_bc_matrix = cr_matrix.CountMatrix.load_h5_file(
@@ -500,74 +506,178 @@ def convert_10x_h5(path_10x_h5, output_loom, labelkey=None,label='', genes_as_ca
     features_common_names = filtered_feature_bc_matrix.feature_ref.get_feature_names(
     )
 
-
-
     barcodes = filtered_feature_bc_matrix.bcs.astype(str)
     ca = {'cellname': barcodes}
     if labelkey is not None:
-        ca[labelkey] = [label]*len(barcodes)
-
+        ca[labelkey] = [label] * len(barcodes)
 
     m = filtered_feature_bc_matrix.m
-    if type(genes_as_ca)==str:
+    if type(genes_as_ca) == str:
         genes_as_ca = [genes_as_ca]
-    if len(genes_as_ca)>0:
+    if len(genes_as_ca) > 0:
         mask = np.isin(features, genes_as_ca)
         if len(genes_as_ca) != mask.sum():
-            raise Exception("Improper mapping of row attributes; perhaps gene of interest not in loom.ra[\'gene\']?")
+            raise Exception(
+                "Improper mapping of row attributes; perhaps gene of interest not in loom.ra[\'gene\']?"
+            )
         for gene in genes_as_ca:
-            submask = np.array(features) == gene 
-            if np.sum(submask)>1:
+            submask = np.array(features) == gene
+            if np.sum(submask) > 1:
                 raise Exception("Two or more features with this name")
-            elif np.sum(submask)==0:
+            elif np.sum(submask) == 0:
                 raise Exception("No features with this name")
-            ca[gene] = list(m[submask,:].toarray()[0])
-        m = m[~mask,:]
+            ca[gene] = list(m[submask, :].toarray()[0])
+        m = m[~mask, :]
         features = list(np.array(features)[~mask])
         features_common_names = list(np.array(features_common_names)[~mask])
 
     ra = {'gene': features, 'gene_common_name': features_common_names}
     loompy.create(output_loom, m, ra, ca)
 
-def create_split_exon_gtf(input_gtf,output_gtf,gene):
-    gtf = pd.read_table(input_gtf,header=None, comment='#')
-    gtf.columns = ['seqname','source','feature','start','end','score','strand','frame','attribute']
-    gtf = gtf[gtf['feature']=='exon']
-    if type(gene)==str:
-        mask = gtf['attribute'].apply(lambda x: 'gene_name "{}"'.format(gene) in x)
+
+def create_split_exon_gtf(input_gtf, output_gtf, gene):
+    gtf = pd.read_table(input_gtf, header=None, comment='#')
+    gtf.columns = [
+        'seqname', 'source', 'feature', 'start', 'end', 'score', 'strand',
+        'frame', 'attribute'
+    ]
+    gtf = gtf[gtf['feature'] == 'exon']
+    if type(gene) == str:
+        mask = gtf['attribute'].apply(
+            lambda x: 'gene_name "{}"'.format(gene) in x)
     elif type(gene) in [list, tuple, np.array]:
-        mask = np.array([False]*len(gtf))
+        mask = np.array([False] * len(gtf))
         for g in gene:
-            mask = mask | gtf['attribute'].apply(lambda x: 'gene_name "{}"'.format(g) in x)
+            mask = mask | gtf['attribute'].apply(
+                lambda x: 'gene_name "{}"'.format(g) in x)
     gtf_unchanged = gtf[~mask]
     gtf_changed = gtf[mask]
 
     def append_exon_number_to_id_and_name(attribute):
-        exon_number = attribute.split('exon_number')[1].split(';')[0].split('\"')[-2]
+        exon_number = attribute.split('exon_number')[1].split(';')[0].split(
+            '\"')[-2]
 
-        old_gene_id_str = 'gene_id'+attribute.split('gene_id')[1].split(';')[0]
-        new_gene_id_str = '\"'.join(old_gene_id_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+        old_gene_id_str = 'gene_id' + attribute.split('gene_id')[1].split(
+            ';')[0]
+        new_gene_id_str = '\"'.join(
+            old_gene_id_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
 
-        old_gene_name_str = 'gene_name'+attribute.split('gene_name')[1].split(';')[0]
-        new_gene_name_str = '\"'.join(old_gene_name_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+        old_gene_name_str = 'gene_name' + attribute.split(
+            'gene_name')[1].split(';')[0]
+        new_gene_name_str = '\"'.join(
+            old_gene_name_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
 
-        old_transcript_id_str = 'transcript_id'+attribute.split('transcript_id')[1].split(';')[0]
-        new_transcript_id_str = '\"'.join(old_transcript_id_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+        old_transcript_id_str = 'transcript_id' + attribute.split(
+            'transcript_id')[1].split(';')[0]
+        new_transcript_id_str = '\"'.join(
+            old_transcript_id_str.split('\"')
+            [0:-1]) + '-exon' + exon_number + '\"'
 
-        old_transcript_name_str = 'transcript_name'+attribute.split('transcript_name')[1].split(';')[0]
-        new_transcript_name_str = '\"'.join(old_transcript_name_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+        old_transcript_name_str = 'transcript_name' + attribute.split(
+            'transcript_name')[1].split(';')[0]
+        new_transcript_name_str = '\"'.join(
+            old_transcript_name_str.split('\"')
+            [0:-1]) + '-exon' + exon_number + '\"'
 
-        old_ccds_id_str = 'ccds_id'+attribute.split('ccds_id')[1].split(';')[0]
-        new_ccds_id_str = '\"'.join(old_ccds_id_str.split('\"')[0:-1])+'-exon'+exon_number+'\"'
+        old_ccds_id_str = 'ccds_id' + attribute.split('ccds_id')[1].split(
+            ';')[0]
+        new_ccds_id_str = '\"'.join(
+            old_ccds_id_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
 
-        attribute = attribute.replace(old_gene_id_str,new_gene_id_str)
-        attribute = attribute.replace(old_gene_name_str,new_gene_name_str)
-        attribute = attribute.replace(old_transcript_id_str,new_transcript_id_str)
-        attribute = attribute.replace(old_transcript_name_str,new_transcript_name_str)
-        attribute = attribute.replace(old_ccds_id_str,new_ccds_id_str)
+        attribute = attribute.replace(old_gene_id_str, new_gene_id_str)
+        attribute = attribute.replace(old_gene_name_str, new_gene_name_str)
+        attribute = attribute.replace(old_transcript_id_str,
+                                      new_transcript_id_str)
+        attribute = attribute.replace(old_transcript_name_str,
+                                      new_transcript_name_str)
+        attribute = attribute.replace(old_ccds_id_str, new_ccds_id_str)
 
         return attribute
 
-    gtf_changed['attribute'] = gtf_changed['attribute'].apply(append_exon_number_to_id_and_name)
+    gtf_changed['attribute'] = gtf_changed['attribute'].apply(
+        append_exon_number_to_id_and_name)
     gtf = pd.concat([gtf_changed, gtf_unchanged])
-    gtf.to_csv(output_gtf,sep='\t',index=False,header=None)    
+    gtf.to_csv(output_gtf, sep='\t', index=False, header=None)
+
+
+def get_umap_from_matrix(X,
+                         random_state=17,
+                         verbose=True,
+                         min_dist=0.001,
+                         n_neighbors=20,
+                         metric='correlation'):
+
+    import umap
+
+    reducer = umap.UMAP(random_state=random_state,
+                        verbose=verbose,
+                        min_dist=min_dist,
+                        n_neighbors=n_neighbors,
+                        metric=metric)
+    return reducer.fit_transform(X)
+
+
+def convert_h5ad(h5ad,
+                 output_loom,
+                 convert_obsm=True,
+                 convert_varm=True,
+                 convert_uns=True,
+                 convert_layers=True):
+    import scanpy
+    import loompy
+
+    h5ad = scanpy.read_h5ad(h5ad)
+    ra = {'gene': np.array(h5ad.var.index)}
+    for col in h5ad.var.columns:
+        if col == 'gene':
+            raise Exception(
+                "var column of h5ad is \"gene\".  This conflicts with panopticon loom format.  You must rename before converting."
+            )
+        else:
+            ra[col] = np.array(h5ad.obs[col].values)
+
+    ca = {'cellname': np.array(h5ad.obs.index)}
+    for col in h5ad.obs.columns:
+        if col == 'cellname':
+            raise Exception(
+                "obs column of h5ad is \"cellname\".  This conflicts with panopticon loom format.  You must rename before converting."
+            )
+        else:
+            ca[col] = np.array(h5ad.obs[col].values)
+    if convert_obsm:
+        for obsm_key in h5ad.obsm.keys():
+            for i in range(h5ad.obsm[obsm_key].shape[1]):
+                ca_key = "{}_{}".format(
+                    obsm_key,
+                    i + 1)  # one added so that these are 1-indexed by default
+                if ca_key in ca.keys():
+                    raise Exception(
+                        "key\"{}\" already present as column attribute key.  Please rename to avoid."
+                    )
+                else:
+                    ca[ca_key] = h5ad.obsm[obsm_key][:, i]
+    if convert_varm:
+        for varm_key in h5ad.varm.keys():
+            for i in range(h5ad.varm_key[varm_key].shape[1]):
+                ra_key = "{}_{}".format(
+                    varm_key,
+                    i + 1)  # one added so that these are 1-indexed by default
+                if ra_key in ra.keys():
+                    raise Exception(
+                        "key\"{}\" already present as row attribute key.  Please rename to avoid."
+                    )
+                else:
+                    ra[ra_key] = h5ad.varm[varm_key][:, i]
+    loompy.create(output_loom, h5ad.X.T, ra, ca)
+
+    if convert_uns:
+        loom = loompy.connect(output_loom)
+        for uns_key in h5ad.uns.keys():
+            loom.attrs[uns_key] = h5ad.uns[key]
+        loom.close()
+
+    if convert_layers:
+        loom = loompy.connect(output_loom)
+        for layer_key in h5ad.layers.keys():
+            loom.layers[layer_key] = h5ad.layers[key].T
+        loom.close()

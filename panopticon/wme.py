@@ -14,7 +14,7 @@ from scipy.sparse import coo_matrix, save_npz
 from panopticon.utilities import get_valid_gene_info
 
 
-def get_list_of_gene_windows(genes, window_size=400, window_step=50):
+def get_list_of_gene_windows(genes, window_size=400, window_step=50, release=102, species='homo sapiens'):
     """
 
     Parameters
@@ -30,7 +30,7 @@ def get_list_of_gene_windows(genes, window_size=400, window_step=50):
     -------
 
     """
-    gene_names, gene_contigs, gene_starts, gene_ends = get_valid_gene_info(genes)
+    gene_names, gene_contigs, gene_starts, gene_ends = get_valid_gene_info(genes, release=release, species=species)
 
     gene_df = pd.DataFrame(gene_names)
     gene_df.columns = ['name']
@@ -273,4 +273,42 @@ def convert_to_sparse(dense_file, sparse_file=None, genes_not_present=False, gen
         np.savetxt(genelist_file,np.array(genes),delimiter=',',fmt='%s')
     return expr_mat, genes
 
+def get_masked_wme(loom, layername, mask=None, gene_ra='gene',species='homo sapiens', release=102, window_step=50, window_size=50, return_principal_components=None, upper_cut=0, mask_option='load_full'):
 
+    from panopticon.wme import get_list_of_gene_windows, robust_mean_windowed_expressions
+    from tqdm import tqdm
+    gene_windows = get_list_of_gene_windows(loom.ra[gene_ra], species=species, window_step=window_step, window_size=window_size, release=release)
+    if mask is None:
+        X = loom[layername][:,:]
+    else:
+        if mask_option == 'load_full':  # this is to address an h5py performance bog
+            X = loom[layername][:,:][:,mask]
+        elif mask_option == 'mask_first':
+            X = loom[layername][:,mask]
+        #if mask_option not in ['load_full','mask_first','scan']:
+        else:
+            raise Exception("mask_option must be one of: load_full, mask_first, scan")
+    if mask_option == 'scan':
+        mwe_parts = []
+        for (ix, selection, view) in loom.scan(items=mask, axis=1):
+            mwe_parts.append(robust_mean_windowed_expressions(view.ra[gene_ra],
+                                       gene_windows,
+                                       view[layername][:,:],
+                                       upper_cut=upper_cut, ).T)
+        mwe = np.vstack(mwe_parts).T
+
+
+    else:
+        mwe = robust_mean_windowed_expressions(loom.ra[gene_ra],
+                                               gene_windows,
+                                               X,
+                                               upper_cut=upper_cut, )
+    if return_principal_components is not None:
+        if type(return_principal_components)!=int:
+            raise Exception("type of return_principal_components must be None or int")
+
+        from sklearn.decomposition import PCA
+        pca = PCA(n_components=return_principal_components)
+        return pca.fit_transform(mwe.T)
+    else:
+        return mwe.T

@@ -674,14 +674,14 @@ def get_cluster_markers(loom, layername, cluster_level):
 
     
     """
-    from panopticon.analysis import cluster_differential_expression
+    from panopticon.analysis import get_cluster_differential_expression
     diffex = {}
     for cluster in np.unique(loom.ca[cluster_level]):
         try:
-            diffex[cluster] = cluster_differential_expression(
+            diffex[cluster] = get_cluster_differential_expression(
                 loom,
-                cluster_level,
                 layername,
+                cluster_level=cluster_level,
                 ident1=cluster,
                 verbose=True,
                 ident1_downsample_size=500,
@@ -998,7 +998,7 @@ def get_differential_expression_dict(loom,
                                      final_iteration=3,
                                      min_cluster_size=50,
                                      gene_alternate_name=None):
-    """Runs cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.
+    """Runs get_cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.
 
     Parameters
     ----------
@@ -1022,16 +1022,16 @@ def get_differential_expression_dict(loom,
 
     
     """
-    from panopticon.analysis import cluster_differential_expression
+    from panopticon.analysis import get_cluster_differential_expression
     from panopticon.utilities import we_can_pickle_it
     diffex = {}
     for i in range(starting_iteration, final_iteration + 1):
         for cluster in np.unique(loom.ca['ClusteringIteration{}'.format(i)]):
             print(cluster)
-            diffex[cluster] = cluster_differential_expression(
+            diffex[cluster] = get_cluster_differential_expression(
                 loom,
-                'ClusteringIteration{}'.format(i),
                 layername,
+                cluster_level='ClusteringIteration{}'.format(i),
                 ident1=cluster,
                 ident1_downsample_size=downsample_size,
                 ident2_downsample_size=downsample_size,
@@ -1079,10 +1079,10 @@ def scrna2tracer_mapping(scrna_cellnames, tracer_cellnames):
     return tracer2scrna_name
 
 
-def cluster_differential_expression(loom,
-                                    cluster_level,
+def get_cluster_differential_expression(loom,
                                     layername,
-                                    ident1,
+                                    cluster_level=None,
+                                    ident1=None,
                                     ident2=None,
                                     mask1=None,
                                     mask2=None,
@@ -1124,7 +1124,8 @@ def cluster_differential_expression(loom,
     
     """
     from scipy.stats import mannwhitneyu
-    from statsmodels.stats.multitest import multipletests
+    from statsmodels.stats.multitest import fdrcorrection
+
     from time import time
     from tqdm import tqdm
 
@@ -1135,6 +1136,10 @@ def cluster_differential_expression(loom,
         raise Exception(
             "Either both or neither of mask1, mask2 must be specified")
     else:
+        if cluster_level is None:
+            raise Exception("cluster_level must be specified when running with cluster identities, i.e. without specifying an explicit mask")
+        if ident1 is None:
+            raise Exception("ident1 must be specified when running with cluster identities, i.e. without specifying an explicit mask")
         if type(ident1) != list:
             ident1 = [ident1]
         mask1 = np.isin(loom.ca[cluster_level], ident1)
@@ -1229,7 +1234,10 @@ def cluster_differential_expression(loom,
         gene2altname = {gene:altname for gene, altname in zip(loom.ra['gene'],loom.ra[gene_alternate_name])}
         altnames = [gene2altname[x] for x in genes]
         output['GeneAlternateName'] = altnames
-    return output.sort_values('pvalue', ascending=True)
+
+    output = output.sort_values('pvalue', ascending=True)
+    output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'], is_sorted=True )[1]
+    return output
 
 
 def get_differential_expression_over_continuum(loom,
@@ -1364,6 +1372,7 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
 
 def simpson(x, with_replacement=False):
     """
+    For computing simpson index directly from counts (or frequencies, if with_replacement=True)
 
     Parameters
     ----------
