@@ -487,12 +487,18 @@ def get_igraph_from_adjacency(adjacency, directed=None):
 
 
 def convert_10x_h5(path_10x_h5,
-                   output_loom,
+                   output_file,
                    labelkey=None,
                    label='',
-                   genes_as_ca=[]):
+                   genes_as_ca=[],
+                   gene_whitelist=None, 
+                   output_type='loom'):
     import cellranger.matrix as cr_matrix
     import loompy
+    output_type = output_file.split('.')[-1]
+    if output_type not in ['loom','pkl']:
+        raise Exception("output_file must be have suffix loom or pkl, denoting an output type of loom of pickle respectively")
+
     filtered_feature_bc_matrix = cr_matrix.CountMatrix.load_h5_file(
         path_10x_h5)
     id2feature = {
@@ -512,6 +518,12 @@ def convert_10x_h5(path_10x_h5,
         ca[labelkey] = [label] * len(barcodes)
 
     m = filtered_feature_bc_matrix.m
+    if gene_whitelist is not None:
+        mask = np.isin(features, gene_whitelist)
+        m = m[mask,:]
+        features = list(np.array(features)[mask])
+        features_common_names = list(np.array(features_common_names)[mask])
+
     if type(genes_as_ca) == str:
         genes_as_ca = [genes_as_ca]
     if len(genes_as_ca) > 0:
@@ -532,7 +544,25 @@ def convert_10x_h5(path_10x_h5,
         features_common_names = list(np.array(features_common_names)[~mask])
 
     ra = {'gene': features, 'gene_common_name': features_common_names}
-    loompy.create(output_loom, m, ra, ca)
+    if output_type == 'loom':
+        loompy.create(output_file, m, ra, ca)
+    if output_type == 'pkl':
+        if gene_whitelist is None:
+            raise Exception("pkl output intended only for saving a small subsetted geneset of interest.  Please select a whitelist before saving as dataframe pkl.")
+        mask = np.isin(features, gene_whitelist)
+        features = np.array(features)[mask]
+        features_common_names = np.array(features_common_names)[mask]
+        df = pd.DataFrame(m[mask,:].toarray())
+        df.index = features
+        if labelkey is not None:
+            df.columns = [labelkey+'_'+x for x in barcodes]
+        else:
+            df.columns = barcodes
+        df.to_pickle(output_file)
+
+
+
+      
 
 
 def create_split_exon_gtf(input_gtf, output_gtf, gene):
@@ -681,3 +711,131 @@ def convert_h5ad(h5ad,
         for layer_key in h5ad.layers.keys():
             loom.layers[layer_key] = h5ad.layers[key].T
         loom.close()
+
+
+def get_UMI_curve_from_10x_h5(path_10x_h5, save_to_file=None):
+    import cellranger.matrix as cr_matrix
+    import matplotlib.pyplot as plt
+
+    bc_matrix = cr_matrix.CountMatrix.load_h5_file(path_10x_h5)
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    ax.plot(np.sort(bc_matrix.get_counts_per_bc())[::-1])
+    ax.set_title('UMI counts per barcode, sorted')
+    ax.set_ylabel('UMI counts')
+    ax.set_xlabel('cell rank, UMI counts (most to fewest)')
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    if save_to_file is None:
+        plt.show()
+    else:
+        plt.savefig(save_to_file)
+        plt.cla()
+
+
+def get_dsb_normalization(cell_antibody_counts,
+                          empty_droplet_antibody_counts,
+                          use_isotype_control=True,
+                          denoise_counts=True,
+                          isotype_control_name_vec=None,
+                          define_pseudocount=False,
+                          pseudocount_use=10,
+                          quantile_clipping=False,
+                          quantile_clip=[0.001, 0.9995],
+                          return_stats=False):
+
+    import rpy2.robjects as robjects
+    import rpy2.robjects.numpy2ri
+    if isotype_control_name_vec is None:
+        isotype_control_name_vec = robjects.r("NULL")
+    if (pseudocount_use != 10) and (not define_pseudocount):
+        raise Exception("\"define_pseudocount\" must be set to True to use pseudocount_use")
+
+    rpy2.robjects.numpy2ri.activate()
+
+    robjects.r(
+        '''                                      
+    library(mclust)                                     
+    library(dsb)                                        
+                                                        
+    dsb <- function(cells,                              
+                    empty,                              
+                    use.isotype.control=TRUE,           
+                    denoise.counts=TRUE,                
+                    isotype.control.name.vec = NULL,    
+                    define.pseudocount = FALSE,         
+                    pseudocount.use = 10,               
+                    quantile.clipping = FALSE,          
+                    quantile.clip = c(0.001, 0.9995),   
+                    return.stats = FALSE){
+    
+    DSBNormalizeProtein(cells, empty, use.isotype.control=use.isotype.control,
+                    isotype.control.name.vec = isotype.control.name.vec,
+                    denoise.counts=denoise.counts,
+                    define.pseudocount = define.pseudocount, 
+                    pseudocount.use = pseudocount.use, 
+                    quantile.clipping = quantile.clipping,
+                    quantile.clip = quantile.clip, 
+                    return.stats = return.stats)
+    }
+    ''')
+    dsb = robjects.r['dsb']
+    return dsb(cell_antibody_counts,
+               empty_droplet_antibody_counts,
+               use_isotype_control=use_isotype_control,
+               denoise_counts=denoise_counts,
+               isotype_control_name_vec=isotype_control_name_vec,
+               define_pseudocount=define_pseudocount,
+               pseudocount_use=pseudocount_use,
+               quantile_clipping=quantile_clipping,
+               quantile_clip=quantile_clip,
+               return_stats=return_stats)
+
+def get_antibody_normalization(ell_droplet_loom,
+        antibody_ca,
+        empty_droplet_loom=None):
+    """
+    This uses the first step of DSB, then provides thresholding based on a 2-component Gaussian mixture model
+    """
+    if type(antibody_ca)==str:
+        antibody_ca = list(antibody_ca)
+    elif not iter(antibody_ca):
+        raise Exception("antibody_ca must be iterable or of type str (single ca)")
+    for antibody in antibody_ca:
+        filtered = cell_droplet_loom.ca[antibody]
+        if empty_droplet_loom is not None:
+            igene = np.where(empty_droplet_loom.ra['gene']==antibody)[0][0]
+            true_cell_set = set(l4filtered.ca['cellname'])
+            mask = np.array([x not in true_cell_set for x in l4raw.ca['cellname']])
+            raw = l4raw[''][igene,:][mask]
+            filtered_zscore_log1p = (np.log1p(filtered)-np.mean(np.log1p(raw)))/np.std(np.log1p(raw))
+
+
+def create_antibody_prediction(loom, raw_antibody_counts_df, pseudocount=1, overwrite=False, only_generate_zscore=False):
+    for antibody in raw_antibody_counts_df:
+        if antibody not in loom.ca.keys():
+            raise Exception("raw_antibody_count_df must be prepared such that columns match column attributes in loom corresponding to raw antibody conjugate counts")
+
+        new_ca_name = antibody+'_zscore_log{}p'.format(pseudocount)
+        if new_ca_name in loom.ca.keys() and overwrite==False:
+            raise Exception("{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True".format(new_ca_name))
+        if pseudocount==1:
+            logcounts_cells = np.log1p(loom.ca[antibody])
+            logcounts_empty_droplets = np.log1p(raw_antibody_counts_df[antibody])
+        else:
+            logcounts_cells = np.log(loom.ca[antibody]+pseudocount)
+            logcounts_empty_droplets = np.log(raw_antibody_counts_df[antibody].values+pseudocount)
+        logcounts_empty_droplets_mean = np.mean(logcounts_empty_droplets)
+        logcounts_empty_droplets_std = np.std(logcounts_empty_droplets)
+        loom.ca[new_ca_name] = (logcounts_cells - logcounts_empty_droplets_mean)/logcounts_empty_droplets_std
+        if not only_generate_zscore: 
+            from sklearn import mixture
+            model = mixture.GaussianMixture(n_components=2)
+            prediction_ca_name = antibody+'_prediction'
+            if prediction_ca_name in loom.ca.keys() and overwrite==False:
+                raise Exception("{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True".format(prediction_ca_name))
+            loom.ca[prediction_ca_name] = model.fit_predict(loom.ca[new_ca_name].reshape(-1, 1))
+
+#def create_antibody_two_component_gaussian_mixture_calls(loom, antibody):
+
+        

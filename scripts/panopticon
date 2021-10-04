@@ -8,14 +8,14 @@ import pkg_resources
 def cli():
     """Panopticon is a set of tools named after Jeremy Bentham's model for a prison, whereby multiple cells (!) could be observed with ease by a single individual.  
     """
-@cli.command(short_help="Combines multiple loom files together; convenience function to call loompy.combine")
+@cli.command(help="Combines multiple loom files together; convenience function to call loompy.combine")
 @click.argument('input_looms', type=click.Path(exists=True),nargs=-1)
 @click.argument('output_loom',nargs=1)
-def combine_looms(input_looms, output_loom):
+def combine_looms(input_looms, output_loom, output_type='loom'):
     import loompy
     loompy.combine(input_looms, output_loom, key='gene')
 
-@cli.command(short_help="Converts a 10x hdf5 file (e.g. filtered_feature_bc_matrix.h5, or raw_feature_bc_matrix) to a panopticon-compatible loom file")
+@cli.command(help="Converts a 10x hdf5 file (e.g. filtered_feature_bc_matrix.h5, or raw_feature_bc_matrix) to a panopticon-compatible loom file")
 @click.argument('h5file', type=click.Path(exists=True))
 @click.argument('output_loom')
 @click.option(
@@ -25,11 +25,24 @@ def combine_looms(input_looms, output_loom):
 @click.option(
     '--convert_to_ca',
     help='Convert a row attribute key to column attribute (e.g. for when your raw data is mixed CITE and scRNA-seq).  Usage --convert_to_ca Hash123', multiple=True)
-def convert_10x_h5(h5file, output_loom, label, convert_to_ca):
+@click.option(
+    '--whitelist_gene',
+    help='Whitelist a gene to include (will blacklist all other genes).  Intended for getting antibody counts from empty droplets, where other types of counts are not needed.  Usage --whitelist_gene Hash123', multiple=True,default=None)
+def convert_10x_h5(h5file, output_loom, label, convert_to_ca,whitelist_gene):
     from panopticon.utilities import convert_10x_h5
-    convert_10x_h5(h5file, output_loom, label[0], label[1], convert_to_ca)
+    convert_10x_h5(h5file, output_loom, label[0], label[1], genes_as_ca=convert_to_ca, gene_whitelist=whitelist_gene)
 
-@cli.command(short_help="Creates a new gtf where gene(s) of interest have been split into separate exonic regions and renamed accordingly")
+@cli.command(help="Plots the UMI curve from a 10x hdf5 file (e.g. raw_feature_bc_matrix)")
+@click.argument('h5file', type=click.Path(exists=True))
+@click.option(
+    '--save_to_file',
+    default=None,
+    help='save output to file using matplotlib.pyplot.savefig' )
+def plot_UMI_curve_from_10x_h5(h5file, save_to_file):
+    from panopticon.utilities import get_UMI_curve_from_10x_h5
+    get_UMI_curve_from_10x_h5(h5file, save_to_file)
+
+@cli.command(help="Creates a new gtf where gene(s) of interest have been split into separate exonic regions and renamed accordingly")
 @click.argument('input_gtf',type=click.Path(exists=True))
 @click.argument('output_gtf')
 @click.argument('gene', nargs=-1)
