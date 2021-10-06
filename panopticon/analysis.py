@@ -921,8 +921,6 @@ def generate_malignancy_score(loom,
                 cnv_quantiles = [np.nan] * np.sum(mask)
 
             else:
-                from IPython.core.debugger import set_trace
-                set_trace()
                 raise Exception(
                     "Unlikely event that CNV same for 45+/- has occurred")
 
