@@ -45,11 +45,19 @@ def generate_cell_and_gene_quality_metrics(loom, layername, gene_ra='gene'):
     """
     from statsmodels import robust
 
-    rpgenemask = np.array([x.startswith('RP') or x.startswith('Rp') for x in loom.ra[gene_ra]])
+    rpgenemask = np.array(
+        [x.startswith('RP') or x.startswith('Rp') for x in loom.ra[gene_ra]])
     madrp, meanrp, maxrp = loom[layername].map([robust.mad, np.mean, np.max],
                                                axis=1,
                                                selection=rpgenemask)
+    mtgenemask = np.array(
+        [x.startswith('MT-') or x.startswith('mt.') for x in loom.ra[gene_ra]])
+    madmt, meanmt, maxmt = loom[layername].map([robust.mad, np.mean, np.max],
+                                               axis=1,
+                                               selection=mtgenemask)
     madall, meanall = loom[layername].map([robust.mad, np.mean], axis=1)
+    loom.ca['MitochondrialMean'] = meanmt
+    loom.ca['MitochondrialRelativeMeanAbsoluteDeviation'] = madmt / meanmt
     loom.ca['RibosomalRelativeMeanAbsoluteDeviation'] = madrp / meanrp
     loom.ca['RibosomalMaxOverMean'] = maxrp / meanrp
     loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
@@ -135,7 +143,11 @@ def generate_count_normalization(loom,
     loom[output_layername] = sparselayer
 
 
-def generate_standardized_layer(loom, layername, variance_axis='cell', batch_size=512, out_of_core_cell_threshold=20000):
+def generate_standardized_layer(loom,
+                                layername,
+                                variance_axis='cell',
+                                batch_size=512,
+                                out_of_core_cell_threshold=20000):
     """                                                                                                                                                                                                                                        
                                                                                                                                                                                                                                                
     Parameters                                                                                                                                                                                                                                 
@@ -152,7 +164,7 @@ def generate_standardized_layer(loom, layername, variance_axis='cell', batch_siz
     None 
     
     """
-    from tqdm import tqdm 
+    from tqdm import tqdm
 
     if layername.endswith('_standardized'):
         raise Exception(
@@ -169,11 +181,13 @@ def generate_standardized_layer(loom, layername, variance_axis='cell', batch_siz
                      loom[layername][:, :].T).T
         else:
             scaler = StandardScaler()
-            loom[layername+'_gene_standardized'] = "float64"
-            for (ix, selection, view) in tqdm(loom.scan(axis=0,
-                                                        batch_size=batch_size),
-                                              total=loom.shape[1] // batch_size):
-                loom[layername+'_gene_standardized'][selection,:] = scaler.fit_transform(view[layername][:,:].T).T
+            loom[layername + '_gene_standardized'] = "float64"
+            for (ix, selection,
+                 view) in tqdm(loom.scan(axis=0, batch_size=batch_size),
+                               total=loom.shape[1] // batch_size):
+                loom[layername + '_gene_standardized'][
+                    selection, :] = scaler.fit_transform(
+                        view[layername][:, :].T).T
 
     elif variance_axis == 'cell':
         if loom.shape[1] < out_of_core_cell_threshold:
@@ -182,9 +196,122 @@ def generate_standardized_layer(loom, layername, variance_axis='cell', batch_siz
                      loom[layername][:, :])
         else:
             scaler = StandardScaler()
-            loom[layername+'_cell_standardized'] = "float64"
-            for (ix, selection, view) in tqdm(loom.scan(axis=1,
-                                                        batch_size=batch_size),
-                                              total=loom.shape[1] // batch_size):
-                loom[layername+'_cell_standardized'][:,selection] = scaler.fit_transform(view[layername][:,:])
-    
+            loom[layername + '_cell_standardized'] = "float64"
+            for (ix, selection,
+                 view) in tqdm(loom.scan(axis=1, batch_size=batch_size),
+                               total=loom.shape[1] // batch_size):
+                loom[layername +
+                     '_cell_standardized'][:,
+                                           selection] = scaler.fit_transform(
+                                               view[layername][:, :])
+
+
+def generate_antibody_prediction(loom,
+                                 raw_antibody_counts_df=None,
+                                 antibodies=None,
+                                 pseudocount=1,
+                                 overwrite=False,
+                                 only_generate_zscore=False):
+    if raw_antibody_counts_df is None and antibodies is None:
+        raise Exception(
+            "one of antibodies, raw_antibody_counts_df must be other than None"
+        )
+    if raw_antibody_counts_df is not None and antibodies is not None:
+        raise Exception(
+            "only one of antibodies, raw_antibody_counts_df must be other than None"
+        )
+
+    if raw_antibody_counts_df is not None:
+        antibodies = raw_antibody_counts_df.columns
+
+    for antibody in antibodies:
+        if antibody not in loom.ca.keys():
+            raise Exception(
+                "raw_antibody_count_df must be prepared such that columns match column attributes in loom corresponding to raw antibody conjugate counts"
+            )
+
+        new_ca_name = antibody + '_zscore_log{}p'.format(pseudocount)
+        if new_ca_name in loom.ca.keys() and overwrite == False:
+            raise Exception(
+                "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
+                .format(new_ca_name))
+        if raw_antibody_counts_df is not None:
+            if pseudocount == 1:
+                logcounts_cells = np.log1p(loom.ca[antibody])
+                logcounts_empty_droplets = np.log1p(
+                    raw_antibody_counts_df[antibody])
+            else:
+                logcounts_cells = np.log(loom.ca[antibody] + pseudocount)
+                logcounts_empty_droplets = np.log(
+                    raw_antibody_counts_df[antibody].values + pseudocount)
+            logcounts_empty_droplets_mean = np.nanmean(
+                logcounts_empty_droplets)
+            logcounts_empty_droplets_std = np.nanstd(logcounts_empty_droplets)
+            loom.ca[new_ca_name] = (
+                logcounts_cells -
+                logcounts_empty_droplets_mean) / logcounts_empty_droplets_std
+        else:
+            if pseudocount == 1:
+                logcounts_cells = np.log1p(loom.ca[antibody])
+            else:
+                logcounts_cells = np.log(loom.ca[antibody] + pseudocount)
+            logcounts_cells_mean = np.nanmean(logcounts_cells)
+            logcounts_cells_std = np.nanstd(logcounts_cells)
+            loom.ca[new_ca_name] = (logcounts_cells -
+                                    logcounts_cells_mean) / logcounts_cells_std
+
+        if not only_generate_zscore:
+            from sklearn import mixture
+
+            model = mixture.GaussianMixture(n_components=2)
+            prediction_ca_name = antibody + '_prediction'
+            if prediction_ca_name in loom.ca.keys() and overwrite == False:
+                raise Exception(
+                    "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
+                    .format(prediction_ca_name))
+            if np.isnan(loom.ca[new_ca_name]).sum() > 0:
+                cellmask = ~np.isnan(loom.ca[new_ca_name])
+                model.fit(loom.ca[new_ca_name][cellmask].reshape(-1, 1))
+                predictions = []
+                for val in loom.ca[new_ca_name]:
+                    if np.isnan(val):
+                        predictions.append(np.nan)
+                    else:
+                        predictions.append(
+                            model.predict(np.array(val).reshape(-1, 1))[0])
+                predictions = np.array(predictions)
+
+            else:
+                predictions = model.fit_predict(loom.ca[new_ca_name].reshape(
+                    -1, 1))
+
+            if model.means_[0][0] > model.means_[1][0]:
+                predictions = 1 - predictions
+
+            loom.ca[prediction_ca_name] = np.array(predictions)
+
+
+def get_clustering_based_outlier_prediction(
+        loom,
+        max_cluster_fraction_break_threshold=0.99,
+        cluster_proportion_minimum=0.01):
+    import pandas as pd
+
+    levels = [x for x in loom.ca.keys() if x.startswith('ClusteringIteration')]
+    max_clustering_level = np.max(
+        [int(x.replace('ClusteringIteration', '')) for x in levels])
+    stub_cells = []
+    mask = np.array([True] * loom.shape[1])
+    for level in range(max_clustering_level + 1):
+        #if level == 0:
+        counts = pd.DataFrame(loom.ca['ClusteringIteration{}'.format(level)]
+                              [mask])[0].value_counts()
+        fractions = counts / counts.sum()
+
+        if fractions.values[0] < max_cluster_fraction_break_threshold:
+            break
+        outlier_clusters = fractions[
+            fractions < cluster_proportion_minimum].index.values
+        mask *= ~np.isin(loom.ca['ClusteringIteration{}'.format(level)],
+                         outlier_clusters)
+    return mask

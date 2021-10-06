@@ -200,7 +200,9 @@ def generate_incremental_pca(loom,
     from panopticon.analysis import generate_pca_loadings
     while loom.shape[1] % batch_size < n_components:
         batch_size += 1
-    print("Batch size increased to {} so that smallest batch will be greater than n_components".format(batch_size))
+    print(
+        "Batch size increased to {} so that smallest batch will be greater than n_components"
+        .format(batch_size))
     if loom.shape[1] < min_size_for_incrementalization:
         print(
             "Loom size below threshold for incremental PCA; running conventional PCA"
@@ -302,7 +304,8 @@ def get_pca_loadings_matrix(loom, layername, n_components=None):
         ]:
             pca_loadings.append(loom.ca[col])
     else:
-        n_components = loom.attrs['NumberPrincipalComponents_{}'.format(layername)]
+        n_components = loom.attrs['NumberPrincipalComponents_{}'.format(
+            layername)]
         for col in [
                 '{} PC {} Loading'.format(layername, x)
                 for x in range(1, n_components + 1)
@@ -359,7 +362,9 @@ def generate_embedding(loom,
         raise Exception("Currently only two modes implemented:  nmf and pca")
     if mode == 'pca':
         from panopticon.analysis import get_pca_loadings_matrix
-        compressed = get_pca_loadings_matrix(loom, layername, n_components=n_pca_components)
+        compressed = get_pca_loadings_matrix(loom,
+                                             layername,
+                                             n_components=n_pca_components)
     elif mode == 'nmf':
         n_nmf_cols = loom.attrs['NumberNMFComponents']
         print(n_nmf_cols)
@@ -385,8 +390,10 @@ def generate_embedding(loom,
                         verbose=True,
                         n_epochs=n_epochs)
     embedding = reducer.fit_transform(compressed)
-    loom.ca['{} UMAP embedding 1'.format(mode.upper())] = embedding[:, 0]
-    loom.ca['{} UMAP embedding 2'.format(mode.upper())] = embedding[:, 1]
+    loom.ca['{} {} UMAP embedding 1'.format(layername,
+                                            mode.upper())] = embedding[:, 0]
+    loom.ca['{} {} UMAP embedding 2'.format(layername,
+                                            mode.upper())] = embedding[:, 1]
 
 
 def get_subclustering(X,
@@ -453,7 +460,11 @@ def get_subclustering(X,
         if np.max(scores) >= score_threshold:
             clustering.set_params(n_clusters=np.argmax(scores) + minnk)
             clustering.fit(X)
-            print(np.argmax(scores) + minnk, "clusters, with", list(pd.DataFrame(clustering.labels_)[0].value_counts().values),"cells")
+            print(
+                np.argmax(scores) + minnk, "clusters, with",
+                list(
+                    pd.DataFrame(clustering.labels_)[0].value_counts().values),
+                "cells")
             return clustering.labels_
         else:
             print("No score exceeded score threshold")
@@ -505,7 +516,8 @@ def generate_clustering(loom,
     
     """
 
-    if type(n_clustering_iterations) != int or n_clustering_iterations < 1 or type(
+    if type(n_clustering_iterations
+            ) != int or n_clustering_iterations < 1 or type(
                 starting_clustering_depth) != int:
         raise Exception(
             "final_clustering_depth and starting_clustering_depth must be natural numbers."
@@ -537,9 +549,16 @@ def generate_clustering(loom,
             import leidenalg
 
             X = get_pca_loadings_matrix(loom, layername)
-            A = kneighbors_graph(X, leiden_nneighbors, mode='connectivity', include_self=True, metric='cosine')
+            A = kneighbors_graph(X,
+                                 leiden_nneighbors,
+                                 mode='connectivity',
+                                 include_self=True,
+                                 metric='cosine')
             ig = get_igraph_from_adjacency(A)
-            part = leidenalg.find_partition(ig, leidenalg.RBConfigurationVertexPartition, n_iterations=leiden_iterations)
+            part = leidenalg.find_partition(
+                ig,
+                leidenalg.RBConfigurationVertexPartition,
+                n_iterations=leiden_iterations)
             clustering = part.membership
         else:
             if mode == 'nmf':
@@ -553,7 +572,9 @@ def generate_clustering(loom,
                 X = np.vstack(nmf_loadings).T
             elif mode == 'pca':
                 from panopticon.analysis import get_pca_loadings_matrix
-                X = get_pca_loadings_matrix(loom, layername, n_components=n_components)
+                X = get_pca_loadings_matrix(loom,
+                                            layername,
+                                            n_components=n_components)
             if max_clusters == 'sqrt_rule':
                 clustering = get_subclustering(
                     X,
@@ -621,8 +642,10 @@ def generate_clustering(loom,
                             view[layername][:, :].T @ pca.components_.T)
                     X = np.vstack(compresseddatalist)
                 elif mask.sum() < min_subclustering_size:
-                    X = np.array([None]*mask.sum()) # This is a hack to avoid computing PCA in cases where no clustering will be performed
-                else:  
+                    X = np.array(
+                        [None] * mask.sum()
+                    )  # This is a hack to avoid computing PCA in cases where no clustering will be performed
+                else:
                     data_c = loom[layername][:, mask].T
                     model = PCA(n_components=np.min([10, data_c.shape[0]]),
                                 random_state=0)
@@ -635,17 +658,14 @@ def generate_clustering(loom,
                     silhouette_threshold,
                     max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
                     clusteringcachedir=clusteringcachedir,
-                    min_input_size=min_subclustering_size
-                )  
+                    min_input_size=min_subclustering_size)
             else:
                 nopath_clustering = get_subclustering(
                     X,
                     silhouette_threshold,
                     max_clusters=max_clusters,
                     clusteringcachedir=clusteringcachedir,
-                    min_input_size=min_subclustering_size
-                )  
-
+                    min_input_size=min_subclustering_size)
 
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
@@ -997,7 +1017,8 @@ def get_differential_expression_dict(loom,
                                      starting_iteration=0,
                                      final_iteration=3,
                                      min_cluster_size=50,
-                                     gene_alternate_name=None):
+                                     gene_alternate_name=None,
+                                     verbose=True):
     """Runs get_cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.
 
     Parameters
@@ -1006,7 +1027,7 @@ def get_differential_expression_dict(loom,
         
     layername : layer key of loom, over which differential expression will be computed
         
-    output : Optional filename whereto a .pkl object will be written with dictionary output
+    output : Optional filename whereto a .pkl object will be written with dictionary output, or an xlsx, with each key assigned to a separate sheet
         (Default value = None)
     downsample_size : Number of cells from each cluster to downsample to prior to running differential expression
         (Default value = 500)
@@ -1027,7 +1048,8 @@ def get_differential_expression_dict(loom,
     diffex = {}
     for i in range(starting_iteration, final_iteration + 1):
         for cluster in np.unique(loom.ca['ClusteringIteration{}'.format(i)]):
-            print(cluster)
+            if verbose:
+                print(cluster)
             diffex[cluster] = get_cluster_differential_expression(
                 loom,
                 layername,
@@ -1040,10 +1062,49 @@ def get_differential_expression_dict(loom,
             if type(diffex[cluster]) != float:
                 diffex[cluster] = diffex[cluster].query(
                     'MeanExpr1 >MeanExpr2').head(500)
-                print(diffex[cluster].head(20))
-            print('')
+                if verbose:
+                    print(diffex[cluster].head(20))
+            if verbose:
+                print('')
     if output is not None:
-        we_can_pickle_it(diffex, output)
+        if output.endswith('.xlsx'):
+            try:
+                import xlsxwriter
+            except ImportError as e:
+                print(
+                    "xlsxwriter not installed; returning output without writer to excel file"
+                )
+                return diffex
+
+            relkeys = [
+                x for x in diffex.keys()
+                if type(diffex[x]) == pd.core.frame.DataFrame
+            ]
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                for key in relkeys:
+                    prefix = '-'.join(str(key).split('-')[0:-1])
+                    complement = ', '.join([
+                        x for x in np.unique(loom.ca[
+                            'ClusteringIteration{}'.format(
+                                len(prefix.split('-')))])
+                        if x != key and x.startswith(prefix)
+                    ])
+                    sheet_name = '{} up vs. {}'.format(key, complement)
+                    if len(
+                            sheet_name
+                    ) >= 32:  # excel doesn't like it when sheets have names with more than 31 characters
+                        complement = complement.replace(
+                            '{}-'.format(prefix), '-')
+                    sheet_name = '{} up vs. {}'.format(key, complement)
+                    if len(sheet_name) >= 32:
+                        sheet_name = '{} up'.format(key)
+                    diffex[key].to_excel(writer,
+                                         sheet_name=sheet_name,
+                                         index=False)
+                writer.save()
+
+        else:
+            we_can_pickle_it(diffex, output)
     return diffex
 
 
@@ -1080,17 +1141,17 @@ def scrna2tracer_mapping(scrna_cellnames, tracer_cellnames):
 
 
 def get_cluster_differential_expression(loom,
-                                    layername,
-                                    cluster_level=None,
-                                    ident1=None,
-                                    ident2=None,
-                                    mask1=None,
-                                    mask2=None,
-                                    verbose=False,
-                                    ident1_downsample_size=None,
-                                    ident2_downsample_size=None,
-                                    min_cluster_size=0,
-                                    gene_alternate_name=None):
+                                        layername,
+                                        cluster_level=None,
+                                        ident1=None,
+                                        ident2=None,
+                                        mask1=None,
+                                        mask2=None,
+                                        verbose=False,
+                                        ident1_downsample_size=None,
+                                        ident2_downsample_size=None,
+                                        min_cluster_size=0,
+                                        gene_alternate_name=None):
     """
 
     Parameters
@@ -1137,9 +1198,13 @@ def get_cluster_differential_expression(loom,
             "Either both or neither of mask1, mask2 must be specified")
     else:
         if cluster_level is None:
-            raise Exception("cluster_level must be specified when running with cluster identities, i.e. without specifying an explicit mask")
+            raise Exception(
+                "cluster_level must be specified when running with cluster identities, i.e. without specifying an explicit mask"
+            )
         if ident1 is None:
-            raise Exception("ident1 must be specified when running with cluster identities, i.e. without specifying an explicit mask")
+            raise Exception(
+                "ident1 must be specified when running with cluster identities, i.e. without specifying an explicit mask"
+            )
         if type(ident1) != list:
             ident1 = [ident1]
         mask1 = np.isin(loom.ca[cluster_level], ident1)
@@ -1231,12 +1296,17 @@ def get_cluster_differential_expression(loom,
     output['FracExpr1'] = fracexpr1
     output['FracExpr2'] = fracexpr2
     if gene_alternate_name is not None:
-        gene2altname = {gene:altname for gene, altname in zip(loom.ra['gene'],loom.ra[gene_alternate_name])}
+        gene2altname = {
+            gene: altname
+            for gene, altname in zip(loom.ra['gene'],
+                                     loom.ra[gene_alternate_name])
+        }
         altnames = [gene2altname[x] for x in genes]
         output['GeneAlternateName'] = altnames
 
     output = output.sort_values('pvalue', ascending=True)
-    output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'], is_sorted=True )[1]
+    output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'],
+                                                 is_sorted=True)[1]
     return output
 
 
@@ -1385,6 +1455,6 @@ def simpson(x, with_replacement=False):
     """
     total = np.sum(x)
     if with_replacement:
-        return np.sum([(y / total) * (y  / total ) for y in x])
+        return np.sum([(y / total) * (y / total) for y in x])
     else:
         return np.sum([(y / total) * ((y - 1) / (total - 1)) for y in x])

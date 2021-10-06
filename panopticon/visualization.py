@@ -264,6 +264,7 @@ def get_cluster_differential_expression_heatmap(loom,
 
 
 def plot_dotmap(loom,
+                layername,
                 diffex,
                 clusterlevel,
                 topn=10,
@@ -271,7 +272,8 @@ def plot_dotmap(loom,
                 output=None,
                 title=None,
                 keyblacklist=[],
-                geneblacklist=[]):
+                geneblacklist=[],
+                figsize=(25, 5)):
     """
 
     Parameters
@@ -301,40 +303,39 @@ def plot_dotmap(loom,
     """
     import matplotlib.pyplot as plt
     import numpy as np
-    fig, ax = plt.subplots(figsize=(25, 5))
-    print(diffex.keys())
+    fig, ax = plt.subplots(figsize=figsize)
     markers = [[]]
     for key in diffex.keys():
         markers.append(
             diffex[key][(~np.isin(diffex[key]['gene'], geneblacklist))
-                        & (~np.isin(diffex[key]['gene'], np.hstack(markers)))
-                        & (~diffex[key]['gene'].apply(lambda x: '.' in x))].
+                        & (~np.isin(diffex[key]['gene'], np.hstack(markers)))].
             query('MeanExpr1 > MeanExpr2')['gene'].head(topn).values)
     markers = np.hstack(markers)
-    print(markers)
     markernames = markers
     key2x = {
         key: x
         for key, x in zip(diffex.keys(), range(len(diffex.keys())))
     }
+    key2x = {key:val for key,val in key2x.items() if len(key.split('-'))==(int(clusterlevel.replace('ClusteringIteration',''))+1)}
+
     marker2y = {marker: x for marker, x in zip(markers, range(len(markers)))}
     exprs = []
     for marker in markers:
         markerindex = np.where(loom.ra['gene'] == marker)[0][0]
         for key in [key for key in diffex.keys() if key not in keyblacklist]:
 
-            expr = loom['log2(TP100k+1)'][markerindex, ][loom.ca[clusterlevel]
-                                                         == key].mean()
+            expr = loom[layername][markerindex, ][loom.ca[clusterlevel] ==
+                                                  key].mean()
             exprs.append(expr)
     for marker in markers:
         markerindex = np.where(loom.ra['gene'] == marker)[0][0]
         for key in diffex.keys():
 
-            expr = loom['log2(TP100k+1)'][markerindex, ][loom.ca[clusterlevel]
-                                                         == key].mean()
+            expr = loom[layername][markerindex, ][loom.ca[clusterlevel] ==
+                                                  key].mean()
             sc = plt.scatter(marker2y[marker],
                              key2x[key],
-                             s=expr * scale,
+                             s=(np.max(exprs)*0-np.min(exprs)+expr)*scale,
                              cmap='coolwarm',
                              c=expr,
                              vmin=np.min(exprs),
@@ -355,7 +356,7 @@ def plot_dotmap(loom,
         #if flag:
     cbar = plt.colorbar(sc, )
     cbar.set_label(
-        'Mean log(TP100k+1) Expression',
+        'Mean {} Expression'.format(layername),
         rotation=90,
     )
     plt.xticks(rotation=90)
@@ -507,28 +508,32 @@ def volcano(diffex,
         if position == 'b':
             ax.annotate(
                 gene, (logfoldchange, negpval),
-                (logfoldchange, negpval + .015 * maxy * gene_label_offset_scale),
+                (logfoldchange,
+                 negpval + .015 * maxy * gene_label_offset_scale),
                 va='bottom',
                 ha='center',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
         elif position == 't':
             ax.annotate(
                 gene, (logfoldchange, negpval),
-                (logfoldchange, negpval - .015 * maxy * gene_label_offset_scale),
+                (logfoldchange,
+                 negpval - .015 * maxy * gene_label_offset_scale),
                 va='top',
                 ha='center',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
         elif position == 'l':
             ax.annotate(
                 gene, (logfoldchange, negpval),
-                (logfoldchange + .03 * maxx * gene_label_offset_scale, negpval),
+                (logfoldchange + .03 * maxx * gene_label_offset_scale,
+                 negpval),
                 va='center',
                 ha='left',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
         elif position == 'r':
             ax.annotate(
                 gene, (logfoldchange, negpval),
-                (logfoldchange - .03 * maxx * gene_label_offset_scale, negpval),
+                (logfoldchange - .03 * maxx * gene_label_offset_scale,
+                 negpval),
                 va='center',
                 ha='right',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
@@ -554,7 +559,15 @@ def volcano(diffex,
     if show:
         plt.show()
 
-def samurai_sword_plot(x=None,y=None,data=None,hue=None,ax=None, fig=None, show=False, output=None):
+
+def samurai_sword_plot(x=None,
+                       y=None,
+                       data=None,
+                       hue=None,
+                       ax=None,
+                       fig=None,
+                       show=False,
+                       output=None):
     if x is None:
         raise Exception("x is a required argument")
     if y is None:
@@ -562,28 +575,32 @@ def samurai_sword_plot(x=None,y=None,data=None,hue=None,ax=None, fig=None, show=
     if data is None:
         raise Exception("data is a required argument")
     if output is not None:
-        if type(output)!=str:
-            raise Exception("argument \"output\" must be a string, representing a desired filename")
-            
+        if type(output) != str:
+            raise Exception(
+                "argument \"output\" must be a string, representing a desired filename"
+            )
+
     import matplotlib.pyplot as plt
     from tqdm import tqdm
     import matplotlib.transforms as transforms
-    
-    if ax is None and fig is None:
-        fig, ax = plt.subplots(figsize=(5,5))
-    elif ax is None and fig is not None:
-        raise Exception("argument \"ax\" must be included when argument \"fig\" is included")
-    elif fig is None and ax is not None:
-        raise Exception("argument \"ax\" must be included when argument \"fig\" is included")
-        
 
-    
+    if ax is None and fig is None:
+        fig, ax = plt.subplots(figsize=(5, 5))
+    elif ax is None and fig is not None:
+        raise Exception(
+            "argument \"ax\" must be included when argument \"fig\" is included"
+        )
+    elif fig is None and ax is not None:
+        raise Exception(
+            "argument \"ax\" must be included when argument \"fig\" is included"
+        )
+
     all_heights = []
     #total = data.groupby(x).apply(lambda var: len(var)).max()
     #print(total)
     if hue is None:
         grouped_data = data.groupby(x)[y].value_counts()
-        total =data.groupby(x)[y].unique().apply(lambda x: len(x)).max()
+        total = data.groupby(x)[y].unique().apply(lambda x: len(x)).max()
         groupings = data[x].unique()
         ind = np.arange(len(groupings))
 
@@ -591,74 +608,81 @@ def samurai_sword_plot(x=None,y=None,data=None,hue=None,ax=None, fig=None, show=
         #data = data.copy()
         #newx = x+'_'+hue
         #data[newx] = np.array([xval+'_'+hueval for xval, hueval in zip(data[x].values, data[hue].values)])
-        grouped_data = data.groupby([x,hue])[y].value_counts()
-        total =data.groupby([x,hue])[y].unique().apply(lambda x: len(x)).max()
+        grouped_data = data.groupby([x, hue])[y].value_counts()
+        total = data.groupby([x,
+                              hue])[y].unique().apply(lambda x: len(x)).max()
         #groupings = data[newx].unique()
-        groupings = list(data.groupby([x,hue]).groups.keys())
+        groupings = list(data.groupby([x, hue]).groups.keys())
         ind = []
-        counter = -1 #accounts for 
+        counter = -1  #accounts for
         for i, grouping in enumerate(groupings):
-            if grouping[0] != groupings[i-1][0]:
+            if grouping[0] != groupings[i - 1][0]:
                 counter += 1
             ind.append(counter)
-            counter+=1
+            counter += 1
         ind = np.array(ind)
         #ind = np.arange(len(groupings))
     #return 0
-    for grouping in groupings:#p.array(patients)[np.argsort([pat2simpson[pat2shortpat[x]] for x in patients])]:
+    for grouping in groupings:  #p.array(patients)[np.argsort([pat2simpson[pat2shortpat[x]] for x in patients])]:
         heights = []
         for n in grouped_data[grouping].values:
             heights.append(n)
-        heights = heights + [0]*(total-len(heights))
+        heights = heights + [0] * (total - len(heights))
         heights = np.array(heights)[::-1]
-      #  print(heights)
-        all_heights.append(heights)  
+        #  print(heights)
+        all_heights.append(heights)
     all_heights = np.vstack(all_heights)
-    all_heights = all_heights[:,::-1] # puts the big bars on bottom
-    bottoms = np.array([0]*all_heights.shape[0])
+    all_heights = all_heights[:, ::-1]  # puts the big bars on bottom
+    bottoms = np.array([0] * all_heights.shape[0])
 
     for i in tqdm(range(all_heights.shape[1])):
         #color = 'r' if i%2==0 else 'b'
         color = 'w'
         #print(all_heights[:,i].sum())
-        ax.bar(ind, all_heights[:,i], 0.8, bottom = bottoms, color=color ,edgecolor='k')#, linewidth=0)
-        bottoms += all_heights[:,i]
+        ax.bar(ind,
+               all_heights[:, i],
+               0.8,
+               bottom=bottoms,
+               color=color,
+               edgecolor='k')  #, linewidth=0)
+        bottoms += all_heights[:, i]
     ax.set_xticks(ind)
     if hue is None:
-        ax.set_xticklabels(groupings, rotation = 90)
+        ax.set_xticklabels(groupings, rotation=90)
     else:
-        ax.set_xticklabels([grouping[1] for grouping in groupings], rotation = 90)
+        ax.set_xticklabels([grouping[1] for grouping in groupings],
+                           rotation=90)
         plt.tight_layout()
 
         xpositions = []
         labels = []
         xpos = 0
         for i, grouping in enumerate(groupings):
-            if grouping[0] != groupings[i-1][0]:
+            if grouping[0] != groupings[i - 1][0]:
                 xpositions.append(i)
                 labels.append(grouping[0])
         xpositions.append(len(groupings))
-        xpositions = np.array(xpositions)[0:-1]+np.diff(xpositions)*0.5
+        xpositions = np.array(xpositions)[0:-1] + np.diff(xpositions) * 0.5
         xpositions += np.arange(len(xpositions))
         xpositions -= 0.5
         for xposition, label in zip(xpositions, labels):
             trans = transforms.blended_transform_factory(
                 ax.transData, fig.transFigure)
 
-            ax.annotate(label, (xposition,0), 
-                        annotation_clip=False, 
+            ax.annotate(label, (xposition, 0),
+                        annotation_clip=False,
                         ha='center',
-                        va='bottom', 
-                        xycoords=trans, fontsize=13)
-            
+                        va='bottom',
+                        xycoords=trans,
+                        fontsize=13)
+
         ax.set_ylabel('# cells in TCR-type (stacked bar plot)')
     plt.tight_layout()
     if output is not None:
 
         if output.endswith('.png'):
-            plt.savefig(output,dpi=300)
-        else :
+            plt.savefig(output, dpi=300)
+        else:
             plt.savefig(output)
     if show:
         plt.show()
-

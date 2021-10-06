@@ -491,13 +491,15 @@ def convert_10x_h5(path_10x_h5,
                    labelkey=None,
                    label='',
                    genes_as_ca=[],
-                   gene_whitelist=None, 
+                   gene_whitelist=None,
                    output_type='loom'):
     import cellranger.matrix as cr_matrix
     import loompy
     output_type = output_file.split('.')[-1]
-    if output_type not in ['loom','pkl']:
-        raise Exception("output_file must be have suffix loom or pkl, denoting an output type of loom of pickle respectively")
+    if output_type not in ['loom', 'pkl']:
+        raise Exception(
+            "output_file must be have suffix loom or pkl, denoting an output type of loom of pickle respectively"
+        )
 
     filtered_feature_bc_matrix = cr_matrix.CountMatrix.load_h5_file(
         path_10x_h5)
@@ -520,7 +522,7 @@ def convert_10x_h5(path_10x_h5,
     m = filtered_feature_bc_matrix.m
     if gene_whitelist is not None:
         mask = np.isin(features, gene_whitelist)
-        m = m[mask,:]
+        m = m[mask, :]
         features = list(np.array(features)[mask])
         features_common_names = list(np.array(features_common_names)[mask])
 
@@ -548,21 +550,19 @@ def convert_10x_h5(path_10x_h5,
         loompy.create(output_file, m, ra, ca)
     if output_type == 'pkl':
         if gene_whitelist is None:
-            raise Exception("pkl output intended only for saving a small subsetted geneset of interest.  Please select a whitelist before saving as dataframe pkl.")
+            raise Exception(
+                "pkl output intended only for saving a small subsetted geneset of interest.  Please select a whitelist before saving as dataframe pkl."
+            )
         mask = np.isin(features, gene_whitelist)
         features = np.array(features)[mask]
         features_common_names = np.array(features_common_names)[mask]
-        df = pd.DataFrame(m[mask,:].toarray())
+        df = pd.DataFrame(m[mask, :].toarray())
         df.index = features
         if labelkey is not None:
-            df.columns = [labelkey+'_'+x for x in barcodes]
+            df.columns = [labelkey + '_' + x for x in barcodes]
         else:
             df.columns = barcodes
         df.to_pickle(output_file)
-
-
-
-      
 
 
 def create_split_exon_gtf(input_gtf, output_gtf, gene):
@@ -749,12 +749,13 @@ def get_dsb_normalization(cell_antibody_counts,
     if isotype_control_name_vec is None:
         isotype_control_name_vec = robjects.r("NULL")
     if (pseudocount_use != 10) and (not define_pseudocount):
-        raise Exception("\"define_pseudocount\" must be set to True to use pseudocount_use")
+        raise Exception(
+            "\"define_pseudocount\" must be set to True to use pseudocount_use"
+        )
 
     rpy2.robjects.numpy2ri.activate()
 
-    robjects.r(
-        '''                                      
+    robjects.r('''                                      
     library(mclust)                                     
     library(dsb)                                        
                                                         
@@ -791,51 +792,29 @@ def get_dsb_normalization(cell_antibody_counts,
                quantile_clip=quantile_clip,
                return_stats=return_stats)
 
-def get_antibody_normalization(ell_droplet_loom,
-        antibody_ca,
-        empty_droplet_loom=None):
-    """
-    This uses the first step of DSB, then provides thresholding based on a 2-component Gaussian mixture model
-    """
-    if type(antibody_ca)==str:
-        antibody_ca = list(antibody_ca)
-    elif not iter(antibody_ca):
-        raise Exception("antibody_ca must be iterable or of type str (single ca)")
-    for antibody in antibody_ca:
-        filtered = cell_droplet_loom.ca[antibody]
-        if empty_droplet_loom is not None:
-            igene = np.where(empty_droplet_loom.ra['gene']==antibody)[0][0]
-            true_cell_set = set(l4filtered.ca['cellname'])
-            mask = np.array([x not in true_cell_set for x in l4raw.ca['cellname']])
-            raw = l4raw[''][igene,:][mask]
-            filtered_zscore_log1p = (np.log1p(filtered)-np.mean(np.log1p(raw)))/np.std(np.log1p(raw))
 
+def get_cellphonedb_compatible_counts_and_meta(loom,
+                                               layername,
+                                               celltype_ca,
+                                               gene_ra='gene',
+                                               cellname_ca='cellname',
+                                               return_df=False,
+                                               output_prefix=None):
+    if output_prefix is None and not return_df:
+        raise Exception(
+            "either output_prefix must be specified, or return_df must be True"
+        )
 
-def create_antibody_prediction(loom, raw_antibody_counts_df, pseudocount=1, overwrite=False, only_generate_zscore=False):
-    for antibody in raw_antibody_counts_df:
-        if antibody not in loom.ca.keys():
-            raise Exception("raw_antibody_count_df must be prepared such that columns match column attributes in loom corresponding to raw antibody conjugate counts")
+    counts = pd.DataFrame(loom[layername][:, :])
+    counts.columns = loom.ca[cellname_ca]
+    counts.insert(0, 'Gene', loom.ra[gene_ra])
 
-        new_ca_name = antibody+'_zscore_log{}p'.format(pseudocount)
-        if new_ca_name in loom.ca.keys() and overwrite==False:
-            raise Exception("{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True".format(new_ca_name))
-        if pseudocount==1:
-            logcounts_cells = np.log1p(loom.ca[antibody])
-            logcounts_empty_droplets = np.log1p(raw_antibody_counts_df[antibody])
-        else:
-            logcounts_cells = np.log(loom.ca[antibody]+pseudocount)
-            logcounts_empty_droplets = np.log(raw_antibody_counts_df[antibody].values+pseudocount)
-        logcounts_empty_droplets_mean = np.mean(logcounts_empty_droplets)
-        logcounts_empty_droplets_std = np.std(logcounts_empty_droplets)
-        loom.ca[new_ca_name] = (logcounts_cells - logcounts_empty_droplets_mean)/logcounts_empty_droplets_std
-        if not only_generate_zscore: 
-            from sklearn import mixture
-            model = mixture.GaussianMixture(n_components=2)
-            prediction_ca_name = antibody+'_prediction'
-            if prediction_ca_name in loom.ca.keys() and overwrite==False:
-                raise Exception("{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True".format(prediction_ca_name))
-            loom.ca[prediction_ca_name] = model.fit_predict(loom.ca[new_ca_name].reshape(-1, 1))
+    meta = pd.DataFrame(loom.ca[cellname_ca])
+    meta.columns = ['Cell']
+    meta['cell_type'] = loom.ca[celltype_ca]
 
-#def create_antibody_two_component_gaussian_mixture_calls(loom, antibody):
-
-        
+    if output_prefix is not None:
+        counts.to_csv(output_prefix + '_counts.txt', sep='\t', index=False)
+        meta.to_csv(output_prefix + '_meta.txt', sep='\t', index=False)
+    elif return_df:
+        return meta, counts
