@@ -22,7 +22,7 @@ def test_preprocess_random_data(tmp_path):
     print(db.ra.keys())
     assert 'cell' in db.ca.keys()
     assert 'gene' in db.ra.keys()
-    assert 'PCA UMAP embedding 1' in db.ca.keys()
+    assert 'log2(TP100k+1) PCA UMAP embedding 1' in db.ca.keys()
     db.close()
 
 
