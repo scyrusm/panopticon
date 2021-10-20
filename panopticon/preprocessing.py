@@ -20,7 +20,13 @@ def generate_gene_variances(loom, layername):
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
 
 
-def generate_cell_and_gene_quality_metrics(loom, layername, gene_ra='gene'):
+def generate_cell_and_gene_quality_metrics(loom,
+                                           layername,
+                                           gene_ra='gene',
+                                           ribosomal_qc=False,
+                                           mitochondrial_qc=False,
+                                           ribosomal_gene_mask=None,
+                                           mitochondrial_gene_mask=None):
     """
     Calculates five quantities and writes them to the LoomConnection instance specified in loom:
 
@@ -44,37 +50,57 @@ def generate_cell_and_gene_quality_metrics(loom, layername, gene_ra='gene'):
     
     """
     from statsmodels import robust
+    ncounts_for_cell = loom[layername].map([np.sum], axis=1)[0]
+    ncounts_for_gene = loom[layername].map([np.sum], axis=0)[0]
 
-    rpgenemask = np.array(
-        [x.startswith('RP') or x.startswith('Rp') for x in loom.ra[gene_ra]])
-    madrp, meanrp, maxrp = loom[layername].map([robust.mad, np.mean, np.max],
-                                               axis=1,
-                                               selection=rpgenemask)
-    mtgenemask = np.array(
-        [x.startswith('MT-') or x.startswith('mt.') for x in loom.ra[gene_ra]])
-    madmt, meanmt, maxmt = loom[layername].map([robust.mad, np.mean, np.max],
-                                               axis=1,
-                                               selection=mtgenemask)
+    if (ncounts_for_cell == (
+            ncounts_for_cell).astype(int)).sum() == len(ncounts_for_cell):
+        loom.ca['nCountsForCell'] = ncounts_for_cell
+        loom.ra['nCountsForGene'] = ncounts_for_gene
+        israw = True
+    else:
+        print(
+            "layer does not appear to be raw counts; skipping raw count sums per cell, gene, as well as statistics involving percentages of overall counts"
+        )
+        israw = False
+
+    if ribosomal_qc:
+        if ribosomal_gene_mask is None:
+            ribosomal_gene_mask = np.array([
+                x.startswith('RP') or x.startswith('Rp')
+                for x in loom.ra[gene_ra]
+            ])
+        madrp, meanrp, maxrp = loom[layername].map(
+            [robust.mad, np.mean, np.max],
+            axis=1,
+            selection=ribosomal_gene_mask)
+        loom.ca['RibosomalRelativeMeanAbsoluteDeviation'] = madrp / meanrp
+        loom.ca['RibosomalMaxOverMean'] = maxrp / meanrp
+        if israw:
+            loom.ca['RibosomalCountFraction'] = loom[layername].map(
+                [np.sum], axis=1,
+                selection=ribosomal_gene_mask)[0] / ncounts_for_cell
+    if mitochondrial_qc:
+        if mitochondrial_gene_mask is None:
+            mitochondrial_gene_mask = np.array([
+                x.lower().startswith('mt-') or x.lower().startswith('mt.')
+                for x in loom.ra[gene_ra]
+            ])
+        madmt, meanmt, maxmt = loom[layername].map(
+            [robust.mad, np.mean, np.max],
+            axis=1,
+            selection=mitochondrial_gene_mask)
+        loom.ca['MitochondrialMean'] = meanmt
+        loom.ca['MitochondrialRelativeMeanAbsoluteDeviation'] = madmt / meanmt
+        if israw:
+            loom.ca['MitochondrialCountFraction'] = loom[layername].map(
+                [np.sum], axis=1,
+                selection=mitochondrial_gene_mask)[0] / ncounts_for_cell
+
     madall, meanall = loom[layername].map([robust.mad, np.mean], axis=1)
-    loom.ca['MitochondrialMean'] = meanmt
-    loom.ca['MitochondrialRelativeMeanAbsoluteDeviation'] = madmt / meanmt
-    loom.ca['RibosomalRelativeMeanAbsoluteDeviation'] = madrp / meanrp
-    loom.ca['RibosomalMaxOverMean'] = maxrp / meanrp
     loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
 
     def complexity(vec):
-        """
-
-        Parameters
-        ----------
-        vec :
-            
-
-        Returns
-        -------
-
-        
-        """
         return np.sum(vec > 0)
 
     loom.ca['nGene'] = loom[layername].map([complexity], axis=1)[0]

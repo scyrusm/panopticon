@@ -52,7 +52,8 @@ def generate_masked_module_score(loom,
                                  genelist,
                                  ca_name,
                                  nbins=10,
-                                 ncontrol=5):
+                                 ncontrol=5,
+                                 gene_ra='gene'):
     """
 
     Parameters
@@ -81,7 +82,7 @@ def generate_masked_module_score(loom,
     if mask is None:
         mask = np.array([True] * loom.shape[1])
     matrix = loom[layername][:, mask]
-    sigmask = np.isin(loom.ra['gene'], genelist)
+    sigmask = np.isin(loom.ra[gene_ra], genelist)
     sig_score = get_module_score_matrix(matrix,
                                         sigmask,
                                         nbins=nbins,
@@ -1253,6 +1254,7 @@ def get_cluster_differential_expression(loom,
                                   size=mask2.shape[0])
     print(np.sum(mask1), np.sum(mask2))
     pvalues = []
+    uvalues = []
     genes = []
     meanexpr1 = []
     meanexpr2 = []
@@ -1273,11 +1275,13 @@ def get_cluster_differential_expression(loom,
         genes.append(gene)
         if np.std(data1[igene, :]) + np.std(data2[igene, :]) < 1e-14:
             pvalues.append(1)
+            uvalues.append(np.nan)
         else:
-            pvalues.append(
-                mannwhitneyu(data1[igene, :],
+            mw = mannwhitneyu(data1[igene, :],
                              data2[igene, :],
-                             alternative='two-sided').pvalue)
+                             alternative='two-sided')
+            pvalues.append(mw.pvalue)
+            uvalues.append(mw.statistic)
         meanexpr1.append(data1[igene, :].mean())
         meanexpr2.append(data2[igene, :].mean())
         meanexpexpr1.append(np.mean(2**data1[igene, :]))
@@ -1287,6 +1291,7 @@ def get_cluster_differential_expression(loom,
     output = pd.DataFrame(genes)
     output.columns = ['gene']
     output['pvalue'] = pvalues
+    output['CommonLanguageEffectSize'] = np.array(uvalues)/(data1.shape[1]*data2.shape[1])
     output['MeanExpr1'] = meanexpr1
     output['MeanExpr2'] = meanexpr2
     output['MeanExpExpr1'] = meanexpexpr1
@@ -1404,6 +1409,7 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
         X1 = X1.T
         X2 = X2.T
     pvalues = []
+    uvalues = []
     meanexpr1 = []
     meanexpr2 = []
     meanexpexpr1 = []
@@ -1415,11 +1421,13 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
             tqdm(genes, desc='Computing Mann-Whitney p-values')):
         if np.std(X1[igene, :]) + np.std(X2[igene, :]) < 1e-14:
             pvalues.append(1)
+            uvalues.append(np.nan)
         else:
-            pvalues.append(
-                mannwhitneyu(X1[igene, :],
+            mw = mannwhitneyu(X1[igene, :],
                              X2[igene, :],
-                             alternative='two-sided').pvalue)
+                             alternative='two-sided').pvalue
+            pvalues.append(mw.pvalues)
+            uvalues.append(mw.statistic)
         meanexpr1.append(X1[igene, :].mean())
         meanexpr2.append(X2[igene, :].mean())
         meanexpexpr1.append(np.mean(2**X1[igene, :]))
@@ -1429,6 +1437,7 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
     output = pd.DataFrame(genes)
     output.columns = ['gene']
     output['pvalue'] = pvalues
+    output['CommonLanguageEffectSize'] = np.array(uvalues) / (X1.shape[1]*X2.shape[1])
     output['MeanExpr1'] = meanexpr1
     output['MeanExpr2'] = meanexpr2
     output['MeanExpExpr1'] = meanexpexpr1

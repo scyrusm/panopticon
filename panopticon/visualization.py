@@ -198,7 +198,7 @@ def get_cluster_differential_expression_heatmap(loom,
     -------
 
     """
-    from panopticon.analysis import cluster_differential_expression
+    from panopticon.analysis import get_cluster_differential_expression
     import seaborn as sns
     import pandas as pd
 
@@ -262,85 +262,7 @@ def get_cluster_differential_expression_heatmap(loom,
     plt.show()
     return diffex
 
-
-def plot_dotmap(loom,
-                layername,
-                diffex,
-                clusterlevel,
-                topn=10,
-                scale=1,
-                output=None,
-                title=None,
-                keyblacklist=[],
-                geneblacklist=[],
-                figsize=(25, 5)):
-    """
-
-    Parameters
-    ----------
-    loom :
-        
-    diffex :
-        
-    clusterlevel :
-        
-    topn :
-         (Default value = 10)
-    scale :
-         (Default value = 1)
-    output :
-         (Default value = None)
-    title :
-         (Default value = None)
-    keyblacklist :
-         (Default value = [])
-    geneblacklist :
-         (Default value = [])
-
-    Returns
-    -------
-
-    """
-    import matplotlib.pyplot as plt
-    import numpy as np
-    fig, ax = plt.subplots(figsize=figsize)
-    markers = [[]]
-    for key in diffex.keys():
-        markers.append(
-            diffex[key][(~np.isin(diffex[key]['gene'], geneblacklist))
-                        & (~np.isin(diffex[key]['gene'], np.hstack(markers)))].
-            query('MeanExpr1 > MeanExpr2')['gene'].head(topn).values)
-    markers = np.hstack(markers)
-    markernames = markers
-    key2x = {
-        key: x
-        for key, x in zip(diffex.keys(), range(len(diffex.keys())))
-    }
-    key2x = {key:val for key,val in key2x.items() if len(key.split('-'))==(int(clusterlevel.replace('ClusteringIteration',''))+1)}
-
-    marker2y = {marker: x for marker, x in zip(markers, range(len(markers)))}
-    exprs = []
-    for marker in markers:
-        markerindex = np.where(loom.ra['gene'] == marker)[0][0]
-        for key in [key for key in diffex.keys() if key not in keyblacklist]:
-
-            expr = loom[layername][markerindex, ][loom.ca[clusterlevel] ==
-                                                  key].mean()
-            exprs.append(expr)
-    for marker in markers:
-        markerindex = np.where(loom.ra['gene'] == marker)[0][0]
-        for key in diffex.keys():
-
-            expr = loom[layername][markerindex, ][loom.ca[clusterlevel] ==
-                                                  key].mean()
-            sc = plt.scatter(marker2y[marker],
-                             key2x[key],
-                             s=(np.max(exprs)*0-np.min(exprs)+expr)*scale,
-                             cmap='coolwarm',
-                             c=expr,
-                             vmin=np.min(exprs),
-                             vmax=np.max(exprs))
-            #print(expr)
+    #print(expr)
 
     ax.set_xticklabels(markernames)
     ax.set_xticks(range(len(markers)))
@@ -370,12 +292,13 @@ def plot_dotmap(loom,
 def swarmviolin(data,
                 x,
                 y,
-                hue,
-                ax,
-                split=True,
+                hue=None,
+                ax=None,
+                split=False,
                 alpha=0.2,
                 violinplot_kwargs={},
-                swarmplot_kwargs={}):
+                swarmplot_kwargs={},
+                swarm_downsample_percentage=None):
     """
 
     Parameters
@@ -404,6 +327,9 @@ def swarmviolin(data,
 
     """
     import seaborn as sns
+    import matplotlib.pyplot as plt
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5, 5))
     sns.violinplot(data=data,
                    x=x,
                    hue=hue,
@@ -417,16 +343,33 @@ def swarmviolin(data,
                    **violinplot_kwargs)
     for violin in ax.collections:
         violin.set_alpha(0.1)
-    sns.swarmplot(data=data,
-                  x=x,
-                  hue=hue,
-                  y=y,
-                  split=split,
-                  alpha=1,
-                  ax=ax,
-                  dodge=True,
-                  size=2.5,
-                  **swarmplot_kwargs)
+    if swarm_downsample_percentage is None:
+        sns.swarmplot(
+            data=data,
+            x=x,
+            hue=hue,
+            y=y,
+            split=split,
+            alpha=1,
+            ax=ax,
+            dodge=True,
+            #          size=2.5,
+            **swarmplot_kwargs)
+    else:
+        downsample_mask = np.random.choice(
+            [True, False],
+            size=data.shape[0],
+            p=[swarm_downsample_percentage, 1 - swarm_downsample_percentage],
+        )
+        sns.swarmplot(data=data[downsample_mask],
+                      x=x,
+                      hue=hue,
+                      y=y,
+                      split=split,
+                      alpha=1,
+                      ax=ax,
+                      dodge=True,
+                      **swarmplot_kwargs)
 
     def legend_without_duplicate_labels(ax):
         handles, labels = ax.get_legend_handles_labels()

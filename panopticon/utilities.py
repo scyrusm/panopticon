@@ -521,13 +521,15 @@ def convert_10x_h5(path_10x_h5,
 
     m = filtered_feature_bc_matrix.m
     if gene_whitelist is not None:
-        mask = np.isin(features, gene_whitelist)
-        m = m[mask, :]
-        features = list(np.array(features)[mask])
-        features_common_names = list(np.array(features_common_names)[mask])
-
+        if len(gene_whitelist) > 0:
+            mask = np.isin(features, gene_whitelist)
+            m = m[mask, :]
+            features = list(np.array(features)[mask])
+            features_common_names = list(np.array(features_common_names)[mask])
     if type(genes_as_ca) == str:
         genes_as_ca = [genes_as_ca]
+    else:
+        genes_as_ca = list(genes_as_ca)
     if len(genes_as_ca) > 0:
         mask = np.isin(features, genes_as_ca)
         if len(genes_as_ca) != mask.sum():
@@ -591,36 +593,36 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
             ';')[0]
         new_gene_id_str = '\"'.join(
             old_gene_id_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
+        attribute = attribute.replace(old_gene_id_str, new_gene_id_str)
 
         old_gene_name_str = 'gene_name' + attribute.split(
             'gene_name')[1].split(';')[0]
         new_gene_name_str = '\"'.join(
             old_gene_name_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
+        attribute = attribute.replace(old_gene_name_str, new_gene_name_str)
 
         old_transcript_id_str = 'transcript_id' + attribute.split(
             'transcript_id')[1].split(';')[0]
         new_transcript_id_str = '\"'.join(
             old_transcript_id_str.split('\"')
             [0:-1]) + '-exon' + exon_number + '\"'
+        attribute = attribute.replace(old_transcript_id_str,
+                                      new_transcript_id_str)
 
         old_transcript_name_str = 'transcript_name' + attribute.split(
             'transcript_name')[1].split(';')[0]
         new_transcript_name_str = '\"'.join(
             old_transcript_name_str.split('\"')
             [0:-1]) + '-exon' + exon_number + '\"'
-
-        old_ccds_id_str = 'ccds_id' + attribute.split('ccds_id')[1].split(
-            ';')[0]
-        new_ccds_id_str = '\"'.join(
-            old_ccds_id_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
-
-        attribute = attribute.replace(old_gene_id_str, new_gene_id_str)
-        attribute = attribute.replace(old_gene_name_str, new_gene_name_str)
-        attribute = attribute.replace(old_transcript_id_str,
-                                      new_transcript_id_str)
         attribute = attribute.replace(old_transcript_name_str,
                                       new_transcript_name_str)
-        attribute = attribute.replace(old_ccds_id_str, new_ccds_id_str)
+
+        if 'ccds_id' in attribute:
+            old_ccds_id_str = 'ccds_id' + attribute.split('ccds_id')[1].split(
+                ';')[0]
+            new_ccds_id_str = '\"'.join(old_ccds_id_str.split('\"')
+                                        [0:-1]) + '-exon' + exon_number + '\"'
+            attribute = attribute.replace(old_ccds_id_str, new_ccds_id_str)
 
         return attribute
 
@@ -664,7 +666,7 @@ def convert_h5ad(h5ad,
                 "var column of h5ad is \"gene\".  This conflicts with panopticon loom format.  You must rename before converting."
             )
         else:
-            ra[col] = np.array(h5ad.obs[col].values)
+            ra[col] = np.array(h5ad.var[col].values)
 
     ca = {'cellname': np.array(h5ad.obs.index)}
     for col in h5ad.obs.columns:
@@ -688,7 +690,7 @@ def convert_h5ad(h5ad,
                     ca[ca_key] = h5ad.obsm[obsm_key][:, i]
     if convert_varm:
         for varm_key in h5ad.varm.keys():
-            for i in range(h5ad.varm_key[varm_key].shape[1]):
+            for i in range(h5ad.varm[varm_key].shape[1]):
                 ra_key = "{}_{}".format(
                     varm_key,
                     i + 1)  # one added so that these are 1-indexed by default
@@ -703,7 +705,7 @@ def convert_h5ad(h5ad,
     if convert_uns:
         loom = loompy.connect(output_loom)
         for uns_key in h5ad.uns.keys():
-            loom.attrs[uns_key] = h5ad.uns[key]
+            loom.attrs[uns_key] = h5ad.uns[uns_key]
         loom.close()
 
     if convert_layers:
@@ -799,7 +801,8 @@ def get_cellphonedb_compatible_counts_and_meta(loom,
                                                gene_ra='gene',
                                                cellname_ca='cellname',
                                                return_df=False,
-                                               output_prefix=None):
+                                               output_prefix=None,
+                                               mouse_to_human=False):
     if output_prefix is None and not return_df:
         raise Exception(
             "either output_prefix must be specified, or return_df must be True"
@@ -807,8 +810,37 @@ def get_cellphonedb_compatible_counts_and_meta(loom,
 
     counts = pd.DataFrame(loom[layername][:, :])
     counts.columns = loom.ca[cellname_ca]
-    counts.insert(0, 'Gene', loom.ra[gene_ra])
 
+    #counts.insert(0, 'Gene', np.array([x.upper() for x in loom.ra[gene_ra]]))
+    genes = loom.ra[gene_ra]
+    if mouse_to_human:
+        from pybiomart import Server
+        server = Server(host="http://www.ensembl.org")
+        mouse_dataset = (server.marts['ENSEMBL_MART_ENSEMBL'].
+                         datasets['mmusculus_gene_ensembl'])
+        mouse_data = mouse_dataset.query(
+            attributes=['ensembl_gene_id', 'external_gene_name'])
+        mouse_data['Gene upper'] = mouse_data['Gene name'].apply(
+            lambda x: str(x).upper())
+        human_dataset = (server.marts['ENSEMBL_MART_ENSEMBL'].
+                         datasets['hsapiens_gene_ensembl'])
+        human_data = human_dataset.query(
+            attributes=['ensembl_gene_id', 'external_gene_name'])
+        conversion_dict = pd.merge(
+            mouse_data, human_data, left_on='Gene upper',
+            right_on='Gene name').set_index(
+                'Gene stable ID_x')['Gene stable ID_y'].to_dict()
+
+        convertible_mask = np.array(
+            [x in conversion_dict.keys() for x in genes])
+        genes = [
+            conversion_dict[x] if x in conversion_dict.keys() else np.nan
+            for x in genes
+        ]
+    counts.insert(0, 'Gene', genes)
+    if mouse_to_human:
+        counts = counts.iloc[convertible_mask, :]
+        counts = counts.groupby('Gene').first().reset_index()
     meta = pd.DataFrame(loom.ca[cellname_ca])
     meta.columns = ['Cell']
     meta['cell_type'] = loom.ca[celltype_ca]
@@ -816,5 +848,105 @@ def get_cellphonedb_compatible_counts_and_meta(loom,
     if output_prefix is not None:
         counts.to_csv(output_prefix + '_counts.txt', sep='\t', index=False)
         meta.to_csv(output_prefix + '_meta.txt', sep='\t', index=False)
+        command = 'cellphonedb method statistical_analysis {0}_meta.txt {0}_counts.txt'.format(
+            output_prefix)
+        print("Run cellphonedb on command line with \"{}\"".format(command))
     elif return_df:
         return meta, counts
+
+
+def create_gsea_txt_and_cls(loom,
+                            layername,
+                            output_prefix,
+                            phenotypes,
+                            cellmask=None,
+                            gene_ra='gene',
+                            cellname_ca='cellname'):
+    import os
+    if cellmask is None:
+        cellmask = np.array([True] * loom.shape[1])
+    if type(phenotypes) == str:
+        phenotypes = loom.ca[phenotypes]
+    if len(phenotypes) != cellmask.sum():
+        raise Exception(
+            "length of phenotypes vector must be equal to number of samples (cells)"
+        )
+
+    txt = pd.DataFrame(loom.ra[gene_ra])
+    txt.columns = ['NAME']
+    txt['DESCRIPTION'] = 'na'
+    #txt = pd.concat([txt,pd.DataFrame(loom[layername][:,cellmask])],axis=1)
+    #txt.columns = ['NAME','DESCRIPTION'] + list(loom.ca[cellname_ca][cellmask])
+    #txt.to_csv(output_prefix+'.txt',index=False,sep='\t')
+
+    total = cellmask.sum()
+    nphenotypes = len(np.unique(phenotypes))
+    outcls = output_prefix + '.cls'
+    if os.path.exists(outcls):
+        os.system("rm {}".format(outcls))
+        #raise Exception("cls file already present--cannot overwrite")
+    line1 = "{} {} 1".format(total, nphenotypes)
+    line2 = '# ' + ' '.join(np.unique(phenotypes))
+    phenotype2index = {
+        phenotype: i
+        for i, phenotype in enumerate(np.unique(phenotypes))
+    }
+    #print(phenotype2index)
+    #print([phenotype2index[x] for x in phenotypes])
+    line3 = ' '.join([str(phenotype2index[x]) for x in phenotypes])
+    for line in [line1, line2, line3]:
+        os.system('echo \"{}\">>{}'.format(line, outcls))
+
+
+def get_cross_column_attribute_heatmap(loom,
+                                       ca1,
+                                       ca2,
+                                       normalization_axis=None):
+    #if type(normalization_axis) == list:
+    #    outdfs = []
+    #    for axis in normalization_axis:
+    #        outdfs.append(get_cross_column_attribute_heatmap(loom, ca1, ca2, normalization_axis=axis))
+    #    return outdfs
+
+    df = pd.DataFrame(loom.ca[ca1], copy=True)
+    df.columns = [ca1]
+    df[ca2] = loom.ca[ca2]
+
+    df = pd.DataFrame(df.groupby(ca1, )[ca2].value_counts())
+    df.columns = ['counts']
+
+    dfs = []
+
+    for i, df_group in df.reset_index().groupby(ca1):
+        dfs.append(
+            df_group.rename(columns={
+                'counts': 'counts_' + i
+            }).set_index(ca2)['counts_' + i])
+    outdf = pd.concat(dfs, axis=1)
+    if normalization_axis is None:
+        return outdf
+    elif normalization_axis == 0:
+        return np.divide(outdf, outdf.sum(axis=0).values)
+    elif normalization_axis == 1:
+        return np.divide(outdf.T, outdf.sum(axis=1).values).T
+    else:
+        raise Exception("normalization axis must be one of \"None\", 0, or 1")
+
+
+def get_complement_contigency_tables(df):
+    if type(df) != pd.core.frame.DataFrame:
+        raise Exception("pandas dataframe expected input")
+    complement_contigency_table_dict = {}
+
+    for col in df.columns:
+        complement_contigency_table_dict[col] = {}
+
+        for index in df.index.values:
+            a = df.loc[index][col].sum()
+            b = df.loc[index][[x for x in df.columns if x != col]].sum()
+            c = df.loc[[x for x in df.index if x != index]][col].sum()
+            d = np.sum(df.loc[[x for x in df.index if x != index
+                               ]][[x for x in df.columns if x != col]].sum())
+
+            complement_contigency_table_dict[col][index] = [[a, b], [c, d]]
+    return complement_contigency_table_dict
