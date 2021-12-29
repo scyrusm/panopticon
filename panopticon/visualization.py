@@ -16,28 +16,27 @@ def plot_subclusters(loom,
     Parameters
     ----------
     loom :
-        
+        param layername:
+    cluster :
+        type cluster: Cluster, or list of clusters
+    sublayers :
+        Default value = 1)
+    plot_output :
+        Default value = None)
+    label_clusters :
+        Default value = True)
+    complexity_cutoff :
+        Default value = 0)
+    downsample_to :
+        Default value = 500)
+    blacklist :
+        Default value = [])
     layername :
         
-    cluster : Cluster, or list of clusters
-        
-    sublayers :
-        (Default value = 1)
-    plot_output :
-        (Default value = None)
-    label_clusters :
-        (Default value = True)
-    complexity_cutoff :
-        (Default value = 0)
-    downsample_to :
-         (Default value = 500)
-    blacklist :
-         (Default value = [])
 
     Returns
     -------
 
-    
     """
     from panopticon.analysis import get_cluster_embedding
     import matplotlib.pyplot as plt
@@ -106,30 +105,29 @@ def plot_cluster_umap(loom,
     Parameters
     ----------
     loom :
-        
+        param layername:
+    cluster :
+        type cluster: Cluster, or list of clusters
+    sublayers :
+        Default value = 1)
+    plot_output :
+        Default value = None)
+    label_clusters :
+        Default value = True)
+    complexity_cutoff :
+        Default value = 0)
+    mask :
+        Default value = None)
+    downsample_to :
+        Default value = 500)
+    blacklist :
+        Default value = [])
     layername :
         
-    cluster : Cluster, or list of clusters
-        
-    sublayers :
-        (Default value = 1)
-    plot_output :
-        (Default value = None)
-    label_clusters :
-        (Default value = True)
-    complexity_cutoff :
-        (Default value = 0)
-    mask :
-         (Default value = None)
-    downsample_to :
-         (Default value = 500)
-    blacklist :
-         (Default value = [])
 
     Returns
     -------
 
-    
     """
     from panopticon.analysis import get_cluster_embedding
     import matplotlib.pyplot as plt
@@ -176,23 +174,23 @@ def get_cluster_differential_expression_heatmap(loom,
     Parameters
     ----------
     loom :
-        
-    layer :
-        
+        param layer:
     clusteringlevel :
+        param diffex: (Default value = {})
+    output :
+        Default value = None)
+    bracketwidth :
+        Default value = 3.5)
+    ff_offset :
+        Default value = 0)
+    ff_scale :
+        Default value = 7)
+    bracket_width :
+        Default value = 3.5)
+    layer :
         
     diffex :
          (Default value = {})
-    output :
-         (Default value = None)
-    bracketwidth :
-         (Default value = 3.5)
-    ff_offset :
-         (Default value = 0)
-    ff_scale :
-         (Default value = 7)
-    bracket_width :
-         (Default value = 3.5)
 
     Returns
     -------
@@ -215,7 +213,7 @@ def get_cluster_differential_expression_heatmap(loom,
         mask = loom.ca[clusteringlevel] == cluster
         if mask.sum() > 2:
             if cluster not in diffex.keys():
-                diffex[cluster] = cluster_differential_expression(
+                diffex[cluster] = get_cluster_differential_expression(
                     loom, clusteringlevel, layer, cluster)
             if np.sum(loom.ca[clusteringlevel] == cluster) > 1:
                 genes = diffex[cluster][~diffex[cluster]['gene'].isin(
@@ -296,43 +294,58 @@ def swarmviolin(data,
                 ax=None,
                 split=False,
                 alpha=0.2,
+                noswarm=False,
                 violinplot_kwargs={},
                 swarmplot_kwargs={},
-                swarm_downsample_percentage=None):
+                swarm_downsample_percentage=None,
+                annotate_hue_pvalues=False,
+                annotate_hue_effect_size=False,
+                annotate_hue_pvalue_fmt_str='p: {0:.2f}',
+                annotate_hue_effect_size_fmt_str='cles: {0:.2f}'):
     """
 
     Parameters
     ----------
-    data : pandas dataframe in form that would be acceptable input to seaborn violin, swarmplots
-        
+    data :
+        type data: pandas dataframe in form that would be acceptable input to seaborn violin, swarmplots
     diffex :
-    x : column of data to be used for violin, swarmplot x argument 
+        param x:
+    y :
+        type y: column of data to be used for violin, swarmplot y argument
+    hue : column of data to be used for violin, swarmplot hue argument
+        Default value = 10)
+    ax : matplotlib axis
+        Default value = None)
+    split : split: split argument to be passed to violin, swarmplot
+        Default value = True)
+    alpha : alpha: alpha to be used for seaborn violinplot
+        Default value = 0.2)
+    violinplot_kwargs :
+        Default value = {})
+    swarmplot_kwargs :
+        Default value = {})
+    swarm_downsample_percentage :
+        Default value = None)
+    annotate_hue_pvalues :
+        Default value = False)
+    annotate_hue_pvalue_fmt_str :
+        Default value = 'p: {0:.2f}')
+    x :
         
-    y : column of data to be used for violin, swarmplot y argument 
-        
-    hue : column of data to be used for violin, swarmplot hue argument 
-         (Default value = 10)
-    
-    ax : matplotlib axis 
-    
-    split : split argument to be passed to violin, swarmplot
-         (Default value = True)
-    alpha : alpha to be used for seaborn violinplot
-         (Default value = 0.2)
 
     Returns
     -------
-
-    matplotlib axis
 
     """
     import seaborn as sns
     import matplotlib.pyplot as plt
     if ax is None:
         fig, ax = plt.subplots(figsize=(5, 5))
+    hue_order = data[hue].unique()
     sns.violinplot(data=data,
                    x=x,
                    hue=hue,
+                   hue_order=hue_order,
                    y=y,
                    split=split,
                    inner='quartile',
@@ -343,45 +356,112 @@ def swarmviolin(data,
                    **violinplot_kwargs)
     for violin in ax.collections:
         violin.set_alpha(0.1)
-    if swarm_downsample_percentage is None:
-        sns.swarmplot(
-            data=data,
-            x=x,
-            hue=hue,
-            y=y,
-            split=split,
-            alpha=1,
-            ax=ax,
-            dodge=True,
-            #          size=2.5,
-            **swarmplot_kwargs)
-    else:
-        downsample_mask = np.random.choice(
-            [True, False],
-            size=data.shape[0],
-            p=[swarm_downsample_percentage, 1 - swarm_downsample_percentage],
-        )
-        sns.swarmplot(data=data[downsample_mask],
-                      x=x,
-                      hue=hue,
-                      y=y,
-                      split=split,
-                      alpha=1,
-                      ax=ax,
-                      dodge=True,
-                      **swarmplot_kwargs)
+    if not noswarm:
+        if swarm_downsample_percentage is None:
+            sns.swarmplot(
+                data=data,
+                x=x,
+                hue=hue,
+                hue_order=hue_order,
+                y=y,
+                split=split,
+                alpha=1,
+                ax=ax,
+                dodge=True,
+                #          size=2.5,
+                **swarmplot_kwargs)
+        else:
+            downsample_mask = np.random.choice(
+                [True, False],
+                size=data.shape[0],
+                p=[
+                    swarm_downsample_percentage,
+                    1 - swarm_downsample_percentage
+                ],
+            )
+            sns.swarmplot(data=data[downsample_mask],
+                          x=x,
+                          hue=hue,
+                          hue_order=hue_order,
+                          y=y,
+                          split=split,
+                          alpha=1,
+                          ax=ax,
+                          dodge=True,
+                          **swarmplot_kwargs)
 
     def legend_without_duplicate_labels(ax):
+        """
+
+        Parameters
+        ----------
+        ax :
+            
+
+        Returns
+        -------
+
+        """
         handles, labels = ax.get_legend_handles_labels()
         unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels))
                   if l not in labels[:i]]
         ax.legend(*zip(*unique), title='', loc=(1.05, .8))
 
     legend_without_duplicate_labels(ax)
+    if annotate_hue_pvalues or annotate_hue_effect_size:
+        if len(data[hue].unique()) != 2:
+            raise Exception(
+                "hue must be a categorical variable with 2 unique values")
+        from scipy.stats import mannwhitneyu
+        if data[y].dtype in [float, int]:
+            category_col = x
+            continuous_col = y
+            vertical_violins = True
+            ticklabels = ax.get_xmajorticklabels()
+        else:
+            category_col = y
+            continuous_col = x
+            vertical_violins = False
+            ticklabels = ax.get_ymajorticklabels()
+        for ticklabel in ticklabels:
+            category = ticklabel.get_text()
+            hue1, hue2 = data[hue].unique()
+
+            a = data[(data[hue] == hue1)
+                     & (data[category_col] == category)][continuous_col].values
+            b = data[(data[hue] == hue2)
+                     & (data[category_col] == category)][continuous_col].values
+            mw = mannwhitneyu(a, b, alternative='two-sided')
+            pval = mw.pvalue
+            cles = mw.statistic / len(a) / len(b)
+            annotation_string = ''
+            if vertical_violins:
+                if annotate_hue_pvalues:
+                    annotation_string += annotate_hue_pvalue_fmt_str.format(
+                        pval) + '\n'
+                if annotate_hue_effect_size:
+                    annotation_string += annotate_hue_effect_size_fmt_str.format(
+                        cles) + '\n'
+                ax.annotate(
+                    annotation_string,
+                    (ticklabel.get_position()[0], np.max(np.hstack((a, b)))),
+                    ha='center',
+                    va='bottom')
+            else:
+                if annotate_hue_pvalues:
+                    annotation_string += ' ' + annotate_hue_pvalue_fmt_str.format(
+                        pval)
+                if annotate_hue_effect_size:
+                    annotation_string += '\n ' + annotate_hue_effect_size_fmt_str.format(
+                        cles)
+                ax.annotate(annotation_string, (
+                    np.max(np.hstack((a, b))),
+                    ticklabel.get_position()[1],
+                ),
+                            ha='left',
+                            va='center')
+
     return ax
-
-
-import numpy as np
 
 
 def volcano(diffex,
@@ -400,6 +480,47 @@ def volcano(diffex,
             positions=None,
             show=True,
             gene_label_offset_scale=1):
+    """
+
+    Parameters
+    ----------
+    diffex :
+        param ax:  (Default value = None)
+    gene_column :
+        Default value = 'gene')
+    pval_column :
+        Default value = 'pvalue')
+    mean_expr_left :
+        Default value = 'MeanExpr1')
+    mean_expr_right :
+        Default value = 'MeanExpr2')
+    left_name :
+        Default value = '')
+    right_name :
+        Default value = '')
+    genemarklist :
+        Default value = [])
+    logfoldchange_importance_threshold :
+        Default value = 0.5)
+    neglogpval_importance_threshold :
+        Default value = 5)
+    title :
+        Default value = '')
+    output :
+        Default value = None)
+    positions :
+        Default value = None)
+    show :
+        Default value = True)
+    gene_label_offset_scale :
+        Default value = 1)
+    ax :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
 
     import matplotlib.pyplot as plt
     import matplotlib
@@ -511,6 +632,31 @@ def samurai_sword_plot(x=None,
                        fig=None,
                        show=False,
                        output=None):
+    """
+
+    Parameters
+    ----------
+    x :
+        Default value = None)
+    y :
+        Default value = None)
+    data :
+        Default value = None)
+    hue :
+        Default value = None)
+    ax :
+        Default value = None)
+    fig :
+        Default value = None)
+    show :
+        Default value = False)
+    output :
+        Default value = None)
+
+    Returns
+    -------
+
+    """
     if x is None:
         raise Exception("x is a required argument")
     if y is None:

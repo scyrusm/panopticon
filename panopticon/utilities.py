@@ -950,3 +950,77 @@ def get_complement_contigency_tables(df):
 
             complement_contigency_table_dict[col][index] = [[a, b], [c, d]]
     return complement_contigency_table_dict
+
+
+def get_cluster_differential_expression_heatmap_df(loom,
+                                                   layer,
+                                                   clusteringlevel,
+                                                   diffex={},
+                                                   gene_name='gene',
+                                                   cell_name='cellname'):
+    """
+
+    Returns
+    -------
+
+    """
+    from panopticon.analysis import get_cluster_differential_expression
+    import seaborn as sns
+    import pandas as pd
+
+    clusteredmask = []
+    for cluster in np.unique(loom.ca[clusteringlevel]):
+        mask = loom.ca[clusteringlevel] == cluster
+        if mask.sum() > 2:
+            clusteredmask.append(np.where(mask)[0])
+    clusteredmask = np.hstack(clusteredmask)
+    allgenes = []
+    allgeneindices = []
+    rawX = []
+    clusters = [
+        x for x in np.unique(loom.ca[clusteringlevel]) if x in diffex.keys()
+    ]
+    for cluster in clusters:
+        mask = loom.ca[clusteringlevel] == cluster
+        genes = diffex[cluster][~diffex[cluster]['gene'].isin(allgenes)].query(
+            'MeanExpr1 > MeanExpr2').query('FracExpr2<.9').head(
+                10)['gene'].values
+        genemask = np.isin(loom.ra['gene'], genes)
+        rawX.append(loom[layer][genemask, :][:, clusteredmask])
+        allgenes.append(genes)
+        allgeneindices.append(np.where(genemask)[0])
+    clusteredmask = np.hstack(clusteredmask)
+    allgeneindices = np.hstack(allgeneindices)
+    hmdf = pd.DataFrame(np.vstack(rawX))
+    hmdf.index = np.hstack(loom.ra[gene_name][allgeneindices])
+    hmdf.columns = loom.ca[cell_name][clusteredmask]
+    return hmdf
+
+
+def generate_ca_frequency(loom,
+                          ca,
+                          blacklisted_ca_values=[],
+                          second_ca=None,
+                          output_name=None,
+                          overwrite=False):
+    if output_name is None:
+        raise Exception("output_name must be specified")
+    if output_name in loom.ca.keys() and overwrite is False:
+        raise Exception(
+            "overwrite must be True to write over existing ca ({})".format(
+                output_name))
+    ca2counts = pd.DataFrame(loom.ca[ca])[0].value_counts().to_dict()
+    for ca_value in blacklisted_ca_values:
+        ca2counts[ca_value] = np.nan
+    if second_ca is None:
+        denominator = loom.shape[1]
+        frequencies = [ca2counts[x] / denominator for x in loom.ca[ca]]
+    else:
+        denominator = pd.DataFrame(
+            loom.ca[second_ca])[0].value_counts().to_dict()
+        frequencies = [
+            ca2counts[x] / denominator[y]
+            for x, y in zip(loom.ca[ca], loom.ca[second_ca])
+        ]
+
+    loom.ca[output_name] = frequencies

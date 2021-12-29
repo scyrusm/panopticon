@@ -69,9 +69,11 @@ def generate_masked_module_score(loom,
     ca_name : Desired name of signature to be made into a column attribute.
         
     nbins :
-         (Default value = 10)
+        (Default value = 10)
     ncontrol :
-         (Default value = 5)
+        (Default value = 5)
+    gene_ra :
+        (Default value = 'gene')
 
     Returns
     -------
@@ -199,11 +201,14 @@ def generate_incremental_pca(loom,
     from tqdm import tqdm
     from sklearn.decomposition import IncrementalPCA, PCA
     from panopticon.analysis import generate_pca_loadings
+    batch_size_altered = False
     while loom.shape[1] % batch_size < n_components:
         batch_size += 1
-    print(
-        "Batch size increased to {} so that smallest batch will be greater than n_components"
-        .format(batch_size))
+        batch_size_altered = True
+    if batch_size_altered:
+        print(
+            "Batch size increased to {} so that smallest batch will be greater than n_components"
+            .format(batch_size))
     if loom.shape[1] < min_size_for_incrementalization:
         print(
             "Loom size below threshold for incremental PCA; running conventional PCA"
@@ -291,11 +296,14 @@ def get_pca_loadings_matrix(loom, layername, n_components=None):
     layername : corresponding layer from which to retrieve PCA loadings matrix
         
     components_to_use :
-         (Default value = None)
+        (Default value = None)
+    n_components :
+        (Default value = None)
 
     Returns
     -------
 
+    
     """
     pca_loadings = []
     if n_components != None:
@@ -350,6 +358,8 @@ def generate_embedding(loom,
         (Default value = None)
     mode :
         (Default value = 'nmf')
+    n_pca_components :
+        (Default value = None)
 
     Returns
     -------
@@ -485,7 +495,8 @@ def generate_clustering(loom,
                         min_subclustering_size=50,
                         first_round_leiden=False,
                         leiden_nneighbors=20,
-                        leiden_iterations=10):
+                        leiden_iterations=10,
+                        incremental_pca_threshold=10000):
     """
 
     Parameters
@@ -507,9 +518,21 @@ def generate_clustering(loom,
     clusteringcachedir :
         (Default value = 'clusteringcachedir/')
     n_components :
-         (Default value = 10)
+        (Default value = 10)
     out_of_core_batch_size :
-         (Default value = 512)
+        (Default value = 512)
+    n_clustering_iterations :
+        (Default value = 3)
+    min_subclustering_size :
+        (Default value = 50)
+    first_round_leiden :
+        (Default value = False)
+    leiden_nneighbors :
+        (Default value = 20)
+    leiden_iterations :
+        (Default value = 10)
+    incremental_pca_threshold :
+        (Default value = 10000)
 
     Returns
     -------
@@ -621,7 +644,10 @@ def generate_clustering(loom,
                 X = model.fit_transform(data_c.T)
             elif mode == 'pca':
 
-                if mask.sum() > 5000:
+                if mask.sum() > incremental_pca_threshold:
+                    print(
+                        "Warning: running incremental PCA with loom.scan with masked items; this can lead to batches smaller than the number of principal components.  If computation fails, try adjusting out_of_core_batch_size, or raising incremental_pca_threshold."
+                    )
                     pca = IncrementalPCA(n_components=n_components)
                     for (ix, selection, view) in tqdm(
                             loom.scan(axis=1,
@@ -629,7 +655,6 @@ def generate_clustering(loom,
                                       items=mask,
                                       layers=[layername]),
                             total=loom.shape[1] // out_of_core_batch_size):
-                        #pca.partial_fit(view[:, :].transpose())
                         pca.partial_fit(view[layername][:, :].T)
 
                     compresseddatalist = []
@@ -1036,6 +1061,10 @@ def get_differential_expression_dict(loom,
         (Default value = 3)
     min_cluster_size : minimum size of clusters to consider (if one of clusters if below this threshold, will output nan instead of a differential expression dataframe for that particular key)
         (Default value = 50)
+    gene_alternate_name :
+        (Default value = None)
+    verbose :
+        (Default value = True)
 
     Returns
     -------
@@ -1158,11 +1187,11 @@ def get_cluster_differential_expression(loom,
     loom : LoomConnection object
         
     cluster_level :
-        
+        (Default value = None)
     layername :
         
     ident1 :
-        
+        (Default value = None)
     ident2 :
         (Default value = None)
     verbose :
@@ -1177,6 +1206,8 @@ def get_cluster_differential_expression(loom,
         (Default value = None)
     min_cluster_size :
         (Default value = 0)
+    gene_alternate_name :
+        (Default value = None)
 
     Returns
     -------
@@ -1278,8 +1309,8 @@ def get_cluster_differential_expression(loom,
             uvalues.append(np.nan)
         else:
             mw = mannwhitneyu(data1[igene, :],
-                             data2[igene, :],
-                             alternative='two-sided')
+                              data2[igene, :],
+                              alternative='two-sided')
             pvalues.append(mw.pvalue)
             uvalues.append(mw.statistic)
         meanexpr1.append(data1[igene, :].mean())
@@ -1291,7 +1322,8 @@ def get_cluster_differential_expression(loom,
     output = pd.DataFrame(genes)
     output.columns = ['gene']
     output['pvalue'] = pvalues
-    output['CommonLanguageEffectSize'] = np.array(uvalues)/(data1.shape[1]*data2.shape[1])
+    output['CommonLanguageEffectSize'] = np.array(uvalues) / (data1.shape[1] *
+                                                              data2.shape[1])
     output['MeanExpr1'] = meanexpr1
     output['MeanExpr2'] = meanexpr2
     output['MeanExpExpr1'] = meanexpexpr1
@@ -1392,11 +1424,12 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
     genes :
         
     axis :
-         (Default value = 0)
+        (Default value = 0)
 
     Returns
     -------
 
+    
     """
     from tqdm import tqdm
     from scipy.stats import mannwhitneyu
@@ -1424,8 +1457,8 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
             uvalues.append(np.nan)
         else:
             mw = mannwhitneyu(X1[igene, :],
-                             X2[igene, :],
-                             alternative='two-sided').pvalue
+                              X2[igene, :],
+                              alternative='two-sided').pvalue
             pvalues.append(mw.pvalues)
             uvalues.append(mw.statistic)
         meanexpr1.append(X1[igene, :].mean())
@@ -1437,7 +1470,8 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
     output = pd.DataFrame(genes)
     output.columns = ['gene']
     output['pvalue'] = pvalues
-    output['CommonLanguageEffectSize'] = np.array(uvalues) / (X1.shape[1]*X2.shape[1])
+    output['CommonLanguageEffectSize'] = np.array(uvalues) / (X1.shape[1] *
+                                                              X2.shape[1])
     output['MeanExpr1'] = meanexpr1
     output['MeanExpr2'] = meanexpr2
     output['MeanExpExpr1'] = meanexpexpr1
@@ -1448,20 +1482,104 @@ def get_differential_expression_custom(X1, X2, genes, axis=0):
 
 
 def simpson(x, with_replacement=False):
-    """
-    For computing simpson index directly from counts (or frequencies, if with_replacement=True)
+    """For computing simpson index directly from counts (or frequencies, if with_replacement=True)
 
     Parameters
     ----------
     x :
         
+    with_replacement :
+        (Default value = False)
 
     Returns
     -------
 
+    
     """
     total = np.sum(x)
     if with_replacement:
         return np.sum([(y / total) * (y / total) for y in x])
     else:
         return np.sum([(y / total) * ((y - 1) / (total - 1)) for y in x])
+
+
+def get_enrichment_score(genes,
+                         geneset,
+                         scores=None,
+                         presorted=False,
+                         return_es_curve=False,
+                         return_pvalue=False,
+                         n_pvalue_permutations=1000):
+    """Returns an enrichment score (ES) in the manner of Subramanian et al. 2005 (https://doi.org/10.1073/pnas.0506580102).
+
+    Parameters
+    ----------
+    genes :
+        
+    geneset :
+        
+    scores :
+         (Default value = None)
+    presorted :
+         (Default value = False)
+    return_es_curve :
+         (Default value = True)
+    return_pvalue :
+         (Default value = False)
+    n_pvalue_permutations :
+         (Default value = 1000)
+
+    Returns
+    -------
+
+    """
+    from collections import namedtuple
+    from tqdm import tqdm
+
+    enrichment_score_output = namedtuple("EnrichmentScoreOutput","enrichment_score enrichment_score_curve p_value")
+    
+    if presorted is False and scores is None:
+        raise Exception("Scores must be specified when sorted==False")
+    elif presorted is False:
+        genes = np.array(genes)[np.argsort(scores)[::-1]]
+    running_es = []
+    phit = 0
+    pmiss = 0
+    n_genes = len(genes)
+    n_genes_in_geneset = len(np.intersect1d(genes, geneset))
+    if n_genes_in_geneset == 0:
+        raise Exception("Overlap of geneset with gene list is zero")
+
+    for gene in genes:
+        if gene in geneset:
+            phit += 1 / n_genes_in_geneset
+        else:
+            pmiss += 1 / (n_genes - n_genes_in_geneset)
+
+        running_es.append(phit - pmiss)
+    es = running_es[np.argmax(np.abs(running_es))]
+
+    if return_pvalue is False:
+        if return_es_curve:
+            return enrichment_score_output(es, running_es, None)
+        else:
+            return enrichment_score_output(es, None, None)
+    else:
+        null_enrichments = []
+        for i in tqdm(range(n_pvalue_permutations)):
+            null_enrichments.append(
+                        get_enrichment_score(
+                            np.random.permutation(genes),
+                            geneset,
+                            return_es_curve=False,
+                            return_pvalue=False,
+                            presorted=True).enrichment_score)
+
+        pval = np.mean(np.abs(es) < np.abs(np.array(null_enrichments)))
+
+        if return_es_curve:
+            return enrichment_score_output(es, running_es, pval)
+        else:
+            return enrichment_score_output(es, None, pval)
+
+
