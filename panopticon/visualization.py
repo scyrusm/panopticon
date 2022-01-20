@@ -37,6 +37,7 @@ def plot_subclusters(loom,
     Returns
     -------
 
+    
     """
     from panopticon.analysis import get_cluster_embedding
     import matplotlib.pyplot as plt
@@ -128,6 +129,7 @@ def plot_cluster_umap(loom,
     Returns
     -------
 
+    
     """
     from panopticon.analysis import get_cluster_embedding
     import matplotlib.pyplot as plt
@@ -190,11 +192,12 @@ def get_cluster_differential_expression_heatmap(loom,
     layer :
         
     diffex :
-         (Default value = {})
+        (Default value = {})
 
     Returns
     -------
 
+    
     """
     from panopticon.analysis import get_cluster_differential_expression
     import seaborn as sns
@@ -332,10 +335,17 @@ def swarmviolin(data,
         Default value = 'p: {0:.2f}')
     x :
         
+    noswarm :
+         (Default value = False)
+    annotate_hue_effect_size :
+         (Default value = False)
+    annotate_hue_effect_size_fmt_str :
+         (Default value = 'cles: {0:.2f}')
 
     Returns
     -------
 
+    
     """
     import seaborn as sns
     import matplotlib.pyplot as plt
@@ -401,6 +411,7 @@ def swarmviolin(data,
         Returns
         -------
 
+        
         """
         handles, labels = ax.get_legend_handles_labels()
         unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels))
@@ -515,11 +526,12 @@ def volcano(diffex,
     gene_label_offset_scale :
         Default value = 1)
     ax :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
 
+    
     """
 
     import matplotlib.pyplot as plt
@@ -631,31 +643,38 @@ def samurai_sword_plot(x=None,
                        ax=None,
                        fig=None,
                        show=False,
-                       output=None):
-    """
+                       output=None,
+                       normalize=False,
+                       ylabel='# cells in TCR-type (stacked bar plot)'):
+    """'Samurai sword' plot, designed for plotting TCR repertoires as stacked bar plots, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
     ----------
-    x :
+    x : Column of data indicating sample
         Default value = None)
-    y :
+    y : Column of data indicate clone
         Default value = None)
-    data :
+    data : pandas.DataFrame object, with necessary columns specified by arguments x, y.
         Default value = None)
-    hue :
+    hue : Optional column of data indicating additional grouping of samples
         Default value = None)
-    ax :
+    ax : matplotlib matplotlib.axes._subplots.AxesSubplot object, optional
         Default value = None)
-    fig :
+    fig : matplotlib.figure.Figure opbject, optional
         Default value = None)
-    show :
+    show : if 'True', will run matplotlib.show() upon completion
         Default value = False)
-    output :
+    output : argument to matplotlib.savefig
         Default value = None)
+    normalize :
+         (Default value = False)
+    ylabel :
+         (Default value = '# cells in TCR-type (stacked bar plot)')
 
     Returns
     -------
 
+    
     """
     if x is None:
         raise Exception("x is a required argument")
@@ -685,8 +704,7 @@ def samurai_sword_plot(x=None,
         )
 
     all_heights = []
-    #total = data.groupby(x).apply(lambda var: len(var)).max()
-    #print(total)
+
     if hue is None:
         grouped_data = data.groupby(x)[y].value_counts()
         total = data.groupby(x)[y].unique().apply(lambda x: len(x)).max()
@@ -694,25 +712,21 @@ def samurai_sword_plot(x=None,
         ind = np.arange(len(groupings))
 
     else:
-        #data = data.copy()
-        #newx = x+'_'+hue
-        #data[newx] = np.array([xval+'_'+hueval for xval, hueval in zip(data[x].values, data[hue].values)])
+
         grouped_data = data.groupby([x, hue])[y].value_counts()
         total = data.groupby([x,
                               hue])[y].unique().apply(lambda x: len(x)).max()
-        #groupings = data[newx].unique()
         groupings = list(data.groupby([x, hue]).groups.keys())
         ind = []
-        counter = -1  #accounts for
+        counter = -1
         for i, grouping in enumerate(groupings):
             if grouping[0] != groupings[i - 1][0]:
                 counter += 1
             ind.append(counter)
             counter += 1
         ind = np.array(ind)
-        #ind = np.arange(len(groupings))
-    #return 0
-    for grouping in groupings:  #p.array(patients)[np.argsort([pat2simpson[pat2shortpat[x]] for x in patients])]:
+
+    for grouping in groupings:
         heights = []
         for n in grouped_data[grouping].values:
             heights.append(n)
@@ -721,8 +735,11 @@ def samurai_sword_plot(x=None,
         #  print(heights)
         all_heights.append(heights)
     all_heights = np.vstack(all_heights)
-    all_heights = all_heights[:, ::-1]  # puts the big bars on bottom
-    bottoms = np.array([0] * all_heights.shape[0])
+    all_heights = all_heights[:, ::-1]
+    if normalize:
+        all_heights = np.divide(all_heights.T, all_heights.sum(axis=1)).T
+
+    bottoms = np.array([0.0] * all_heights.shape[0])
 
     for i in tqdm(range(all_heights.shape[1])):
         #color = 'r' if i%2==0 else 'b'
@@ -765,7 +782,7 @@ def samurai_sword_plot(x=None,
                         xycoords=trans,
                         fontsize=13)
 
-        ax.set_ylabel('# cells in TCR-type (stacked bar plot)')
+        ax.set_ylabel(ylabel)
     plt.tight_layout()
     if output is not None:
 
