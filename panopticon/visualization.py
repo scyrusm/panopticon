@@ -636,17 +636,21 @@ def volcano(diffex,
         plt.show()
 
 
-def samurai_sword_plot(x=None,
-                       y=None,
-                       data=None,
-                       hue=None,
-                       ax=None,
-                       fig=None,
-                       show=False,
-                       output=None,
-                       normalize=False,
-                       ylabel='# cells in TCR-type (stacked bar plot)'):
-    """'Samurai sword' plot, designed for plotting TCR repertoires as stacked bar plots, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
+def samurai_sword_plot(
+    x=None,
+    y=None,
+    data=None,
+    hue=None,
+    ax=None,
+    fig=None,
+    show=False,
+    output=None,
+    normalize=False,
+    piechart=False,
+    ylabel='# cells in TCR-type (stacked bar plot)',
+):
+    """
+    'Samurai sword' plot, designed for plotting TCR repertoires as stacked bar plots, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came. 
 
     Parameters
     ----------
@@ -658,23 +662,18 @@ def samurai_sword_plot(x=None,
         Default value = None)
     hue : Optional column of data indicating additional grouping of samples
         Default value = None)
-    ax : matplotlib matplotlib.axes._subplots.AxesSubplot object, optional
+    ax : matplotlib matplotlib.axes._subplots.AxesSubplot object or array thereof, optional
         Default value = None)
-    fig : matplotlib.figure.Figure opbject, optional
+    fig : matplotlib.figure.Figure object, optional
         Default value = None)
     show : if 'True', will run matplotlib.show() upon completion
         Default value = False)
     output : argument to matplotlib.savefig
         Default value = None)
-    normalize :
-         (Default value = False)
-    ylabel :
-         (Default value = '# cells in TCR-type (stacked bar plot)')
 
     Returns
     -------
 
-    
     """
     if x is None:
         raise Exception("x is a required argument")
@@ -687,14 +686,13 @@ def samurai_sword_plot(x=None,
             raise Exception(
                 "argument \"output\" must be a string, representing a desired filename"
             )
+    #if piechar
 
     import matplotlib.pyplot as plt
     from tqdm import tqdm
     import matplotlib.transforms as transforms
 
-    if ax is None and fig is None:
-        fig, ax = plt.subplots(figsize=(5, 5))
-    elif ax is None and fig is not None:
+    if ax is None and fig is not None:
         raise Exception(
             "argument \"ax\" must be included when argument \"fig\" is included"
         )
@@ -702,6 +700,11 @@ def samurai_sword_plot(x=None,
         raise Exception(
             "argument \"ax\" must be included when argument \"fig\" is included"
         )
+    if piechart and ax is not None:
+        if type(ax) not in [np.ndarray, list]:
+            raise Exception(
+                "ax must be a list or array of matplotlib.axes._subplots.AxesSubplot objects when argument piechart==True"
+            )
 
     all_heights = []
 
@@ -741,47 +744,85 @@ def samurai_sword_plot(x=None,
 
     bottoms = np.array([0.0] * all_heights.shape[0])
 
-    for i in tqdm(range(all_heights.shape[1])):
-        #color = 'r' if i%2==0 else 'b'
-        color = 'w'
-        #print(all_heights[:,i].sum())
-        ax.bar(ind,
-               all_heights[:, i],
-               0.8,
-               bottom=bottoms,
-               color=color,
-               edgecolor='k')  #, linewidth=0)
-        bottoms += all_heights[:, i]
-    ax.set_xticks(ind)
-    if hue is None:
-        ax.set_xticklabels(groupings, rotation=90)
-    else:
-        ax.set_xticklabels([grouping[1] for grouping in groupings],
-                           rotation=90)
-        plt.tight_layout()
+    if (not piechart) and (ax is None) and (fig is None):
+        fig, ax = plt.subplots(figsize=(5, 5))
+    elif (piechart) and (ax is None) and (fig is None):
+        import math
+        ngroups = len(groupings)
 
-        xpositions = []
-        labels = []
-        xpos = 0
-        for i, grouping in enumerate(groupings):
-            if grouping[0] != groupings[i - 1][0]:
-                xpositions.append(i)
-                labels.append(grouping[0])
-        xpositions.append(len(groupings))
-        xpositions = np.array(xpositions)[0:-1] + np.diff(xpositions) * 0.5
-        xpositions += np.arange(len(xpositions))
-        xpositions -= 0.5
-        for xposition, label in zip(xpositions, labels):
-            trans = transforms.blended_transform_factory(
-                ax.transData, fig.transFigure)
+        nrows = int(np.round(ngroups / np.sqrt(ngroups)))
+        ncols = math.ceil(ngroups / np.sqrt(ngroups))
+        print(ngroups, nrows, ncols)
 
-            ax.annotate(label, (xposition, 0),
-                        annotation_clip=False,
-                        ha='center',
-                        va='bottom',
-                        xycoords=trans,
-                        fontsize=13)
+        fig, ax = plt.subplots(nrows, ncols, figsize=(5, 5))
 
+
+# if piechart:
+#color = 'w'
+    if piechart:
+        for i in tqdm(range(all_heights.shape[0])):
+            if len(np.shape(ax)) == 1:
+                ax[i].pie(all_heights[i, :],
+                          colors=['w'],
+                          wedgeprops={"edgecolor": "k"})
+            elif len(np.shape(ax)) == 2:
+                maxrows, maxcols = np.shape(ax)
+                if all_heights.shape[0] // maxrows > maxcols:
+                    raise Exception(
+                        "Insufficient number of subplots for number of grouping (pies)"
+                    )
+                ax[i % maxrows,
+                   i // maxrows].pie(all_heights[i, :],
+                                     colors=['w'],
+                                     wedgeprops={"edgecolor": "k"})
+                #edgecolor='k')
+                ax[i % maxrows, i // maxrows].set_title(groupings[i])
+
+    else:  # conventional stacked bar plot mode
+        for i in tqdm(range(all_heights.shape[1])):
+            #color = 'r' if i%2==0 else 'b'
+            #color = 'w'
+            #print(all_heights[:,i].sum())
+
+            ax.bar(ind,
+                   all_heights[:, i],
+                   0.8,
+                   bottom=bottoms,
+                   color='w',
+                   edgecolor='k')  #, linewidth=0)
+
+            bottoms += all_heights[:, i]
+        ax.set_xticks(ind)
+        if hue is None:
+            ax.set_xticklabels(groupings, rotation=90)
+        else:
+            ax.set_xticklabels([grouping[1] for grouping in groupings],
+                               rotation=90)
+            plt.tight_layout()
+
+            xpositions = []
+            labels = []
+            xpos = 0
+            for i, grouping in enumerate(groupings):
+                if grouping[0] != groupings[i - 1][0]:
+                    xpositions.append(i)
+                    labels.append(grouping[0])
+            xpositions.append(len(groupings))
+            xpositions = np.array(xpositions)[0:-1] + np.diff(xpositions) * 0.5
+            xpositions += np.arange(len(xpositions))
+            xpositions -= 0.5
+            for xposition, label in zip(xpositions, labels):
+                trans = transforms.blended_transform_factory(
+                    ax.transData, fig.transFigure)
+
+                ax.annotate(label, (xposition, 0),
+                            annotation_clip=False,
+                            ha='center',
+                            va='bottom',
+                            xycoords=trans,
+                            fontsize=13)
+        if (ylabel == '# cells in TCR-type (stacked bar plot)') and normalize:
+            ylabel = 'fraction of cells in TCR-type (stacked bar plot)'
         ax.set_ylabel(ylabel)
     plt.tight_layout()
     if output is not None:

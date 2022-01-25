@@ -30,3 +30,14 @@ do this myself), put the following line in your ``.bashrc``
 ::
 
     eval "$(_PANOPTICON_COMPLETE=source panopticon)"
+
+File locking
+============
+
+I strongly recommend using file locking, to ensure that you do not accidentally open a .loom file outside of a 'with' context in two place concurrently.  If you do this, your .loom file may become corrupted.  
+
+To ensure that file locking is used, set the following environmental variable, e.g. in your ``.bashrc``
+
+::
+
+    export HDF5_USE_FILE_LOCKING=TRUE

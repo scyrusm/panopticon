@@ -2,7 +2,12 @@ import numpy as np
 import pandas as pd
 
 
-def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
+def get_module_score_matrix(loom,
+                            layername,
+                            cellmask,
+                            signature_mask,
+                            nbins=10,
+                            ncontrol=5):
     """generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).
 
     Parameters
@@ -21,17 +26,30 @@ def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
 
     
     """
-    assert len(signature_mask) == alldata.shape[0]
-    nonsigdata = alldata[~signature_mask, :]
-    sigdata = alldata[signature_mask, :]
-
-    gene_quantiles = pd.qcut(alldata.mean(axis=1),
-                             nbins,
-                             duplicates='drop',
-                             labels=False)
+    assert len(signature_mask) == loom.shape[0]
+    #nonsigdata = alldata[~signature_mask, :]
+    #sigdata = alldata[signature_mask, :]
+    if cellmask is None:
+        gene_quantiles = pd.qcut(loom[layername].map(
+            [np.mean],
+            axis=0,
+        )[0],
+                                 nbins,
+                                 duplicates='drop',
+                                 labels=False)
+    else:
+        gene_quantiles = pd.qcut(loom[layername].map([np.mean],
+                                                     axis=0,
+                                                     selection=cellmask)[0],
+                                 nbins,
+                                 duplicates='drop',
+                                 labels=False)
     sigdata_quantiles = gene_quantiles[signature_mask]
     nonsigdata_quantiles = gene_quantiles[~signature_mask]
-    signature = sigdata.mean(axis=0)
+    signature = loom[layername].map([np.mean],
+                                    axis=1,
+                                    selection=signature_mask)[0]
+    sigdata_quantiles = gene_quantiles[signature_mask]
     control_group = []
     for quantile in np.unique(sigdata_quantiles):
         noccurrences = np.sum(sigdata_quantiles == quantile)
@@ -42,13 +60,15 @@ def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
                              replace=False))
 
     control_group = np.array(control_group)
-    control = nonsigdata[control_group].mean(axis=0)
+    #control = nonsigdata[control_group].mean(axis=0)
+    control = loom[layername].map([np.mean], axis=1,
+                                  selection=control_group)[0]
     return signature - control
 
 
 def generate_masked_module_score(loom,
                                  layername,
-                                 mask,
+                                 cellmask,
                                  genelist,
                                  ca_name,
                                  nbins=10,
@@ -62,7 +82,7 @@ def generate_masked_module_score(loom,
         
     layername : Layername on which the module score will be calculated.
         
-    mask : Mask over cells over which the score will be calculated ("None" for all cells)
+    cellmask : Mask over cells over which the score will be calculated ("None" for all cells)
         
     genelist : list of gene names in signature
         
@@ -81,23 +101,126 @@ def generate_masked_module_score(loom,
     
     """
     from panopticon.analysis import get_module_score_matrix
-    if mask is None:
-        mask = np.array([True] * loom.shape[1])
-    matrix = loom[layername][:, mask]
+    #    if mask is None:
+    #        mask = np.array([True] * loom.shape[1])
+    #matrix = loom[layername][:, mask]
     sigmask = np.isin(loom.ra[gene_ra], genelist)
-    sig_score = get_module_score_matrix(matrix,
+    sig_score = get_module_score_matrix(loom,
+                                        layername,
+                                        cellmask,
                                         sigmask,
                                         nbins=nbins,
                                         ncontrol=ncontrol)
-    maskedscores = []
-    counter = 0
-    for flag in mask:
-        if flag:
-            maskedscores.append(sig_score[counter])
-            counter += 1
-        else:
-            maskedscores.append(np.nan)
+    if cellmask is not None:
+        maskedscores = []
+        counter = 0
+        for flag in cellmask:
+            if flag:
+                maskedscores.append(sig_score[counter])
+                counter += 1
+            else:
+                maskedscores.append(np.nan)
+    else:
+        maskedscores = sig_score
     loom.ca[ca_name] = maskedscores
+
+
+#def get_module_score_matrix(alldata, signature_mask, nbins=10, ncontrol=5):
+#    """generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).
+#
+#    Parameters
+#    ----------
+#    alldata : matrix
+#
+#    signature_mask : indices corresponding to signature
+#
+#    nbins : Number of quantile bins to use
+#        (Default value = 10)
+#    ncontrol : Number of genes in each matched quantile
+#        (Default value = 5)
+#
+#    Returns
+#    -------
+#
+#
+#    """
+#    assert len(signature_mask) == alldata.shape[0]
+#    nonsigdata = alldata[~signature_mask, :]
+#    sigdata = alldata[signature_mask, :]
+#
+#    gene_quantiles = pd.qcut(alldata.mean(axis=1),
+#                             nbins,
+#                             duplicates='drop',
+#                             labels=False)
+#    sigdata_quantiles = gene_quantiles[signature_mask]
+#    nonsigdata_quantiles = gene_quantiles[~signature_mask]
+#    signature = sigdata.mean(axis=0)
+#    control_group = []
+#    for quantile in np.unique(sigdata_quantiles):
+#        noccurrences = np.sum(sigdata_quantiles == quantile)
+#        # there's an edge case wherein if size is greater than the number of genes to be taken without replacement, this will generate an error.  Will be an issue in the few-gene regime
+#        control_group += list(
+#            np.random.choice(np.where(nonsigdata_quantiles == quantile)[0],
+#                             size=ncontrol * noccurrences,
+#                             replace=False))
+#
+#    control_group = np.array(control_group)
+#    control = nonsigdata[control_group].mean(axis=0)
+#    return signature - control
+#
+#
+#def generate_masked_module_score(loom,
+#                                 layername,
+#                                 mask,
+#                                 genelist,
+#                                 ca_name,
+#                                 nbins=10,
+#                                 ncontrol=5,
+#                                 gene_ra='gene'):
+#    """
+#
+#    Parameters
+#    ----------
+#    loom : Name of loom object of interest.
+#
+#    layername : Layername on which the module score will be calculated.
+#
+#    mask : Mask over cells over which the score will be calculated ("None" for all cells)
+#
+#    genelist : list of gene names in signature
+#
+#    ca_name : Desired name of signature to be made into a column attribute.
+#
+#    nbins :
+#        (Default value = 10)
+#    ncontrol :
+#        (Default value = 5)
+#    gene_ra :
+#        (Default value = 'gene')
+#
+#    Returns
+#    -------
+#
+#
+#    """
+#    from panopticon.analysis import get_module_score_matrix
+#    if mask is None:
+#        mask = np.array([True] * loom.shape[1])
+#    matrix = loom[layername][:, mask]
+#    sigmask = np.isin(loom.ra[gene_ra], genelist)
+#    sig_score = get_module_score_matrix(matrix,
+#                                        sigmask,
+#                                        nbins=nbins,
+#                                        ncontrol=ncontrol)
+#    maskedscores = []
+#    counter = 0
+#    for flag in mask:
+#        if flag:
+#            maskedscores.append(sig_score[counter])
+#            counter += 1
+#        else:
+#            maskedscores.append(np.nan)
+#    loom.ca[ca_name] = maskedscores
 
 
 def generate_nmf_and_loadings(loom,
@@ -1536,8 +1659,10 @@ def get_enrichment_score(genes,
     from collections import namedtuple
     from tqdm import tqdm
 
-    enrichment_score_output = namedtuple("EnrichmentScoreOutput","enrichment_score enrichment_score_curve p_value")
-    
+    enrichment_score_output = namedtuple(
+        "EnrichmentScoreOutput",
+        "enrichment_score enrichment_score_curve p_value")
+
     if presorted is False and scores is None:
         raise Exception("Scores must be specified when sorted==False")
     elif presorted is False:
@@ -1568,12 +1693,11 @@ def get_enrichment_score(genes,
         null_enrichments = []
         for i in tqdm(range(n_pvalue_permutations)):
             null_enrichments.append(
-                        get_enrichment_score(
-                            np.random.permutation(genes),
-                            geneset,
-                            return_es_curve=False,
-                            return_pvalue=False,
-                            presorted=True).enrichment_score)
+                get_enrichment_score(np.random.permutation(genes),
+                                     geneset,
+                                     return_es_curve=False,
+                                     return_pvalue=False,
+                                     presorted=True).enrichment_score)
 
         pval = np.mean(np.abs(es) < np.abs(np.array(null_enrichments)))
 
@@ -1583,3 +1707,23 @@ def get_enrichment_score(genes,
             return enrichment_score_output(es, None, pval)
 
 
+def hutcheson_t(x, y):
+    from collections import namedtuple
+
+    import rpy2.robjects as robjects
+    import rpy2.robjects.numpy2ri
+    rpy2.robjects.numpy2ri.activate()
+    robjects.r('''                                      
+    library(ecolTest)                                     
+    hutcheson <- function(x,                              
+                    y){
+    
+    Hutcheson_t_test(x,y)
+    }
+    ''')
+    out = namedtuple('Hutcheson_t_test', [
+        'statistic', 'parameter', 'p_value', 'estimate', 'null_value',
+        'method', 'alternative', 'data_name'
+    ])
+    test = robjects.r['hutcheson'](np.array(x), np.array(y))
+    return out(*[x[0] for x in test])
