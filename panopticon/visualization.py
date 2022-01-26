@@ -304,7 +304,8 @@ def swarmviolin(data,
                 annotate_hue_pvalues=False,
                 annotate_hue_effect_size=False,
                 annotate_hue_pvalue_fmt_str='p: {0:.2f}',
-                annotate_hue_effect_size_fmt_str='cles: {0:.2f}'):
+                annotate_hue_effect_size_fmt_str='es: {0:.2f}',
+                effect_size='cohensd'):
     """
 
     Parameters
@@ -336,11 +337,13 @@ def swarmviolin(data,
     x :
         
     noswarm :
-         (Default value = False)
+        (Default value = False)
     annotate_hue_effect_size :
-         (Default value = False)
+        (Default value = False)
     annotate_hue_effect_size_fmt_str :
-         (Default value = 'cles: {0:.2f}')
+        (Default value = 'es: {0:.2f}')
+    effect_size : If annotating the effect size between hues, this will set the relevant means of calculation.  Must be one of 'cohensd' or 'cles' for Cohen's d, or common language effect size, respectively.  
+         (Default value = 'cohensd')
 
     Returns
     -------
@@ -365,7 +368,7 @@ def swarmviolin(data,
                    width=.8,
                    **violinplot_kwargs)
     for violin in ax.collections:
-        violin.set_alpha(0.1)
+        violin.set_alpha(alpha)
     if not noswarm:
         if swarm_downsample_percentage is None:
             sns.swarmplot(
@@ -424,7 +427,8 @@ def swarmviolin(data,
             raise Exception(
                 "hue must be a categorical variable with 2 unique values")
         from scipy.stats import mannwhitneyu
-        if data[y].dtype in [float, int]:
+        print(data[y].dtype)
+        if np.issubdtype(data[y].dtype, np.number):
             category_col = x
             continuous_col = y
             vertical_violins = True
@@ -444,7 +448,13 @@ def swarmviolin(data,
                      & (data[category_col] == category)][continuous_col].values
             mw = mannwhitneyu(a, b, alternative='two-sided')
             pval = mw.pvalue
-            cles = mw.statistic / len(a) / len(b)
+            if effect_size=='cohensd':
+                from panopticon.utilities import cohensd
+                es = cohensd(a,b)
+            elif effect_size=='cles':
+                es = mw.statistic / len(a) / len(b)
+            else:
+                raise Exception("effect_size must be either \'cohensd\' or \'cles\'")
             annotation_string = ''
             if vertical_violins:
                 if annotate_hue_pvalues:
@@ -452,7 +462,7 @@ def swarmviolin(data,
                         pval) + '\n'
                 if annotate_hue_effect_size:
                     annotation_string += annotate_hue_effect_size_fmt_str.format(
-                        cles) + '\n'
+                        es) + '\n'
                 ax.annotate(
                     annotation_string,
                     (ticklabel.get_position()[0], np.max(np.hstack((a, b)))),
@@ -464,7 +474,7 @@ def swarmviolin(data,
                         pval)
                 if annotate_hue_effect_size:
                     annotation_string += '\n ' + annotate_hue_effect_size_fmt_str.format(
-                        cles)
+                        es)
                 ax.annotate(annotation_string, (
                     np.max(np.hstack((a, b))),
                     ticklabel.get_position()[1],
@@ -649,8 +659,7 @@ def samurai_sword_plot(
     piechart=False,
     ylabel='# cells in TCR-type (stacked bar plot)',
 ):
-    """
-    'Samurai sword' plot, designed for plotting TCR repertoires as stacked bar plots, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came. 
+    """'Samurai sword' plot, designed for plotting TCR repertoires as stacked bar plots, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
     ----------
@@ -670,10 +679,17 @@ def samurai_sword_plot(
         Default value = False)
     output : argument to matplotlib.savefig
         Default value = None)
+    normalize :
+         (Default value = False)
+    piechart :
+         (Default value = False)
+    ylabel :
+         (Default value = '# cells in TCR-type (stacked bar plot)')
 
     Returns
     -------
 
+    
     """
     if x is None:
         raise Exception("x is a required argument")
