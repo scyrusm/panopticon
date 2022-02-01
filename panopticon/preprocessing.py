@@ -146,7 +146,7 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
 def generate_count_normalization(loom,
                                  raw_count_layername,
                                  output_layername,
-                                 denominator=10**5):
+                                 denominator=10**4):
     """Generates a new layer with log2(transcripts per denominator).  By default this will produce a log2(TP100k+1) layer; adjusting the denominator will permit e.g. a log2(TP10k+1) or log2(TPM+1), etc.                                                                                                                                                                                             
                                                                                                                                                                                                                                                
     Parameters                                                                                                                                                                                                                                 
