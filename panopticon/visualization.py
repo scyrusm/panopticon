@@ -354,7 +354,10 @@ def swarmviolin(data,
     import matplotlib.pyplot as plt
     if ax is None:
         fig, ax = plt.subplots(figsize=(5, 5))
-    hue_order = data[hue].unique()
+    if hue is None:
+        hue_order=None
+    else:
+        hue_order = data[hue].unique()
     sns.violinplot(data=data,
                    x=x,
                    hue=hue,
