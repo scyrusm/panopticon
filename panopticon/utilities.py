@@ -538,11 +538,13 @@ def convert_10x_h5(path_10x_h5,
             )
         for gene in genes_as_ca:
             submask = np.array(features) == gene
+            gene_common_name = np.array(features_common_names)[submask][0]
             if np.sum(submask) > 1:
                 raise Exception("Two or more features with this name")
             elif np.sum(submask) == 0:
                 raise Exception("No features with this name")
             ca[gene] = list(m[submask, :].toarray()[0])
+            ca[gene_common_name] = ca[gene]
         m = m[~mask, :]
         features = list(np.array(features)[~mask])
         features_common_names = list(np.array(features_common_names)[~mask])
@@ -986,7 +988,7 @@ def get_cluster_differential_expression_heatmap_df(loom,
             'MeanExpr1 > MeanExpr2').query('FracExpr2<.9').head(
                 10)['gene'].values
         genemask = np.isin(loom.ra['gene'], genes)
-        rawX.append(loom[layer][genemask, :][:, clusteredmask])
+        rawX.append(loom[layer][genemask, :][:, clusteredmask.nonzero()[0]])
         allgenes.append(genes)
         allgeneindices.append(np.where(genemask)[0])
     clusteredmask = np.hstack(clusteredmask)

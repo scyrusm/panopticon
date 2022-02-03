@@ -282,9 +282,9 @@ def get_masked_wme(loom, layername, mask=None, gene_ra='gene',species='homo sapi
         X = loom[layername][:,:]
     else:
         if mask_option == 'load_full':  # this is to address an h5py performance bog
-            X = loom[layername][:,:][:,mask]
+            X = loom[layername][:,:][:,mask.nonzero()[0]]
         elif mask_option == 'mask_first':
-            X = loom[layername][:,mask]
+            X = loom[layername][:,mask.nonzero()[0]]
         #if mask_option not in ['load_full','mask_first','scan']:
         else:
             raise Exception("mask_option must be one of: load_full, mask_first, scan")

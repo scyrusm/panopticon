@@ -73,13 +73,13 @@ def generate_cell_and_gene_quality_metrics(loom,
         madrp, meanrp, maxrp = loom[layername].map(
             [robust.mad, np.mean, np.max],
             axis=1,
-            selection=ribosomal_gene_mask)
+            selection=ribosomal_gene_mask.nonzero()[0])
         loom.ca['RibosomalRelativeMeanAbsoluteDeviation'] = madrp / meanrp
         loom.ca['RibosomalMaxOverMean'] = maxrp / meanrp
         if israw:
             loom.ca['RibosomalCountFraction'] = loom[layername].map(
                 [np.sum], axis=1,
-                selection=ribosomal_gene_mask)[0] / ncounts_for_cell
+                selection=ribosomal_gene_mask.nonzero()[0])[0] / ncounts_for_cell
     if mitochondrial_qc:
         if mitochondrial_gene_mask is None:
             mitochondrial_gene_mask = np.array([
@@ -89,13 +89,13 @@ def generate_cell_and_gene_quality_metrics(loom,
         madmt, meanmt, maxmt = loom[layername].map(
             [robust.mad, np.mean, np.max],
             axis=1,
-            selection=mitochondrial_gene_mask)
+            selection=mitochondrial_gene_mask.nonzero()[0])
         loom.ca['MitochondrialMean'] = meanmt
         loom.ca['MitochondrialRelativeMeanAbsoluteDeviation'] = madmt / meanmt
         if israw:
             loom.ca['MitochondrialCountFraction'] = loom[layername].map(
                 [np.sum], axis=1,
-                selection=mitochondrial_gene_mask)[0] / ncounts_for_cell
+                selection=mitochondrial_gene_mask.nonzero()[0])[0] / ncounts_for_cell
 
     madall, meanall = loom[layername].map([robust.mad, np.mean], axis=1)
     loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
@@ -315,6 +315,75 @@ def generate_antibody_prediction(loom,
                 predictions = 1 - predictions
 
             loom.ca[prediction_ca_name] = np.array(predictions)
+
+
+def generate_guide_rna_prediction(loom,
+                                  guide_rnas,
+                                  overwrite=False,
+                                  only_generate_zscore=False):
+
+    for guide_rna in guide_rnas:
+        if guide_rna not in loom.ca.keys():
+            raise Exception(
+                "raw_antibody_count_df must be prepared such that columns match column attributes in loom corresponding to raw antibody conjugate counts"
+            )
+
+        new_ca_name = guide_rna + '_log2'
+        if new_ca_name in loom.ca.keys() and overwrite == False:
+            raise Exception(
+                "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
+                .format(new_ca_name))
+
+        loom.ca[new_ca_name] = np.log2(loom.ca[guide_rna])
+        if not only_generate_zscore:
+            from pomegranate import GeneralMixtureModel, NormalDistribution, PoissonDistribution, LogNormalDistribution
+
+#            model = GeneralMixtureModel.from_samples(
+#                [PoissonDistribution, PoissonDistribution],
+#                n_components=2,
+#                X=counts.reshape(-1, 1))
+
+            prediction_ca_name = guide_rna + '_prediction'
+            if prediction_ca_name in loom.ca.keys() and overwrite == False:
+                raise Exception(
+                    "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
+                    .format(prediction_ca_name))
+            if (~np.isfinite(loom.ca[new_ca_name])).sum() > 0:
+                cellmask = np.isfinite(loom.ca[new_ca_name])
+                print(cellmask.sum(), guide_rna)
+                if cellmask.sum()>10:
+                    model = GeneralMixtureModel.from_samples(
+                        [PoissonDistribution, PoissonDistribution],
+                        n_components=2,
+                        X=loom.ca[new_ca_name][cellmask.nonzero()[0]].reshape(-1, 1))
+                    predictions = []
+                    for val in loom.ca[new_ca_name]:
+                        if not np.isfinite(val):
+                            predictions.append(np.nan)
+    
+                        else:
+                            predictions.append(
+                                model.predict(np.array(val).reshape(-1, 1))[0])
+                else:
+                    predictions = [0]*loom.shape[1]
+                predictions = np.array(predictions)
+
+            else:
+                #print(guide_rna, loom.ca[guide_rna].sum())
+                # print('Warning:  pomegrante Poisson/Normal mixture model has predicted a Poisson component with greater log(UMI+1) counts than normal component.  This is unusual behavior!')
+                model = GeneralMixtureModel.from_samples(
+                    [PoissonDistribution, PoissonDistribution],
+                    n_components=2,
+                    X=loom.ca[new_ca_name].reshape(-1, 1))
+                #model.fit(loom.ca[new_ca_name].reshape(-1, 1))
+                predictions = model.predict(loom.ca[new_ca_name].reshape(
+                    -1, 1))
+            if loom.ca[new_ca_name][np.array(predictions) == 0].mean(
+            ) > loom.ca[new_ca_name][np.array(predictions) == 1].mean():
+                predictions = 1 - predictions
+            predictions = np.array(predictions)
+            predictions = np.nan_to_num(predictions, nan=0.0)
+            loom.ca[prediction_ca_name] = predictions
 
 
 def get_clustering_based_outlier_prediction(

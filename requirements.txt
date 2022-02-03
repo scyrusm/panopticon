@@ -9,6 +9,11 @@ tqdm
 seaborn
 loompy
 pymannkendall
-leidenalg
-h5py<=2.10.0
+leidenalg # best installed with 'conda install -c conda-forge leidenalg'
+cellranger # best installed with 'conda install -c hcc cellranger' ??
+h5py #<=2.10.0
 statsmodels
+#pomegranate
+tables
+lz4
+

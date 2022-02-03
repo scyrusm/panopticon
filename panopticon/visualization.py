@@ -78,7 +78,7 @@ def plot_subclusters(loom,
             ]
     for subcluster in subclusters:
         mask = loom.ca['ClusteringIteration{}'.format(
-            current_layer + sublayers)][supermask] == subcluster
+            current_layer + sublayers)][supermask.nonzero()[0]] == subcluster
         plt.scatter(embedding[mask, 0], embedding[mask, 1], label=subcluster)
         if label_clusters:
             plt.annotate(
@@ -223,7 +223,7 @@ def get_cluster_differential_expression_heatmap(loom,
                     allgenes)].query('MeanExpr1 > MeanExpr2').query(
                         'FracExpr2<.9').head(10)['gene'].values
                 genemask = np.isin(loom.ra['gene'], genes)
-                rawX.append(loom[layer][genemask, :][:, clusteredmask])
+                rawX.append(loom[layer][genemask, :][:, clusteredmask.nonzero()[0]])
                 allgenes.append(genes)
 
     clusteredmask = np.hstack(clusteredmask)

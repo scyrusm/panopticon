@@ -40,7 +40,7 @@ def get_module_score_matrix(loom,
     else:
         gene_quantiles = pd.qcut(loom[layername].map([np.mean],
                                                      axis=0,
-                                                     selection=cellmask)[0],
+                                                     selection=cellmask.nonzero()[0])[0],
                                  nbins,
                                  duplicates='drop',
                                  labels=False)
@@ -48,7 +48,7 @@ def get_module_score_matrix(loom,
     nonsigdata_quantiles = gene_quantiles[~signature_mask]
     signature = loom[layername].map([np.mean],
                                     axis=1,
-                                    selection=signature_mask)[0]
+                                    selection=signature_mask.nonzero()[0])
     sigdata_quantiles = gene_quantiles[signature_mask]
     control_group = []
     for quantile in np.unique(sigdata_quantiles):
@@ -255,7 +255,7 @@ def generate_nmf_and_loadings(loom,
             "Necessary to have already generated gene expression variances")
     vargenemask = loom.ra['GeneVar'] > np.sort(
         loom.ra['GeneVar'])[::-1][nvargenes]
-    X = loom[layername][vargenemask, :]
+    X = loom[layername][vargenemask.nonzero()[0], :]
     model = NMF(n_components=n_components,
                 init='random',
                 random_state=0,
@@ -758,7 +758,7 @@ def generate_clustering(loom,
                     "NMF operation currently requires loading full layer into memory"
                 )
                 start = time()
-                data_c = loom[layername][:, mask]
+                data_c = loom[layername][:, mask.nonzero()[0]]
                 print("processing cluster", cluster, "; time to load: ",
                       time() - start, ", mask size: ", np.sum(mask))
                 model = NMF(n_components=np.min([50, data_c.shape[1]]),
@@ -775,7 +775,7 @@ def generate_clustering(loom,
                     for (ix, selection, view) in tqdm(
                             loom.scan(axis=1,
                                       batch_size=out_of_core_batch_size,
-                                      items=mask,
+                                      items=mask.nonzero()[0],
                                       layers=[layername]),
                             total=loom.shape[1] // out_of_core_batch_size):
                         pca.partial_fit(view[layername][:, :].T)
@@ -784,7 +784,7 @@ def generate_clustering(loom,
                     for (ix, selection, view) in tqdm(
                             loom.scan(axis=1,
                                       batch_size=out_of_core_batch_size,
-                                      items=mask,
+                                      items=mask.nonzero()[0],
                                       layers=[layername]),
                             total=loom.shape[1] // out_of_core_batch_size):
                         compresseddatalist.append(
@@ -795,7 +795,7 @@ def generate_clustering(loom,
                         [None] * mask.sum()
                     )  # This is a hack to avoid computing PCA in cases where no clustering will be performed
                 else:
-                    data_c = loom[layername][:, mask].T
+                    data_c = loom[layername][:, mask.nonzero()[0]].T
                     model = PCA(n_components=np.min([10, data_c.shape[0]]),
                                 random_state=0)
 
@@ -820,7 +820,7 @@ def generate_clustering(loom,
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
             ]
             loom.ca['ClusteringIteration{}'.format(
-                subi)][mask] = fullpath_clustering
+                subi)][mask.nonzero()[0]] = fullpath_clustering
         loom.ca['ClusteringIteration{}'.format(subi)] = loom.ca[
             'ClusteringIteration{}'.format(
                 subi)]  #This is to force the changes to save to disk
@@ -909,9 +909,9 @@ def get_cluster_embedding(loom,
     if n_neighbors is None:
         n_neighbors = int(np.sqrt(np.sum(mask)))
     if genemask is None:
-        data = loom[layername][:, mask]
+        data = loom[layername][:, mask.nonzero()[0]]
     else:
-        data = loom[layername][genemask, :][:, mask]
+        data = loom[layername][genemask, :][:, mask.nonzero()[0]]
 
     pca = PCA(n_components=np.min([n_components_pca, data.shape[1]]))
     pca.fit(data[:, :].transpose())
@@ -959,7 +959,7 @@ def get_metafield_breakdown(loom,
     else:
         print("ignoring cluster, using custom mask")
         mask = (mask) & (loom.ca['nGene'] >= complexity_cutoff)
-    return pd.DataFrame(loom.ca[field][mask])[0].value_counts()
+    return pd.DataFrame(loom.ca[field][mask.nonzero()[0]])[0].value_counts()
 
 
 def get_patient_averaged_table(loom,
@@ -1042,17 +1042,17 @@ def generate_malignancy_score(loom,
             np.unique(loom.ca[patient_id_key]),
             desc='Computing per-patient, per-cell malignancy scores'):
         mask = loom.ca['patient_ID'] == patient
-        if malignant_sort_label in loom.ca[cell_sort_key][mask]:
+        if malignant_sort_label in loom.ca[cell_sort_key][mask.nonzero()[0]]:
             gene_windows = get_list_of_gene_windows(loom.ra['gene'])
-            single_patient_expression = loom[layername][:, mask]
+            single_patient_expression = loom[layername][:, mask.nonzero()[0]]
             mwe = robust_mean_windowed_expressions(loom.ra['gene'],
                                                    gene_windows,
                                                    single_patient_expression,
                                                    upper_cut=2)
             pca = PCA(n_components=1)
             pca1 = pca.fit_transform(mwe.T)[:, 0]
-            mask1 = loom.ca[cell_sort_key][mask] == malignant_sort_label
-            mask2 = loom.ca[cell_sort_key][mask] != malignant_sort_label
+            mask1 = loom.ca[cell_sort_key][mask.nonzero()[0]] == malignant_sort_label
+            mask2 = loom.ca[cell_sort_key][mask.nonzero()[0]] != malignant_sort_label
             #if loom.ca[cell_sort_key][mask]
             if pca1[mask1].mean() > pca1[mask2].mean():
                 scores45neg = np.sum(np.greater.outer(pca1[mask1],
@@ -1078,8 +1078,8 @@ def generate_malignancy_score(loom,
             cnv_quantiles = [np.nan] * np.sum(mask)
         counter45neg = 0
         for i, (cell_name, cell_sort) in enumerate(
-                zip(loom.ca[cell_name_key][mask],
-                    loom.ca[cell_sort_key][mask])):
+                zip(loom.ca[cell_name_key][mask.nonzero()[0]],
+                    loom.ca[cell_sort_key][mask.nonzero()[0]])):
             cnv_quantiles_dict[cell_name] = cnv_quantiles[i]
             if cell_sort == malignant_sort_label:
                 cnv_scores_dict[cell_name] = scores45neg[counter45neg]
@@ -1121,8 +1121,8 @@ def get_cosine_self_similarity(loom, layername, cluster, self_mean=None):
     if mask.sum() == 0:
         raise Exception("Mask is empty")
     if self_mean is None:
-        self_mean = loom[layername][:, mask].mean(axis=1)
-    return cosine_similarity(loom[layername][:, mask].T,
+        self_mean = loom[layername][:, mask.nonzero()[0]].mean(axis=1)
+    return cosine_similarity(loom[layername][:, mask.nonzero()[0]].T,
                              Y=np.array([self_mean]))
 
 
@@ -1149,10 +1149,10 @@ def get_dictionary_of_cluster_means(loom, layername, clustering_level):
                         desc='looping over clusters'):
         mask = loom.ca[clustering_level] == cluster
         if mask.sum() < 5000:
-            mean_dict[cluster] = loom[layername][:, mask].mean(axis=1)
+            mean_dict[cluster] = loom[layername][:, mask.nonzero()[0]].mean(axis=1)
         else:
             mean_dict[cluster] = loom[layername].map([np.mean],
-                                                     selection=mask)[0]
+                                                     selection=mask.nonzero()[0])[0]
 
     return mean_dict
 
@@ -1196,6 +1196,10 @@ def get_differential_expression_dict(loom,
     """
     from panopticon.analysis import get_cluster_differential_expression
     from panopticon.utilities import we_can_pickle_it
+
+    if gene_alternate_name is None and 'gene_common_name' in loom.ra.keys():
+        gene_alternate_name = 'gene_common_name'
+
     diffex = {}
     for i in range(starting_iteration, final_iteration + 1):
         for cluster in np.unique(loom.ca['ClusteringIteration{}'.format(i)]):
@@ -1417,11 +1421,11 @@ def get_cluster_differential_expression(loom,
     fracexpr1 = []
     fracexpr2 = []
     start = time()
-    data1 = loom[layername][:, mask1]
+    data1 = loom[layername][:, mask1.nonzero()[0]]
     if verbose:
         print('First matrix extracted in', time() - start, 'seconds')
     start = time()
-    data2 = loom[layername][:, mask2]
+    data2 = loom[layername][:, mask2.nonzeros()[0]]
     if verbose:
         print('Second matrix extracted', time() - start, 'seconds')
     for igene, gene in enumerate(
@@ -1512,7 +1516,7 @@ def get_differential_expression_over_continuum(loom,
     corrs = []
     pvals = []
     genes = []
-    X = loom[layer][:, mask]
+    X = loom[layer][:, mask.nonzero()[0]]
     for i, gene in enumerate(tqdm(loom.ra['gene'], desc='looping over genes')):
         #try:
         if np.std(X[i, :]) < 1e-14:

@@ -31,6 +31,9 @@ def get_module_score_loom(loom,
     """
     if querymask is None:
         querymask = np.array([True] * loom.shape[1])
+    if querymask.dtype == bool:
+        querymask = querymask.nonzero()[0]
+
     alldata = loom[:, querymask]
     nonsigdata = alldata[loom.ra[signature_name] == 0]
     sigdata = alldata[loom.ra[signature_name] == 1]
@@ -82,12 +85,12 @@ def create_subsetted_loom_with_genemask(loom, output_loom, cellmask, genemask):
     if '' not in loom.layers.keys():
         raise Exception("Expecting '' layer, yet none found")
     rowmeta, colmeta = recover_meta(loom)
-    loompy.create(output_loom, loom[''][genemask, :][:, cellmask],
+    loompy.create(output_loom, loom[''][genemask.nonzero()[0], :][:, cellmask.nonzero()[0]],
                   rowmeta[genemask].to_dict("list"),
                   colmeta[cellmask].to_dict("list"))
     with loompy.connect(output_loom) as smallerloom:
         for layer in [x for x in loom.layer.keys() if x != '']:
-            smallerloom[layer] = loom[layer][:, cellmask][genemask, :]
+            smallerloom[layer] = loom[layer][:, cellmask][genemask.nonzero()[0], :]
 
 
 def create_subsetted_loom(loom, output_loom_filename, cellmask):

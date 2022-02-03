@@ -100,7 +100,7 @@ def multireference_dna_correspondence(loom: Any,
     """
 
     list_of_correlations = []
-    loomquery = np.where(loomquery)[0] # Indexing by Bool vector is not supported by loompy v. 3.0.6 for some reason
+    loomquery = np.where(loomquery)[0] # Indexing by Bool vector is not supported by loompy v. 3.0.6 for some reason # EDIT this is a still-existing bug in h5py>=3.0 3 Feb 2022
     for segmentation in tqdm(segmentations, desc='Processing segmentations'):
         crd = loom.ra[segmentation]
         expressions = loom[:, loomquery]
