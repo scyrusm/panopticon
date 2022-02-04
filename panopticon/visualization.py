@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 
 
 def plot_subclusters(loom,
@@ -223,7 +224,8 @@ def get_cluster_differential_expression_heatmap(loom,
                     allgenes)].query('MeanExpr1 > MeanExpr2').query(
                         'FracExpr2<.9').head(10)['gene'].values
                 genemask = np.isin(loom.ra['gene'], genes)
-                rawX.append(loom[layer][genemask, :][:, clusteredmask.nonzero()[0]])
+                rawX.append(
+                    loom[layer][genemask, :][:, clusteredmask.nonzero()[0]])
                 allgenes.append(genes)
 
     clusteredmask = np.hstack(clusteredmask)
@@ -355,7 +357,7 @@ def swarmviolin(data,
     if ax is None:
         fig, ax = plt.subplots(figsize=(5, 5))
     if hue is None:
-        hue_order=None
+        hue_order = None
     else:
         hue_order = data[hue].unique()
     sns.violinplot(data=data,
@@ -451,13 +453,14 @@ def swarmviolin(data,
                      & (data[category_col] == category)][continuous_col].values
             mw = mannwhitneyu(a, b, alternative='two-sided')
             pval = mw.pvalue
-            if effect_size=='cohensd':
+            if effect_size == 'cohensd':
                 from panopticon.utilities import cohensd
-                es = cohensd(a,b)
-            elif effect_size=='cles':
+                es = cohensd(a, b)
+            elif effect_size == 'cles':
                 es = mw.statistic / len(a) / len(b)
             else:
-                raise Exception("effect_size must be either \'cohensd\' or \'cles\'")
+                raise Exception(
+                    "effect_size must be either \'cohensd\' or \'cles\'")
             annotation_string = ''
             if vertical_violins:
                 if annotate_hue_pvalues:
@@ -649,20 +652,21 @@ def volcano(diffex,
         plt.show()
 
 
-def samurai_sword_plot(
-    x=None,
-    y=None,
-    data=None,
-    hue=None,
-    ax=None,
-    fig=None,
-    show=False,
-    output=None,
-    normalize=False,
-    piechart=False,
-    ylabel='# cells in TCR-type (stacked bar plot)',
-):
-    """'Samurai sword' plot, designed for plotting TCR repertoires as stacked bar plots, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
+def repertoire_plot(x=None,
+                    y=None,
+                    data=None,
+                    hue=None,
+                    ax=None,
+                    fig=None,
+                    show=False,
+                    output=None,
+                    normalize=False,
+                    piechart=False,
+                    ylabel='',
+                    legend=False,
+                    color_palette=None,
+                    stack_order='agnostic'):
+    """Repertoire plot, designed for plotting cluster compositions or TCR repertoires as stacked bar plots or pies, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
     ----------
@@ -687,7 +691,7 @@ def samurai_sword_plot(
     piechart :
          (Default value = False)
     ylabel :
-         (Default value = '# cells in TCR-type (stacked bar plot)')
+         (Default value = '')
 
     Returns
     -------
@@ -724,18 +728,82 @@ def samurai_sword_plot(
             raise Exception(
                 "ax must be a list or array of matplotlib.axes._subplots.AxesSubplot objects when argument piechart==True"
             )
+    if piechart and not normalized:
+        print("Warning: Pie charts must be normalized, because they are pie charts.")
+    if stack_order not in ['matched','agnostic']:
+        raise Exception("stack_order must be one of \'matched\', \'agnostic\'")
+    if color_palette is None:
+        if stack_order == 'matched':
+            import seaborn as sns
+            color_palette = sns.palettes.color_palette('colorblind')
+        elif stack_order == 'agnostic':
+            color_palette = ['w']
+
+
 
     all_heights = []
 
     if hue is None:
-        grouped_data = data.groupby(x)[y].value_counts()
+        if stack_order == 'agnostic':
+            grouped_data = data.groupby(x)[y].value_counts()
+        elif stack_order == 'matched':
+            grouped_data = data.groupby(x)[y].value_counts(sort=False)
+
+            # this code ensures that all categories are represented (even with 0) in all bars
+            newname = "{}_{} count".format(x, y)  # to cover an edge case
+            original_order = data[y].unique()
+            grouped_data_df = grouped_data.rename(newname).reset_index()
+            all_y = grouped_data_df[y].unique()
+            grouped_data_df_dict = grouped_data_df.groupby(
+                x)[y].unique().to_dict()
+            for key in grouped_data_df_dict:
+                for missing_element in np.setdiff1d(
+                        all_y, grouped_data_df_dict[key]
+                ):  # may fail if cluster name are of different types
+                    zero_count_insert = pd.DataFrame(
+                        np.array([key, missing_element, 0]).reshape(1, -1),
+                        columns=grouped_data_df.columns).astype(
+                            grouped_data_df.dtypes)
+                    grouped_data_df = pd.concat(
+                        [grouped_data_df, zero_count_insert], )
+            y_to_original_order = {x: i for i, x in enumerate(original_order)}
+            grouped_data_df = grouped_data_df.sort_values(
+                y, key=np.vectorize(lambda x: y_to_original_order[x]))
+            grouped_data = grouped_data_df.set_index([x, y])[newname]
+
         total = data.groupby(x)[y].unique().apply(lambda x: len(x)).max()
         groupings = data[x].unique()
         ind = np.arange(len(groupings))
 
     else:
+        if stack_order == 'agnostic':
+            grouped_data = data.groupby([x, hue])[y].value_counts()
+        elif stack_order == 'matched':
+            grouped_data = data.groupby([x, hue])[y].value_counts(sort=False)
+            original_order = data[y].unique()
+            newname = "{}_{}_{} count".format(x, y,
+                                              hue)  # to cover an edge case
+            grouped_data_df = grouped_data.rename(newname, ).reset_index()
+            all_y = grouped_data_df[y].unique()
+            grouped_data_df_dict = grouped_data_df.groupby(
+                [x, hue])[y].unique().to_dict()
 
-        grouped_data = data.groupby([x, hue])[y].value_counts()
+            for key in grouped_data_df_dict:
+                for missing_element in np.setdiff1d(
+                        all_y, grouped_data_df_dict[key]
+                ):  # may fail if cluster name are of different types
+                    zero_count_insert = pd.DataFrame(
+                        np.array([key[0], key[1], missing_element,
+                                  0]).reshape(1, -1),
+                        columns=grouped_data_df.columns).astype(
+                            grouped_data_df.dtypes)
+                    grouped_data_df = pd.concat(
+                        [grouped_data_df, zero_count_insert], )
+            y_to_original_order = {x: i for i, x in enumerate(original_order)}
+            grouped_data_df = grouped_data_df.sort_values(
+                y, key=np.vectorize(lambda x: y_to_original_order[x]))
+            grouped_data = grouped_data_df.set_index([x, hue, y])[newname]
+
         total = data.groupby([x,
                               hue])[y].unique().apply(lambda x: len(x)).max()
         groupings = list(data.groupby([x, hue]).groups.keys())
@@ -747,14 +815,13 @@ def samurai_sword_plot(
             ind.append(counter)
             counter += 1
         ind = np.array(ind)
-
+# return grouped_data
     for grouping in groupings:
         heights = []
         for n in grouped_data[grouping].values:
             heights.append(n)
         heights = heights + [0] * (total - len(heights))
         heights = np.array(heights)[::-1]
-        #  print(heights)
         all_heights.append(heights)
     all_heights = np.vstack(all_heights)
     all_heights = all_heights[:, ::-1]
@@ -780,10 +847,15 @@ def samurai_sword_plot(
 #color = 'w'
     if piechart:
         for i in tqdm(range(all_heights.shape[0])):
+            if stack_order == 'matched':
+                labels = grouped_data[grouping].index.values
+            else:
+                labels = None
             if len(np.shape(ax)) == 1:
                 ax[i].pie(all_heights[i, :],
-                          colors=['w'],
-                          wedgeprops={"edgecolor": "k"})
+                          colors=color_palette,
+                          wedgeprops={"edgecolor": "k"},
+                          labels=labels)
             elif len(np.shape(ax)) == 2:
                 maxrows, maxcols = np.shape(ax)
                 if all_heights.shape[0] // maxrows > maxcols:
@@ -792,23 +864,27 @@ def samurai_sword_plot(
                     )
                 ax[i % maxrows,
                    i // maxrows].pie(all_heights[i, :],
-                                     colors=['w'],
-                                     wedgeprops={"edgecolor": "k"})
+                                     colors=color_palette,
+                                     wedgeprops={"edgecolor": "k"},
+                                     labels=labels)
                 #edgecolor='k')
                 ax[i % maxrows, i // maxrows].set_title(groupings[i])
 
     else:  # conventional stacked bar plot mode
         for i in tqdm(range(all_heights.shape[1])):
-            #color = 'r' if i%2==0 else 'b'
-            #color = 'w'
-            #print(all_heights[:,i].sum())
 
+            #from IPython.core.debugger import set_trace; set_trace()
+            if stack_order == 'matched':
+                label = grouped_data[grouping].index[i]
+            else:
+                label = None
             ax.bar(ind,
                    all_heights[:, i],
                    0.8,
                    bottom=bottoms,
-                   color='w',
-                   edgecolor='k')  #, linewidth=0)
+                   color=color_palette[i%len(color_palette)],
+                   edgecolor='k',
+                   label=label)
 
             bottoms += all_heights[:, i]
         ax.set_xticks(ind)
@@ -840,8 +916,11 @@ def samurai_sword_plot(
                             va='bottom',
                             xycoords=trans,
                             fontsize=13)
-        if (ylabel == '# cells in TCR-type (stacked bar plot)') and normalize:
-            ylabel = 'fraction of cells in TCR-type (stacked bar plot)'
+        if ylabel == '':
+            if normalize:
+                ylabel = 'cell fraction'
+            else:
+                ylabel = 'cell count'
         ax.set_ylabel(ylabel)
     plt.tight_layout()
     if output is not None:
