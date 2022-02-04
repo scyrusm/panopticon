@@ -694,7 +694,9 @@ def generate_clustering(loom,
             from panopticon.analysis import get_pca_loadings_matrix
             from panopticon.utilities import get_igraph_from_adjacency
             from panopticon.utilities import import_check
-            import_check("leidenalg", 'conda install -c conda-forge leidenalg')
+            exit_code = import_check("leidenalg", 'conda install -c conda-forge leidenalg')
+            if exit_code != 0:
+                return
             import leidenalg
 
             X = get_pca_loadings_matrix(loom, layername)

@@ -322,7 +322,9 @@ def generate_guide_rna_prediction(loom,
                                   overwrite=False,
                                   only_generate_log2=False):
     from panopticon.utilities import import_check
-    import_check("pomegranate", 'conda install -c anaconda pomegranate')
+    exit_code = import_check("pomegranate", 'conda install -c anaconda pomegranate')
+    if exit_code != 0:
+        return
 
     for guide_rna in guide_rnas:
         if guide_rna not in loom.ca.keys():
