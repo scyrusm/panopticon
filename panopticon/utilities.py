@@ -38,6 +38,8 @@ def get_valid_gene_info(
 
     
     """
+    from panopticon.utilities import import_check
+    import_check("pyensembl", 'pip install pyensembl')
     from pyensembl import EnsemblRelease
     assembly = EnsemblRelease(release, species=species)
     gene_names = []
@@ -493,8 +495,11 @@ def convert_10x_h5(path_10x_h5,
                    genes_as_ca=[],
                    gene_whitelist=None,
                    output_type='loom'):
-    import cellranger.matrix as cr_matrix
+
     import loompy
+    from panopticon.utilities import import_check
+    import_check("cellranger", 'conda install -c hcc cellranger')
+    import cellranger.matrix as cr_matrix
     output_type = output_file.split('.')[-1]
     if output_type not in ['loom', 'pkl']:
         raise Exception(
@@ -718,6 +723,8 @@ def convert_h5ad(h5ad,
 
 
 def get_UMI_curve_from_10x_h5(path_10x_h5, save_to_file=None):
+    from panopticon.utilities import import_check
+    import_check("cellranger", 'conda install -c hcc cellranger')
     import cellranger.matrix as cr_matrix
     import matplotlib.pyplot as plt
 
@@ -1026,3 +1033,10 @@ def generate_ca_frequency(loom,
         ]
 
     loom.ca[output_name] = frequencies
+
+def import_check(package, statement_upon_failure):
+    try:
+        exec("import {}".format(package))
+    except:
+        print("Import of package \'{}\' failed. We recommend installing with the command \'{}\'".format(package, statement_upon_failure))
+        exit()

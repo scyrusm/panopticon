@@ -320,7 +320,9 @@ def generate_antibody_prediction(loom,
 def generate_guide_rna_prediction(loom,
                                   guide_rnas,
                                   overwrite=False,
-                                  only_generate_zscore=False):
+                                  only_generate_log2=False):
+    from panopticon.utilities import import_check
+    import_check("pomegranate", 'conda install -c anaconda pomegranate')
 
     for guide_rna in guide_rnas:
         if guide_rna not in loom.ca.keys():
@@ -335,7 +337,7 @@ def generate_guide_rna_prediction(loom,
                 .format(new_ca_name))
 
         loom.ca[new_ca_name] = np.log2(loom.ca[guide_rna])
-        if not only_generate_zscore:
+        if not only_generate_log2:
             from pomegranate import GeneralMixtureModel, NormalDistribution, PoissonDistribution, LogNormalDistribution
 
 #            model = GeneralMixtureModel.from_samples(
