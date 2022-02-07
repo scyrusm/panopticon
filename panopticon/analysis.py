@@ -1429,7 +1429,7 @@ def get_cluster_differential_expression(loom,
     if verbose:
         print('First matrix extracted in', time() - start, 'seconds')
     start = time()
-    data2 = loom[layername][:, mask2.nonzeros()[0]]
+    data2 = loom[layername][:, mask2.nonzero()[0]]
     if verbose:
         print('Second matrix extracted', time() - start, 'seconds')
     for igene, gene in enumerate(
