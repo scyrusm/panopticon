@@ -48,7 +48,7 @@ def get_module_score_matrix(loom,
     nonsigdata_quantiles = gene_quantiles[~signature_mask]
     signature = loom[layername].map([np.mean],
                                     axis=1,
-                                    selection=signature_mask.nonzero()[0])
+                                    selection=signature_mask.nonzero()[0])[0]
     sigdata_quantiles = gene_quantiles[signature_mask]
     control_group = []
     for quantile in np.unique(sigdata_quantiles):
@@ -1717,7 +1717,10 @@ def get_enrichment_score(genes,
 
 def hutcheson_t(x, y):
     from collections import namedtuple
-
+    from panopticon.utilities import import_check
+    exit_code = import_check("rpy2", 'pip install rpy2 (will also require installation of R)')
+    if exit_code != 0:
+        return
     import rpy2.robjects as robjects
     import rpy2.robjects.numpy2ri
     rpy2.robjects.numpy2ri.activate()
@@ -1735,3 +1738,15 @@ def hutcheson_t(x, y):
     ])
     test = robjects.r['hutcheson'](np.array(x), np.array(y))
     return out(*[x[0] for x in test])
+
+def generate_diffusion_coordinates(loom, layername, sigma, n_coordinates=10):
+    from sklearn.metrics import pairwise_distances
+    from numpy.linalg import eig
+
+    distances = pairwise_distances(loom[layername][:,:].T)
+    k = np.exp(-distances/sigma)
+    p = np.sum(k,axis=1)
+    transition_matrix = np.divide(k,p) # transition_matrix.sum(axis=0) is all ones
+    vals, vecs = eig(transition_matrix)
+    for i in range(1,n_coordinates+1):
+        loom.ca['{} DC {}'.format(layername, i)] = vals[1]*np.matmul(transition_matrix, vecs[:,1])

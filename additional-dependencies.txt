@@ -2,3 +2,4 @@ pyensembl
 leidenalg # best installed with 'conda install -c conda-forge leidenalg'
 cellranger # best installed with 'conda install -c hcc cellranger' 
 pomegranate # best installed with 'conda install -c anaconda pomegranate'
+rpy2

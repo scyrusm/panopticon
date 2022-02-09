@@ -344,8 +344,8 @@ def swarmviolin(data,
         (Default value = False)
     annotate_hue_effect_size_fmt_str :
         (Default value = 'es: {0:.2f}')
-    effect_size : If annotating the effect size between hues, this will set the relevant means of calculation.  Must be one of 'cohensd' or 'cles' for Cohen's d, or common language effect size, respectively.  
-         (Default value = 'cohensd')
+    effect_size : If annotating the effect size between hues, this will set the relevant means of calculation.  Must be one of 'cohensd' or 'cles' for Cohen's d, or common language effect size, respectively.
+        (Default value = 'cohensd')
 
     Returns
     -------
@@ -687,11 +687,17 @@ def repertoire_plot(x=None,
     output : argument to matplotlib.savefig
         Default value = None)
     normalize :
-         (Default value = False)
+        (Default value = False)
     piechart :
-         (Default value = False)
+        (Default value = False)
     ylabel :
-         (Default value = '')
+        (Default value = '')
+    legend :
+         (Default value = False)
+    color_palette :
+         (Default value = None)
+    stack_order :
+         (Default value = 'agnostic')
 
     Returns
     -------
@@ -728,7 +734,7 @@ def repertoire_plot(x=None,
             raise Exception(
                 "ax must be a list or array of matplotlib.axes._subplots.AxesSubplot objects when argument piechart==True"
             )
-    if piechart and not normalized:
+    if piechart and not normalize:
         print("Warning: Pie charts must be normalized, because they are pie charts.")
     if stack_order not in ['matched','agnostic']:
         raise Exception("stack_order must be one of \'matched\', \'agnostic\'")
@@ -931,3 +937,71 @@ def repertoire_plot(x=None,
             plt.savefig(output)
     if show:
         plt.show()
+
+def data_to_grid_kde(x,y, xmin=None, xmax=None, ymin=None, ymax=None, px=100):
+    """
+
+    Parameters
+    ----------
+    x : Vector
+        
+    y : Vector
+        
+    px :
+         (Default value = 100)
+
+    Returns
+    -------
+    Grid of points with gaussian kde values of input data.  Can be plotted with plt.imshow(data_to_grid_kde(x,y), origin=\"lower\")
+
+
+    """
+    from scipy.stats import gaussian_kde
+    xy = np.vstack((x,y))
+    kde = gaussian_kde(xy)
+    if np.any([z is None for z in [xmin, xmax,ymin,ymax]]):
+        if np.all([z is None for z in [xmin, xmax,ymin,ymax]]):
+            xmin, xmax = (x.min(), x.max())
+            ymin, ymax = (y.min(), y.max())
+        else:
+            raise Exception("Either all of xmin, xmax, ymin, ymax must be \"None\", or none may be.")
+    xgrid = np.arange(xmin, xmax, (xmax-xmin)/px)
+    ygrid = np.arange(ymin, ymax, (ymax-ymin)/px)
+    xx, yy = np.meshgrid(xgrid, ygrid)
+    zz=kde.evaluate(np.array([xx.reshape(-1,1)[:,0],yy.reshape(-1,1)[:,0]])).reshape(xx.shape, )
+    return zz
+
+
+def plot_differential_density(x,y,mask1,mask2,ax=None, cmap=plt.cm.RdBu_r):
+    xmin, xmax = (x.min(), x.max())
+    ymin, ymax = (y.min(), y.max())
+
+    import numpy as np
+    from panopticon.visualization import data_to_grid_kde
+    zz1 = data_to_grid_kde(x[mask1], 
+                          y[mask1], xmin=xmin,ymin=ymin,xmax=xmax,ymax=ymax)
+    from panopticon.visualization import data_to_grid_kde
+    zz2 = data_to_grid_kde(x[mask2], 
+                          y[mask2], xmin=xmin,ymin=ymin,xmax=xmax,ymax=ymax)
+    vmin = np.min(zz1-zz2)
+    vmax = np.max(zz1-zz2)
+    if np.abs(vmax)>np.abs(vmin):
+        vmin = -vmax
+    else:
+        vmax = -vmin
+    if ax is None:
+        plt.imshow(zz1-zz2,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
+        plt.show()
+    else:
+        ax.imshow(zz1-zz2,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
+
+def plot_density(x,y,ax=None,cmap=plt.cm.twilight_r):
+
+    from panopticon.visualization import data_to_grid_kde
+    zz = data_to_grid_kde(x, 
+                          y)
+    if ax is None:
+        plt.imshow(zz,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
+        plt.show()
+    else:
+        ax.imshow(zz,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
