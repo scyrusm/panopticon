@@ -78,8 +78,8 @@ def generate_cell_and_gene_quality_metrics(loom,
         loom.ca['RibosomalMaxOverMean'] = maxrp / meanrp
         if israw:
             loom.ca['RibosomalCountFraction'] = loom[layername].map(
-                [np.sum], axis=1,
-                selection=ribosomal_gene_mask.nonzero()[0])[0] / ncounts_for_cell
+                [np.sum], axis=1, selection=ribosomal_gene_mask.nonzero()
+                [0])[0] / ncounts_for_cell
     if mitochondrial_qc:
         if mitochondrial_gene_mask is None:
             mitochondrial_gene_mask = np.array([
@@ -94,8 +94,10 @@ def generate_cell_and_gene_quality_metrics(loom,
         loom.ca['MitochondrialRelativeMeanAbsoluteDeviation'] = madmt / meanmt
         if israw:
             loom.ca['MitochondrialCountFraction'] = loom[layername].map(
-                [np.sum], axis=1,
-                selection=mitochondrial_gene_mask.nonzero()[0])[0] / ncounts_for_cell
+                [np.sum],
+                axis=1,
+                selection=mitochondrial_gene_mask.nonzero()
+                [0])[0] / ncounts_for_cell
 
     madall, meanall = loom[layername].map([robust.mad, np.mean], axis=1)
     loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
@@ -317,15 +319,38 @@ def generate_antibody_prediction(loom,
             loom.ca[prediction_ca_name] = np.array(predictions)
 
 
-def generate_guide_rna_prediction(loom,
-                                  guide_rnas,
-                                  overwrite=False,
-                                  only_generate_log2=False):
+def generate_guide_rna_prediction(
+        loom,
+        guide_rnas,
+        nguide_ca='nGuide',
+        nguide_reads_ca='nGuideReads',
+        cell_prediction_summary_ca='CellGuidePrediction',
+        overwrite=False,
+        only_generate_log2=False,
+        ncell_threshold_for_guide=10,
+        nguide_threshold_for_cell=10):
     from panopticon.utilities import import_check
-    exit_code = import_check("pomegranate", 'conda install -c anaconda pomegranate')
+    exit_code = import_check("pomegranate",
+                             'conda install -c anaconda pomegranate')
     if exit_code != 0:
         return
+    import pandas as pd
 
+    if nguide_reads_ca in loom.ca.keys() and overwrite == False:
+        raise Exception(
+            "{} already in loom.ca.keys(); if intended, set overwrite argument to True"
+            .format(nguide_reads_ca))
+
+    guide_rna_dfs = []
+    for guide_rna in guide_rnas:
+        guide_rna_dfs.append(
+            pd.DataFrame(loom.ca[guide_rna], columns=[guide_rna], copy=True))
+    guide_rna_dfs = pd.concat(guide_rna_dfs, axis=1)
+    loom.ca[nguide_reads_ca] = guide_rna_dfs.sum(axis=1).values
+    threshold_for_cell_mask = loom.ca[
+        nguide_reads_ca] >= nguide_threshold_for_cell
+    print(threshold_for_cell_mask.shape, threshold_for_cell_mask.sum())
+    prediction_ca_names = []
     for guide_rna in guide_rnas:
         if guide_rna not in loom.ca.keys():
             raise Exception(
@@ -335,41 +360,37 @@ def generate_guide_rna_prediction(loom,
         new_ca_name = guide_rna + '_log2'
         if new_ca_name in loom.ca.keys() and overwrite == False:
             raise Exception(
-                "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
+                "{} already in loom.ca.keys(); rename guide column attribute and re-run, or set overwrite argument to True"
                 .format(new_ca_name))
 
         loom.ca[new_ca_name] = np.log2(loom.ca[guide_rna])
         if not only_generate_log2:
-            from pomegranate import GeneralMixtureModel, NormalDistribution, PoissonDistribution, LogNormalDistribution
-
-#            model = GeneralMixtureModel.from_samples(
-#                [PoissonDistribution, PoissonDistribution],
-#                n_components=2,
-#                X=counts.reshape(-1, 1))
+            from pomegranate import GeneralMixtureModel, PoissonDistribution
 
             prediction_ca_name = guide_rna + '_prediction'
+            prediction_ca_names.append(prediction_ca_name)
             if prediction_ca_name in loom.ca.keys() and overwrite == False:
                 raise Exception(
-                    "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
+                    "{} already in loom.ca.keys(); rename guide rna column attribute and re-run, or set overwrite argument to True"
                     .format(prediction_ca_name))
             if (~np.isfinite(loom.ca[new_ca_name])).sum() > 0:
                 cellmask = np.isfinite(loom.ca[new_ca_name])
-                print(cellmask.sum(), guide_rna)
-                if cellmask.sum()>10:
+                if cellmask.sum(
+                ) >= ncell_threshold_for_guide:  # have minimum cells for guide
                     model = GeneralMixtureModel.from_samples(
                         [PoissonDistribution, PoissonDistribution],
                         n_components=2,
-                        X=loom.ca[new_ca_name][cellmask.nonzero()[0]].reshape(-1, 1))
+                        X=loom.ca[new_ca_name][cellmask.nonzero()[0]].reshape(
+                            -1, 1))
                     predictions = []
                     for val in loom.ca[new_ca_name]:
                         if not np.isfinite(val):
                             predictions.append(np.nan)
-    
                         else:
                             predictions.append(
                                 model.predict(np.array(val).reshape(-1, 1))[0])
                 else:
-                    predictions = [0]*loom.shape[1]
+                    predictions = [0] * loom.shape[1]
                 predictions = np.array(predictions)
 
             else:
@@ -382,12 +403,27 @@ def generate_guide_rna_prediction(loom,
                 #model.fit(loom.ca[new_ca_name].reshape(-1, 1))
                 predictions = model.predict(loom.ca[new_ca_name].reshape(
                     -1, 1))
+
             if loom.ca[new_ca_name][np.array(predictions) == 0].mean(
             ) > loom.ca[new_ca_name][np.array(predictions) == 1].mean():
                 predictions = 1 - predictions
             predictions = np.array(predictions)
             predictions = np.nan_to_num(predictions, nan=0.0)
+            predictions *= threshold_for_cell_mask
             loom.ca[prediction_ca_name] = predictions
+
+    guide_prediction_dfs = []
+    for prediction_ca_name in prediction_ca_names:
+        guide_prediction_dfs.append(
+            pd.DataFrame(loom.ca[prediction_ca_name],
+                         columns=[prediction_ca_name],
+                         copy=True))
+    guide_prediction_dfs = pd.concat(guide_prediction_dfs, axis=1)
+    loom.ca[nguide_ca] = guide_prediction_dfs.sum(axis=1).values
+
+    loom.ca[cell_prediction_summary_ca] = guide_prediction_dfs.apply(
+        lambda x: '+'.join(guide_prediction_dfs.columns[np.where(x == 1)[0]]),
+        axis=1).values
 
 
 def get_clustering_based_outlier_prediction(

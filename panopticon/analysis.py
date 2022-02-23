@@ -1739,14 +1739,18 @@ def hutcheson_t(x, y):
     test = robjects.r['hutcheson'](np.array(x), np.array(y))
     return out(*[x[0] for x in test])
 
-def generate_diffusion_coordinates(loom, layername, sigma, n_coordinates=10):
+def generate_diffusion_coordinates(loom, layername, sigma, n_coordinates=10, verbose=False, metric='euclidean'):
     from sklearn.metrics import pairwise_distances
     from numpy.linalg import eig
-
-    distances = pairwise_distances(loom[layername][:,:].T)
+    if verbose:
+        print("Calculating transition matrix...")
+    distances = pairwise_distances(loom[layername][:,:].T, metric=metric)
     k = np.exp(-distances/sigma)
     p = np.sum(k,axis=1)
     transition_matrix = np.divide(k,p) # transition_matrix.sum(axis=0) is all ones
+    if verbose:
+        print("Transition matrix calculation complete. Diagonalizing...")
     vals, vecs = eig(transition_matrix)
+#    loom.attrs['diffusion_sigma'] = sigma # May implement later
     for i in range(1,n_coordinates+1):
-        loom.ca['{} DC {}'.format(layername, i)] = vals[1]*np.matmul(transition_matrix, vecs[:,1])
+        loom.ca['{} DC {}'.format(layername, i)] = vals[i]*np.matmul(transition_matrix, vecs[:,i])
