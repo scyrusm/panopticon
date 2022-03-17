@@ -30,8 +30,14 @@ def get_valid_gene_info(
         
     genes : List[str] :
         
+    genes : List[str] :
+        
     genes: List[str] :
         
+    release :
+         (Default value = 102)
+    species :
+         (Default value = 'homo sapiens')
 
     Returns
     -------
@@ -232,6 +238,8 @@ def we_can_pickle_it(thing, thingname: str):
         
     thingname : str :
         
+    thingname : str :
+        
     thingname: str :
         
 
@@ -250,6 +258,8 @@ def we_can_unpickle_it(thingname: str):
 
     Parameters
     ----------
+    thingname : str :
+        
     thingname : str :
         
     thingname : str :
@@ -282,13 +292,14 @@ def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
     ycoords :
         
     alpha :
-         (Default value = 0.1)
+        (Default value = 0.1)
     buffer :
-         (Default value = 1)
+        (Default value = 1)
 
     Returns
     -------
 
+    
     """
 
     from shapely.ops import cascaded_union, polygonize
@@ -314,6 +325,7 @@ def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
         Returns
         -------
 
+        
         """
         if len(points) < 4:
             # When you have a triangle, there is no sense
@@ -340,6 +352,7 @@ def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
             Returns
             -------
 
+            
             """
             if (i, j) in edges or (j, i) in edges:
                 # already added
@@ -401,13 +414,14 @@ def get_outlier_removal_mask(xcoords, ycoords, nth_neighbor=10, quantile=.9):
     ycoords :
         
     nth_neighbor :
-         (Default value = 10)
+        (Default value = 10)
     quantile :
-         (Default value = .9)
+        (Default value = .9)
 
     Returns
     -------
 
+    
     """
     from scipy.spatial.distance import pdist, squareform
     D = squareform(pdist(np.vstack((xcoords, ycoords)).T))
@@ -416,8 +430,7 @@ def get_outlier_removal_mask(xcoords, ycoords, nth_neighbor=10, quantile=.9):
 
 
 def cohensd(g1, g2):
-    """
-    Returns Cohen's D for the effect size of group 1 values (g1) over group 2 values (g2).  
+    """Returns Cohen's D for the effect size of group 1 values (g1) over group 2 values (g2).
 
     Parameters
     ----------
@@ -428,8 +441,8 @@ def cohensd(g1, g2):
 
     Returns
     -------
-    (mean(g1) - mean(g2) )/s, where s is the pooled standard deviation of the two groups with Bessel's correction
 
+    
     """
     n1 = len(g1)
     n2 = len(g2)
@@ -441,18 +454,21 @@ def cohensd(g1, g2):
 
 
 def phi_coefficient(contingency_table):
-    """
-    Returns the phi-coefficient for a contingency table.
-
+    """Returns the phi-coefficient for a contingency table.
+    
     Paramenters
     -----------
     contingency_table : contingency table, identical in format to scipy.stats.fisher_exact
 
+    Parameters
+    ----------
+    contingency_table :
+        
 
     Returns
     -------
-    phi coefficient
 
+    
     """
     table1 = contingency_table[0]
     table2 = contingency_table[1]
@@ -470,7 +486,19 @@ def get_igraph_from_adjacency(adjacency, directed=None):
     """This is taken from scanpy._utils.__init__.py as of 12 August 2021
     
     
-    Get igraph graph from adjacency matrix."""
+    Get igraph graph from adjacency matrix.
+
+    Parameters
+    ----------
+    adjacency :
+        
+    directed :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     import igraph as ig
 
     sources, targets = adjacency.nonzero()
@@ -497,6 +525,29 @@ def convert_10x_h5(path_10x_h5,
                    genes_as_ca=[],
                    gene_whitelist=None,
                    output_type='loom'):
+    """
+
+    Parameters
+    ----------
+    path_10x_h5 :
+        
+    output_file :
+        
+    labelkey :
+         (Default value = None)
+    label :
+         (Default value = '')
+    genes_as_ca :
+         (Default value = [])
+    gene_whitelist :
+         (Default value = None)
+    output_type :
+         (Default value = 'loom')
+
+    Returns
+    -------
+
+    """
 
     import loompy
     from panopticon.utilities import import_check
@@ -579,6 +630,21 @@ def convert_10x_h5(path_10x_h5,
 
 
 def create_split_exon_gtf(input_gtf, output_gtf, gene):
+    """
+
+    Parameters
+    ----------
+    input_gtf :
+        
+    output_gtf :
+        
+    gene :
+        
+
+    Returns
+    -------
+
+    """
     gtf = pd.read_table(input_gtf, header=None, comment='#')
     gtf.columns = [
         'seqname', 'source', 'feature', 'start', 'end', 'score', 'strand',
@@ -597,6 +663,17 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
     gtf_changed = gtf[mask]
 
     def append_exon_number_to_id_and_name(attribute):
+        """
+
+        Parameters
+        ----------
+        attribute :
+            
+
+        Returns
+        -------
+
+        """
         exon_number = attribute.split('exon_number')[1].split(';')[0].split(
             '\"')[-2]
 
@@ -649,6 +726,27 @@ def get_umap_from_matrix(X,
                          min_dist=0.001,
                          n_neighbors=20,
                          metric='correlation'):
+    """
+
+    Parameters
+    ----------
+    X :
+        
+    random_state :
+         (Default value = 17)
+    verbose :
+         (Default value = True)
+    min_dist :
+         (Default value = 0.001)
+    n_neighbors :
+         (Default value = 20)
+    metric :
+         (Default value = 'correlation')
+
+    Returns
+    -------
+
+    """
 
     import umap
 
@@ -666,6 +764,27 @@ def convert_h5ad(h5ad,
                  convert_varm=True,
                  convert_uns=True,
                  convert_layers=True):
+    """
+
+    Parameters
+    ----------
+    h5ad :
+        
+    output_loom :
+        
+    convert_obsm :
+         (Default value = True)
+    convert_varm :
+         (Default value = True)
+    convert_uns :
+         (Default value = True)
+    convert_layers :
+         (Default value = True)
+
+    Returns
+    -------
+
+    """
     import scanpy
     import loompy
 
@@ -727,6 +846,19 @@ def convert_h5ad(h5ad,
 
 
 def get_UMI_curve_from_10x_h5(path_10x_h5, save_to_file=None):
+    """
+
+    Parameters
+    ----------
+    path_10x_h5 :
+        
+    save_to_file :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     from panopticon.utilities import import_check
     exit_code = import_check("cellranger", 'conda install -c hcc cellranger')
     if exit_code != 0:
@@ -760,6 +892,37 @@ def get_dsb_normalization(cell_antibody_counts,
                           quantile_clipping=False,
                           quantile_clip=[0.001, 0.9995],
                           return_stats=False):
+    """
+
+    Parameters
+    ----------
+    cell_antibody_counts :
+        
+    empty_droplet_antibody_counts :
+        
+    use_isotype_control :
+         (Default value = True)
+    denoise_counts :
+         (Default value = True)
+    isotype_control_name_vec :
+         (Default value = None)
+    define_pseudocount :
+         (Default value = False)
+    pseudocount_use :
+         (Default value = 10)
+    quantile_clipping :
+         (Default value = False)
+    quantile_clip :
+         (Default value = [0.001)
+    0.9995] :
+        
+    return_stats :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
 
     import rpy2.robjects as robjects
     import rpy2.robjects.numpy2ri
@@ -818,6 +981,31 @@ def get_cellphonedb_compatible_counts_and_meta(loom,
                                                return_df=False,
                                                output_prefix=None,
                                                mouse_to_human=False):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    celltype_ca :
+        
+    gene_ra :
+         (Default value = 'gene')
+    cellname_ca :
+         (Default value = 'cellname')
+    return_df :
+         (Default value = False)
+    output_prefix :
+         (Default value = None)
+    mouse_to_human :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
     if output_prefix is None and not return_df:
         raise Exception(
             "either output_prefix must be specified, or return_df must be True"
@@ -877,6 +1065,29 @@ def create_gsea_txt_and_cls(loom,
                             cellmask=None,
                             gene_ra='gene',
                             cellname_ca='cellname'):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    output_prefix :
+        
+    phenotypes :
+        
+    cellmask :
+         (Default value = None)
+    gene_ra :
+         (Default value = 'gene')
+    cellname_ca :
+         (Default value = 'cellname')
+
+    Returns
+    -------
+
+    """
     import os
     if cellmask is None:
         cellmask = np.array([True] * loom.shape[1])
@@ -917,6 +1128,23 @@ def get_cross_column_attribute_heatmap(loom,
                                        ca1,
                                        ca2,
                                        normalization_axis=None):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    ca1 :
+        
+    ca2 :
+        
+    normalization_axis :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     #if type(normalization_axis) == list:
     #    outdfs = []
     #    for axis in normalization_axis:
@@ -949,6 +1177,17 @@ def get_cross_column_attribute_heatmap(loom,
 
 
 def get_complement_contigency_tables(df):
+    """
+
+    Parameters
+    ----------
+    df :
+        
+
+    Returns
+    -------
+
+    """
     if type(df) != pd.core.frame.DataFrame:
         raise Exception("pandas dataframe expected input")
     complement_contigency_table_dict = {}
@@ -975,9 +1214,25 @@ def get_cluster_differential_expression_heatmap_df(loom,
                                                    cell_name='cellname'):
     """
 
+    Parameters
+    ----------
+    loom :
+        
+    layer :
+        
+    clusteringlevel :
+        
+    diffex :
+         (Default value = {})
+    gene_name :
+         (Default value = 'gene')
+    cell_name :
+         (Default value = 'cellname')
+
     Returns
     -------
 
+    
     """
     from panopticon.analysis import get_cluster_differential_expression
     import seaborn as sns
@@ -1018,6 +1273,27 @@ def generate_ca_frequency(loom,
                           second_ca=None,
                           output_name=None,
                           overwrite=False):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    ca :
+        
+    blacklisted_ca_values :
+         (Default value = [])
+    second_ca :
+         (Default value = None)
+    output_name :
+         (Default value = None)
+    overwrite :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
     if output_name is None:
         raise Exception("output_name must be specified")
     if output_name in loom.ca.keys() and overwrite is False:
@@ -1040,10 +1316,143 @@ def generate_ca_frequency(loom,
 
     loom.ca[output_name] = frequencies
 
+
 def import_check(package, statement_upon_failure):
+    """
+
+    Parameters
+    ----------
+    package :
+        
+    statement_upon_failure :
+        
+
+    Returns
+    -------
+
+    """
     try:
         exec("import {}".format(package))
         return 0
     except:
-        print("Import of package \'{}\' failed. We recommend installing with the command \'{}\'".format(package, statement_upon_failure))
+        print(
+            "Import of package \'{}\' failed. We recommend installing with the command \'{}\'"
+            .format(package, statement_upon_failure))
         return 1
+
+
+def combine_misshaped_looms(looms,
+                            combined_output_loomname,
+                            filename_suffix='_reshaped.loom',
+                            key_ras=['gene'],
+                            key_ra_for_combining='gene',
+                            layers_to_copy=[''],
+                            verbose=False):
+    """
+
+    Parameters
+    ----------
+    looms :
+        
+    combined_output_loomname :
+        
+    filename_suffix :
+         (Default value = '_reshaped.loom')
+    key_ras :
+         (Default value = ['gene'])
+    key_ra_for_combining :
+         (Default value = 'gene')
+    layers_to_copy :
+         (Default value = [''])
+    verbose :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
+    from panopticon.utilities import recover_meta
+    import scipy
+    import loompy
+
+    rowmetas = []
+    for loom in looms:
+        rowmeta, colmeta = recover_meta(loom)
+        rowmetas.append(rowmeta)
+    key_ra_groups = set(pd.concat(rowmetas).groupby(key_ras).groups)
+    rowmetas_reshaped = []
+    reshaped_loomnames = []
+    for loom in looms:
+        if verbose:
+            print('Reshaping {}'.format(loom.filename))
+        rowmeta, colmeta = recover_meta(loom)
+        rowmeta = rowmeta[key_ras]
+        difference = pd.DataFrame(key_ra_groups.difference(
+            rowmeta.groupby(key_ras).groups),
+                                  columns=key_ras)
+        if np.sum(difference.columns != rowmeta.columns) > 0:
+            raise Exception(
+                "Column names mismatched in original and extended row metadata"
+            )
+        rowmeta_reshaped = pd.concat([rowmeta, difference])
+        reshaped_loomname = loom.filename.replace('.loom',
+                                                  '') + filename_suffix
+        reshaped_loomnames.append(reshaped_loomname)
+        # these could be processed sparsely
+        reshaped_X = np.vstack(
+            (loom[''][:, :], np.zeros((len(difference), loom.shape[1]))))
+        #zero_block = scipy.sparse.csr_matrix((len(difference), loom.shape[1]), dtype=loom[''].dtype)
+        #reshaped_X  = scipy.sparse.vstack((loom[''].sparse(),zero_block))
+
+        loompy.create(reshaped_loomname, reshaped_X,
+                      rowmeta_reshaped.to_dict("list"),
+                      colmeta.to_dict("list"))
+
+        with loompy.connect(reshaped_loomname) as reshaped_loom:
+            for layer in [x for x in layers_to_copy if x != '']:
+                reshaped_X = np.vstack((loom[layer][:, :],
+                                        np.zeros(
+                                            (len(difference), loom.shape[1]))))
+                reshaped_loom[layer] = reshaped_X
+    if verbose:
+        print('Combining reshaped looms')
+    loompy.combine(reshaped_loomnames,
+                   combined_output_loomname,
+                   key=key_ra_for_combining)
+
+
+def tcr_levenshtein_distance(tra1, tra2, trb1, trb2):
+    from tqdm import tqdm
+    from panopticon.utilities import import_check
+    exit_code = import_check("Levenshtein", 'pip install python-Levenshtein')
+    if exit_code != 0:
+        return
+
+    from Levenshtein import distance as levenshtein_distance
+    with tqdm(total=6) as pbar:
+        distance_a11 = np.array([[levenshtein_distance(x, y) for y in tra1]
+                                 for x in tra1])
+        pbar.update(1)
+
+        distance_a12 = np.array([[levenshtein_distance(x, y) for y in tra1]
+                                 for x in tra2])
+        pbar.update(1)
+
+        distance_a22 = np.array([[levenshtein_distance(x, y) for y in tra2]
+                                 for x in tra2])
+        pbar.update(1)
+        distance_a = np.minimum(distance_a11, distance_a12, distance_a22)
+        distance_b11 = np.array([[levenshtein_distance(x, y) for y in trb1]
+                                 for x in trb1])
+        pbar.update(1)
+
+        distance_b12 = np.array([[levenshtein_distance(x, y) for y in trb1]
+                                 for x in trb2])
+        pbar.update(1)
+
+        distance_b22 = np.array([[levenshtein_distance(x, y) for y in trb2]
+                                 for x in trb2])
+        pbar.update(1)
+        distance_b = np.minimum(distance_b11, distance_b12, distance_b22)
+        distances = distance_a + distance_b
+        return distances

@@ -2,19 +2,18 @@ import numpy as np
 
 
 def generate_gene_variances(loom, layername):
-    """
-    Computes the variance (across cells) of genes, and assigns this to the row attribute "GeneVar" 
+    """Computes the variance (across cells) of genes, and assigns this to the row attribute "GeneVar"
 
     Parameters
     ----------
     loom : The LoomConnection instance upon which gene variance will be calculated
-    
+        
     layername : The name of the layer of the LoomConnection upon which the gene variance will be calculated.
         
 
     Returns
     -------
-    None
+
     
     """
     loom.ra['GeneVar'] = loom[layername].map([np.var])[0]
@@ -27,14 +26,13 @@ def generate_cell_and_gene_quality_metrics(loom,
                                            mitochondrial_qc=False,
                                            ribosomal_gene_mask=None,
                                            mitochondrial_gene_mask=None):
-    """
-    Calculates five quantities and writes them to the LoomConnection instance specified in loom:
-
+    """Calculates five quantities and writes them to the LoomConnection instance specified in loom:
+    
     - RibosomalRelativeMeanAbsolutionDeviation:  this is madrp / meanrp, where madrp is the mean absolute deviation of ribosomal protein genes (RP*) and meanrp is the mean expression of ribosomal protein genes (RP*) (means, mads compute on a cell-by-cell basis).
     - RibosomalMaxOverMean: this is maxrp / meanrp, where maxrp is the maximum RP* expression over all RP* genes; meanrp is as above (max, mean on a cell-by-cell basis).
-    - AllGeneRelativeMeanAbsoluteDeviation: this is madall / meanall, where madall is the MAD over all genes, and meanall is the mean over all genes (mad, mean on a cell-by-cell basis).  
+    - AllGeneRelativeMeanAbsoluteDeviation: this is madall / meanall, where madall is the MAD over all genes, and meanall is the mean over all genes (mad, mean on a cell-by-cell basis).
     - nGene: number of unique genes expressed (>0) on a cell-by-cell basis.
-    - nCell: number of unique cells expressing a gene (>0), on a gene-by-gene basis.  
+    - nCell: number of unique cells expressing a gene (>0), on a gene-by-gene basis.
 
     Parameters
     ----------
@@ -42,10 +40,19 @@ def generate_cell_and_gene_quality_metrics(loom,
         
     layername : The name of the layer upon which cell and gene quality metrics will be calculated.
         
+    gene_ra :
+         (Default value = 'gene')
+    ribosomal_qc :
+         (Default value = False)
+    mitochondrial_qc :
+         (Default value = False)
+    ribosomal_gene_mask :
+         (Default value = None)
+    mitochondrial_gene_mask :
+         (Default value = None)
 
     Returns
     -------
-    None
 
     
     """
@@ -103,6 +110,17 @@ def generate_cell_and_gene_quality_metrics(loom,
     loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
 
     def complexity(vec):
+        """
+
+        Parameters
+        ----------
+        vec :
+            
+
+        Returns
+        -------
+
+        """
         return np.sum(vec > 0)
 
     loom.ca['nGene'] = loom[layername].map([complexity], axis=1)[0]
@@ -131,7 +149,6 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
 
     Returns
     -------
-    None
 
     
     """
@@ -149,19 +166,23 @@ def generate_count_normalization(loom,
                                  raw_count_layername,
                                  output_layername,
                                  denominator=10**4):
-    """Generates a new layer with log2(transcripts per denominator).  By default this will produce a log2(TP100k+1) layer; adjusting the denominator will permit e.g. a log2(TP10k+1) or log2(TPM+1), etc.                                                                                                                                                                                             
-                                                                                                                                                                                                                                               
-    Parameters                                                                                                                                                                                                                                 
-    ----------                                                                                                                                                                                                                                 
-    loom : The LoomConnection instance upon which a count normalized layer will be computed.                                                                                                                                                                                                                                     
-    raw_count_layername : The layername corresponding to raw counts, or normalized log counts (counts of TPM).                                                                                                                                                                                                                       
-    output_layername :  The desired output layername.                                                                                                                                                                                                                         
-    denominator : The denominator for transcript count normalization (e.g. transcripts per denominator).                                                                                                                                                                                                                           
-        (Default value = 10**5)                                                                                                                                                                                                                
-                                                                                                                                                                                                                                               
-    Returns                                                                                                                                                                                                                                    
-    -------                                                                                                                                                                                                                                    
-    None                                                                                                                                                                                                                                               
+    """Generates a new layer with log2(transcripts per denominator).  By default this will produce a log2(TP100k+1) layer; adjusting the denominator will permit e.g. a log2(TP10k+1) or log2(TPM+1), etc.
+
+    Parameters
+    ----------
+    loom : The LoomConnection instance upon which a count normalized layer will be computed.
+        
+    raw_count_layername : The layername corresponding to raw counts, or normalized log counts (counts of TPM).
+        
+    output_layername : The desired output layername.
+        
+    denominator : The denominator for transcript count normalization (e.g. transcripts per denominator).
+        (Default value = 10**5)
+
+    Returns
+    -------
+
+    
     """
     import numpy as np
     colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]
@@ -176,20 +197,24 @@ def generate_standardized_layer(loom,
                                 variance_axis='cell',
                                 batch_size=512,
                                 out_of_core_cell_threshold=20000):
-    """                                                                                                                                                                                                                                        
-                                                                                                                                                                                                                                               
-    Parameters                                                                                                                                                                                                                                 
-    ----------                                                                                                                                                                                                                                 
+    """
+
+    Parameters
+    ----------
     loom : The LoomConnection instance upon which the standardized layer will be added.
-                                                                                                                                                                                                                                               
-    layername : The name of the layer which will be standardized.                                                                                                                                                           
-                                                                                                                                                                                                                                               
-    variance_axis : The axis over which the standardization will proceed (i.e. over cells or over genes).                                                                                                                                                                                                                             
-         (Default value = 'cell')                                                                                                                                                                                                              
-                                                                                                                                                                                                                                               
-    Returns                                                                                                                                                                                                                                    
-    -------                                                                                                                                                                                                                                    
-    None 
+        
+    layername : The name of the layer which will be standardized.
+        
+    variance_axis : The axis over which the standardization will proceed (i.e. over cells or over genes).
+        (Default value = 'cell')
+    batch_size :
+         (Default value = 512)
+    out_of_core_cell_threshold :
+         (Default value = 20000)
+
+    Returns
+    -------
+
     
     """
     from tqdm import tqdm
@@ -240,6 +265,27 @@ def generate_antibody_prediction(loom,
                                  pseudocount=1,
                                  overwrite=False,
                                  only_generate_zscore=False):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    raw_antibody_counts_df :
+         (Default value = None)
+    antibodies :
+         (Default value = None)
+    pseudocount :
+         (Default value = 1)
+    overwrite :
+         (Default value = False)
+    only_generate_zscore :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
     if raw_antibody_counts_df is None and antibodies is None:
         raise Exception(
             "one of antibodies, raw_antibody_counts_df must be other than None"
@@ -329,6 +375,33 @@ def generate_guide_rna_prediction(
         only_generate_log2=False,
         ncell_threshold_for_guide=10,
         nguide_threshold_for_cell=10):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    guide_rnas :
+        
+    nguide_ca :
+         (Default value = 'nGuide')
+    nguide_reads_ca :
+         (Default value = 'nGuideReads')
+    cell_prediction_summary_ca :
+         (Default value = 'CellGuidePrediction')
+    overwrite :
+         (Default value = False)
+    only_generate_log2 :
+         (Default value = False)
+    ncell_threshold_for_guide :
+         (Default value = 10)
+    nguide_threshold_for_cell :
+         (Default value = 10)
+
+    Returns
+    -------
+
+    """
     from panopticon.utilities import import_check
     exit_code = import_check("pomegranate",
                              'conda install -c anaconda pomegranate')
@@ -349,7 +422,6 @@ def generate_guide_rna_prediction(
     loom.ca[nguide_reads_ca] = guide_rna_dfs.sum(axis=1).values
     threshold_for_cell_mask = loom.ca[
         nguide_reads_ca] >= nguide_threshold_for_cell
-    print(threshold_for_cell_mask.shape, threshold_for_cell_mask.sum())
     prediction_ca_names = []
     for guide_rna in guide_rnas:
         if guide_rna not in loom.ca.keys():
@@ -430,6 +502,21 @@ def get_clustering_based_outlier_prediction(
         loom,
         max_cluster_fraction_break_threshold=0.99,
         cluster_proportion_minimum=0.01):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    max_cluster_fraction_break_threshold :
+         (Default value = 0.99)
+    cluster_proportion_minimum :
+         (Default value = 0.01)
+
+    Returns
+    -------
+
+    """
     import pandas as pd
 
     levels = [x for x in loom.ca.keys() if x.startswith('ClusteringIteration')]

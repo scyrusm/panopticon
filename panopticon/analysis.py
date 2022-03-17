@@ -38,9 +38,8 @@ def get_module_score_matrix(loom,
                                  duplicates='drop',
                                  labels=False)
     else:
-        gene_quantiles = pd.qcut(loom[layername].map([np.mean],
-                                                     axis=0,
-                                                     selection=cellmask.nonzero()[0])[0],
+        gene_quantiles = pd.qcut(loom[layername].map(
+            [np.mean], axis=0, selection=cellmask.nonzero()[0])[0],
                                  nbins,
                                  duplicates='drop',
                                  labels=False)
@@ -694,7 +693,8 @@ def generate_clustering(loom,
             from panopticon.analysis import get_pca_loadings_matrix
             from panopticon.utilities import get_igraph_from_adjacency
             from panopticon.utilities import import_check
-            exit_code = import_check("leidenalg", 'conda install -c conda-forge leidenalg')
+            exit_code = import_check("leidenalg",
+                                     'conda install -c conda-forge leidenalg')
             if exit_code != 0:
                 return
             import leidenalg
@@ -823,8 +823,8 @@ def generate_clustering(loom,
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
             ]
-            loom.ca['ClusteringIteration{}'.format(
-                subi)][mask.nonzero()[0]] = fullpath_clustering
+            loom.ca['ClusteringIteration{}'.format(subi)][
+                mask.nonzero()[0]] = fullpath_clustering
         loom.ca['ClusteringIteration{}'.format(subi)] = loom.ca[
             'ClusteringIteration{}'.format(
                 subi)]  #This is to force the changes to save to disk
@@ -1055,8 +1055,10 @@ def generate_malignancy_score(loom,
                                                    upper_cut=2)
             pca = PCA(n_components=1)
             pca1 = pca.fit_transform(mwe.T)[:, 0]
-            mask1 = loom.ca[cell_sort_key][mask.nonzero()[0]] == malignant_sort_label
-            mask2 = loom.ca[cell_sort_key][mask.nonzero()[0]] != malignant_sort_label
+            mask1 = loom.ca[cell_sort_key][mask.nonzero()
+                                           [0]] == malignant_sort_label
+            mask2 = loom.ca[cell_sort_key][mask.nonzero()
+                                           [0]] != malignant_sort_label
             #if loom.ca[cell_sort_key][mask]
             if pca1[mask1].mean() > pca1[mask2].mean():
                 scores45neg = np.sum(np.greater.outer(pca1[mask1],
@@ -1153,10 +1155,11 @@ def get_dictionary_of_cluster_means(loom, layername, clustering_level):
                         desc='looping over clusters'):
         mask = loom.ca[clustering_level] == cluster
         if mask.sum() < 5000:
-            mean_dict[cluster] = loom[layername][:, mask.nonzero()[0]].mean(axis=1)
+            mean_dict[cluster] = loom[layername][:, mask.nonzero()[0]].mean(
+                axis=1)
         else:
-            mean_dict[cluster] = loom[layername].map([np.mean],
-                                                     selection=mask.nonzero()[0])[0]
+            mean_dict[cluster] = loom[layername].map(
+                [np.mean], selection=mask.nonzero()[0])[0]
 
     return mean_dict
 
@@ -1718,7 +1721,8 @@ def get_enrichment_score(genes,
 def hutcheson_t(x, y):
     from collections import namedtuple
     from panopticon.utilities import import_check
-    exit_code = import_check("rpy2", 'pip install rpy2 (will also require installation of R)')
+    exit_code = import_check(
+        "rpy2", 'pip install rpy2 (will also require installation of R)')
     if exit_code != 0:
         return
     import rpy2.robjects as robjects
@@ -1739,18 +1743,93 @@ def hutcheson_t(x, y):
     test = robjects.r['hutcheson'](np.array(x), np.array(y))
     return out(*[x[0] for x in test])
 
-def generate_diffusion_coordinates(loom, layername, sigma, n_coordinates=10, verbose=False, metric='euclidean'):
+
+def generate_diffusion_coordinates(loom,
+                                   layername,
+                                   sigma,
+                                   n_coordinates=10,
+                                   verbose=False,
+                                   metric='euclidean'):
     from sklearn.metrics import pairwise_distances
     from numpy.linalg import eig
     if verbose:
         print("Calculating transition matrix...")
-    distances = pairwise_distances(loom[layername][:,:].T, metric=metric)
-    k = np.exp(-distances/sigma)
-    p = np.sum(k,axis=1)
-    transition_matrix = np.divide(k,p) # transition_matrix.sum(axis=0) is all ones
+    distances = pairwise_distances(loom[layername][:, :].T, metric=metric)
+    k = np.exp(-distances / sigma)
+    p = np.sum(k, axis=1)
+    transition_matrix = np.divide(
+        k, p)  # transition_matrix.sum(axis=0) is all ones
     if verbose:
         print("Transition matrix calculation complete. Diagonalizing...")
     vals, vecs = eig(transition_matrix)
-#    loom.attrs['diffusion_sigma'] = sigma # May implement later
-    for i in range(1,n_coordinates+1):
-        loom.ca['{} DC {}'.format(layername, i)] = vals[i]*np.matmul(transition_matrix, vecs[:,i])
+    #    loom.attrs['diffusion_sigma'] = sigma # May implement later
+    for i in range(1, n_coordinates + 1):
+        loom.ca['{} DC {}'.format(
+            layername, i)] = vals[i] * np.matmul(transition_matrix, vecs[:, i])
+
+
+def conditional_simpson(x, x_conditional, x_total, with_replacement=False):
+    """For computing simpson index directly from counts (or frequencies, if with_replacement=True), where the first selected element is conditional on some feature                                                                                                                                           
+    Parameters                                                                                                                                                                                                                               
+    ----------                                                                                                                                                                                                                               
+    x :                                                                                                                                                                                                                                      
+    with_replacement :                                                                                                                                                                                                                       
+        (Default value = False)                                                                                                                                                                                                              
+    Returns                                                                                                                                                                                                                                  
+    -------                                                                                                                                                                                                                                  
+    """
+    #total = np.sum(x)
+    total_conditional = np.sum(x_conditional)
+
+    if with_replacement:
+        return np.sum([(y / x_total) * (y_conditional / total_conditional)
+                       for y, y_conditional in zip(x, x_conditional)])
+    else:
+        return np.sum([
+            ((y - 1) / (x_total - 1)) * (y_conditional / total_conditional)
+            for y, y_conditional in zip(x, x_conditional)
+        ])
+
+
+
+
+def get_cluster_enrichment_dataframes(x, y, data):
+    from panopticon.utilities import phi_coefficient
+    from collections import namedtuple
+    from scipy.stats import fisher_exact
+    fishers_exact_p_dict = {}
+    phi_coefficient_dict = {}
+    counts_dict = {}
+    cluster_fraction_dict = {}
+    for group in data[x].unique():
+        fishers_exact_p_dict[group] = {}
+        phi_coefficient_dict[group] = {}
+        counts_dict[group] = {}
+        cluster_fraction_dict[group] = {}
+        for cluster in data[y].unique():
+            t11 = data[(data[x] == group)
+                       & (data[y] == cluster)].shape[0]  #.sum()
+            t12 = data[(data[x] == group)
+                       & (data[y] != cluster)].shape[0]  #.sum()
+            t21 = data[(data[x] != group)
+                       & (data[y] == cluster)].shape[0]  
+            t22 = data[(data[x] != group)
+                       & (data[y] != cluster)].shape[0]
+            table = np.array([[t11, t12], [t21, t22]])
+
+            fishers_exact_p_dict[group][cluster] = fisher_exact(table)[1]
+            phi_coefficient_dict[group][cluster] = phi_coefficient(table)
+            counts_dict[group][cluster] = t11
+            cluster_fraction_dict[group][cluster] = t11 / (t11 + t21)
+
+    fishers_exact_p_df = pd.DataFrame.from_dict(fishers_exact_p_dict)
+    phi_coefficient_df = pd.DataFrame.from_dict(phi_coefficient_dict)
+    counts_df = pd.DataFrame.from_dict(counts_dict)
+    cluster_fraction_df = pd.DataFrame.from_dict(cluster_fraction_dict)
+
+    ClusterEnrichment = namedtuple(
+        'ClusterEnrichment',
+        ['FishersExactP', 'PhiCoefficient', 'Counts', 'ClusterFraction'])
+
+    return ClusterEnrichment(fishers_exact_p_df, phi_coefficient_df, counts_df,
+                             cluster_fraction_df)

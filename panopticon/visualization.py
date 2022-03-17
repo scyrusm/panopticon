@@ -521,9 +521,9 @@ def volcano(diffex,
         Default value = 'MeanExpr1')
     mean_expr_right :
         Default value = 'MeanExpr2')
-    left_name :
+    left_name : Genes toward the left in the volcano plot, which are upregulated in group2 of 'diffex'
         Default value = '')
-    right_name :
+    right_name : Genes toward the right in the volcano plot, which are upregulated in group1 of 'diffex'
         Default value = '')
     genemarklist :
         Default value = [])
