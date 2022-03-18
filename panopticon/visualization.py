@@ -693,11 +693,11 @@ def repertoire_plot(x=None,
     ylabel :
         (Default value = '')
     legend :
-         (Default value = False)
+        (Default value = False)
     color_palette :
-         (Default value = None)
+        (Default value = None)
     stack_order :
-         (Default value = 'agnostic')
+        (Default value = 'agnostic')
 
     Returns
     -------
@@ -735,8 +735,10 @@ def repertoire_plot(x=None,
                 "ax must be a list or array of matplotlib.axes._subplots.AxesSubplot objects when argument piechart==True"
             )
     if piechart and not normalize:
-        print("Warning: Pie charts must be normalized, because they are pie charts.")
-    if stack_order not in ['matched','agnostic']:
+        print(
+            "Warning: Pie charts must be normalized, because they are pie charts."
+        )
+    if stack_order not in ['matched', 'agnostic']:
         raise Exception("stack_order must be one of \'matched\', \'agnostic\'")
     if color_palette is None:
         if stack_order == 'matched':
@@ -744,8 +746,6 @@ def repertoire_plot(x=None,
             color_palette = sns.palettes.color_palette('colorblind')
         elif stack_order == 'agnostic':
             color_palette = ['w']
-
-
 
     all_heights = []
 
@@ -888,7 +888,7 @@ def repertoire_plot(x=None,
                    all_heights[:, i],
                    0.8,
                    bottom=bottoms,
-                   color=color_palette[i%len(color_palette)],
+                   color=color_palette[i % len(color_palette)],
                    edgecolor='k',
                    label=label)
 
@@ -938,7 +938,8 @@ def repertoire_plot(x=None,
     if show:
         plt.show()
 
-def data_to_grid_kde(x,y, xmin=None, xmax=None, ymin=None, ymax=None, px=100):
+
+def data_to_grid_kde(x, y, xmin=None, xmax=None, ymin=None, ymax=None, px=100):
     """
 
     Parameters
@@ -948,60 +949,229 @@ def data_to_grid_kde(x,y, xmin=None, xmax=None, ymin=None, ymax=None, px=100):
     y : Vector
         
     px :
-         (Default value = 100)
+        (Default value = 100)
+    xmin :
+         (Default value = None)
+    xmax :
+         (Default value = None)
+    ymin :
+         (Default value = None)
+    ymax :
+         (Default value = None)
 
     Returns
     -------
-    Grid of points with gaussian kde values of input data.  Can be plotted with plt.imshow(data_to_grid_kde(x,y), origin=\"lower\")
 
-
+    
     """
     from scipy.stats import gaussian_kde
-    xy = np.vstack((x,y))
+    xy = np.vstack((x, y))
     kde = gaussian_kde(xy)
-    if np.any([z is None for z in [xmin, xmax,ymin,ymax]]):
-        if np.all([z is None for z in [xmin, xmax,ymin,ymax]]):
+    if np.any([z is None for z in [xmin, xmax, ymin, ymax]]):
+        if np.all([z is None for z in [xmin, xmax, ymin, ymax]]):
             xmin, xmax = (x.min(), x.max())
             ymin, ymax = (y.min(), y.max())
         else:
-            raise Exception("Either all of xmin, xmax, ymin, ymax must be \"None\", or none may be.")
-    xgrid = np.arange(xmin, xmax, (xmax-xmin)/px)
-    ygrid = np.arange(ymin, ymax, (ymax-ymin)/px)
+            raise Exception(
+                "Either all of xmin, xmax, ymin, ymax must be \"None\", or none may be."
+            )
+    xgrid = np.arange(xmin, xmax, (xmax - xmin) / px)
+    ygrid = np.arange(ymin, ymax, (ymax - ymin) / px)
     xx, yy = np.meshgrid(xgrid, ygrid)
-    zz=kde.evaluate(np.array([xx.reshape(-1,1)[:,0],yy.reshape(-1,1)[:,0]])).reshape(xx.shape, )
+    zz = kde.evaluate(
+        np.array([xx.reshape(-1, 1)[:, 0],
+                  yy.reshape(-1, 1)[:, 0]])).reshape(xx.shape, )
     return zz
 
 
-def plot_differential_density(x,y,mask1,mask2,ax=None, cmap=plt.cm.RdBu_r):
+def plot_differential_density(x, y, mask1, mask2, ax=None, cmap=plt.cm.RdBu_r):
+    """
+
+    Parameters
+    ----------
+    x :
+        
+    y :
+        
+    mask1 :
+        
+    mask2 :
+        
+    ax :
+         (Default value = None)
+    cmap :
+         (Default value = plt.cm.RdBu_r)
+
+    Returns
+    -------
+
+    """
     xmin, xmax = (x.min(), x.max())
     ymin, ymax = (y.min(), y.max())
 
     import numpy as np
     from panopticon.visualization import data_to_grid_kde
-    zz1 = data_to_grid_kde(x[mask1], 
-                          y[mask1], xmin=xmin,ymin=ymin,xmax=xmax,ymax=ymax)
+    zz1 = data_to_grid_kde(x[mask1],
+                           y[mask1],
+                           xmin=xmin,
+                           ymin=ymin,
+                           xmax=xmax,
+                           ymax=ymax)
     from panopticon.visualization import data_to_grid_kde
-    zz2 = data_to_grid_kde(x[mask2], 
-                          y[mask2], xmin=xmin,ymin=ymin,xmax=xmax,ymax=ymax)
-    vmin = np.min(zz1-zz2)
-    vmax = np.max(zz1-zz2)
-    if np.abs(vmax)>np.abs(vmin):
+    zz2 = data_to_grid_kde(x[mask2],
+                           y[mask2],
+                           xmin=xmin,
+                           ymin=ymin,
+                           xmax=xmax,
+                           ymax=ymax)
+    vmin = np.min(zz1 - zz2)
+    vmax = np.max(zz1 - zz2)
+    if np.abs(vmax) > np.abs(vmin):
         vmin = -vmax
     else:
         vmax = -vmin
     if ax is None:
-        plt.imshow(zz1-zz2,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
+        plt.imshow(zz1 - zz2, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
         plt.show()
     else:
-        ax.imshow(zz1-zz2,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
+        ax.imshow(zz1 - zz2, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
 
-def plot_density(x,y,ax=None,cmap=plt.cm.twilight_r):
+
+def plot_density(x, y, ax=None, cmap=plt.cm.twilight_r):
+    """
+
+    Parameters
+    ----------
+    x :
+        
+    y :
+        
+    ax :
+         (Default value = None)
+    cmap :
+         (Default value = plt.cm.twilight_r)
+
+    Returns
+    -------
+
+    """
 
     from panopticon.visualization import data_to_grid_kde
-    zz = data_to_grid_kde(x, 
-                          y)
+    zz = data_to_grid_kde(x, y)
     if ax is None:
-        plt.imshow(zz,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
+        plt.imshow(zz, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
         plt.show()
     else:
-        ax.imshow(zz,origin='lower', cmap=cmap, vmin=vmin,vmax=vmax)
+        ax.imshow(zz, origin='lower', cmap=cmap, vmin=vmin, vmax=vmax)
+
+
+def cluster_enrichment_heatmap(x,
+                               y,
+                               data,
+                               show=True,
+                               output=None,
+                               fig=None,
+                               cax=None,
+                               ax=None,
+                               side_annotation=True,
+                               heatmap_shading_key='ClusterFraction',
+                               annotation_key='Counts',
+                               annotation_fmt='.5g'):
+    """
+
+    Parameters
+    ----------
+    x :
+        
+    y :
+        
+    data :
+        
+    show :
+         (Default value = True)
+    output :
+         (Default value = None)
+    fig :
+         (Default value = None)
+    cax :
+         (Default value = None)
+    ax :
+         (Default value = None)
+    side_annotation :
+         (Default value = True)
+    heatmap_shading_key :
+         (Default value = 'ClusterFraction')
+    annotation_key :
+         (Default value = 'Counts')
+    annotation_fmt :
+         (Default value = '.5g')
+
+    Returns
+    -------
+
+    """
+    from panopticon.analysis import get_cluster_enrichment_dataframes
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    cluster_enrichment_dataframes = get_cluster_enrichment_dataframes(
+        x, y, data)
+    if fig is None and cax is None and ax is None:
+        fig, (cax,
+              ax) = plt.subplots(nrows=2,
+                                 figsize=(5, 5.025),
+                                 gridspec_kw={"height_ratios": [0.025, 1]})
+    elif fig is not None and cax is not None and ax is not None:
+        pass
+    else:
+        raise Exception(
+            'Either none of "fig", "ax", and "cax" must be None, or all must be'
+        )
+
+    if len(data[x].unique()) != 2 and side_annotation:
+        raise Exception(
+            "Side annotation only supported for data with two unique groups")
+
+    if (heatmap_shading_key not in cluster_enrichment_dataframes._fields):
+        raise Exception("heatmap_shading key must be one of {}".format(
+            cluster_enrichment_dataframes._fields))
+    if (annotation_key not in cluster_enrichment_dataframes._fields):
+        raise Exception("annotation_key key must be one of {}".format(
+            cluster_enrichment_dataframes._fields))
+
+    sns.heatmap(cluster_enrichment_dataframes._asdict()[heatmap_shading_key],
+                cmap='Blues',
+                annot=cluster_enrichment_dataframes._asdict()[annotation_key],
+                cbar=False,
+                vmin=0,
+                vmax=1,
+                fmt=annotation_fmt)
+    fig.colorbar(ax.get_children()[0],
+                 cax=cax,
+                 orientation="horizontal",
+                 label='proportion of cells (in-cluster)')
+    #      annotation_clip=False)    #scipy.stats.chisquare
+    cax.xaxis.tick_top()
+    cax.xaxis.set_label_position('top')
+    if side_annotation:
+        for (i, fep_row), (j, phi_row) in zip(
+                cluster_enrichment_dataframes.FishersExactP.iterrows(),
+                cluster_enrichment_dataframes.PhiCoefficient.iterrows()):
+            phi = phi_row.values[0]
+            pval = fep_row.values[0]
+            ax.annotate('p = {0:.2e}, '.format(pval) + r'$\phi$' +
+                        ' = {0:.4f}'.format(phi),
+                        xy=(2, i + .5),
+                        xytext=(2.3, i + .5),
+                        ha='left',
+                        va='center',
+                        bbox=dict(boxstyle='square', fc='white', ec='black'),
+                        arrowprops=dict(
+                            arrowstyle='-[, widthB={}, lengthB=0'.format(1),
+                            lw=2.0,
+                            color='k'),
+                        annotation_clip=False)  #scipy.stats.chisquare
+    if output is not None:
+        plt.tight_layout()
+        plt.savefig(output)
+    plt.show()
