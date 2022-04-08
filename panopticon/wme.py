@@ -16,18 +16,22 @@ from panopticon.utilities import get_valid_gene_info
 
 def get_list_of_gene_windows(genes, window_size=400, window_step=50, release=102, species='homo sapiens'):
     """
+    This function will, given a set of genes, return a list of lists, where 
 
     Parameters
     ----------
-    genes :
-        param window_size:  (Default value = 200)
-    window_step :
-        Default value = 1)
-    window_size :
-        (Default value = 200)
+    genes : list of str
+        The list of genes that will be used to generate a list of gene windows (list of lists).
+    window_step : int
+        How many genes over each window will be "shifted" from the previous. (Default value = 50)
+    window_size : int
+        The size of the windows. (Default value = 400)
+    release : int
+        The ensembl release which will be used to sort the genes into windows of contiguous genes along the genome. (Default value = 102)
 
     Returns
     -------
+    A list of lists of strings. Each element of this list will have length window_size. 
 
     """
     gene_names, gene_contigs, gene_starts, gene_ends = get_valid_gene_info(genes, release=release, species=species)
