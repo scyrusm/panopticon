@@ -1421,38 +1421,180 @@ def combine_misshaped_looms(looms,
                    key=key_ra_for_combining)
 
 
-def tcr_levenshtein_distance(tra1, tra2, trb1, trb2):
+#def tcr_levenshtein_distance(tra1, tra2, trb1, trb2):
+#    from tqdm import tqdm
+#    from panopticon.utilities import import_check
+#    exit_code = import_check("Levenshtein", 'pip install python-Levenshtein')
+#    if exit_code != 0:
+#        return
+#
+#    from Levenshtein import distance as levenshtein_distance
+#    with tqdm(total=6) as pbar:
+#        distance_a11 = np.array([[levenshtein_distance(x, y) for y in tra1]
+#                                 for x in tra1])
+#        pbar.update(1)
+#
+#        distance_a12 = np.array([[levenshtein_distance(x, y) for y in tra1]
+#                                 for x in tra2])
+#        pbar.update(1)
+#
+#        distance_a22 = np.array([[levenshtein_distance(x, y) for y in tra2]
+#                                 for x in tra2])
+#        pbar.update(1)
+#        distance_a = np.minimum(distance_a11, distance_a12, distance_a22)
+#        distance_b11 = np.array([[levenshtein_distance(x, y) for y in trb1]
+#                                 for x in trb1])
+#        pbar.update(1)
+#
+#        distance_b12 = np.array([[levenshtein_distance(x, y) for y in trb1]
+#                                 for x in trb2])
+#        pbar.update(1)
+#
+#        distance_b22 = np.array([[levenshtein_distance(x, y) for y in trb2]
+#                                 for x in trb2])
+#        pbar.update(1)
+#        distance_b = np.minimum(distance_b11, distance_b12, distance_b22)
+#        distances = distance_a + distance_b
+#        return distances
+
+
+def tcr_levenshtein_distance(tra1=None, tra2=None, trb1=None, trb2=None):
     from tqdm import tqdm
     from panopticon.utilities import import_check
     exit_code = import_check("Levenshtein", 'pip install python-Levenshtein')
     if exit_code != 0:
         return
+    n_chains = np.sum([x is not None for x in [tra1, tra2, trb1, trb2]])
+    n_a_chains = np.sum([x is not None for x in [tra1, tra2]])
+    n_b_chains = np.sum([x is not None for x in [trb1, trb2]])
+
+    if n_chains == 0:
+        raise Exception("One of tra1, tra2, trb1, trb2 must not be None.")
 
     from Levenshtein import distance as levenshtein_distance
-    with tqdm(total=6) as pbar:
-        distance_a11 = np.array([[levenshtein_distance(x, y) for y in tra1]
-                                 for x in tra1])
-        pbar.update(1)
+    with tqdm(total=n_chains * (n_chains - 1) // 2) as pbar:
+        if tra1 is not None:
+            distance_a11 = np.array(
+                [[levenshtein_distance(x, y) for y in tra1] for x in tra1])
+            pbar.update(1)
+        else:
+            distance_a11 = None
 
-        distance_a12 = np.array([[levenshtein_distance(x, y) for y in tra1]
-                                 for x in tra2])
-        pbar.update(1)
+        if tra1 is not None and tra2 is not None:
+            distance_a12 = np.array(
+                [[levenshtein_distance(x, y) for y in tra1] for x in tra2])
+            pbar.update(1)
+        else:
+            distance_a12 = None
 
-        distance_a22 = np.array([[levenshtein_distance(x, y) for y in tra2]
-                                 for x in tra2])
-        pbar.update(1)
-        distance_a = np.minimum(distance_a11, distance_a12, distance_a22)
-        distance_b11 = np.array([[levenshtein_distance(x, y) for y in trb1]
-                                 for x in trb1])
-        pbar.update(1)
+        if tra1 is not None:
+            distance_a22 = np.array(
+                [[levenshtein_distance(x, y) for y in tra2] for x in tra2])
+            pbar.update(1)
+        else:
+            distance_a22 = None
 
-        distance_b12 = np.array([[levenshtein_distance(x, y) for y in trb1]
-                                 for x in trb2])
-        pbar.update(1)
+        if n_a_chains >= 2:
+            distance_a = np.minimum(*[
+                d for d in [distance_a11, distance_a12, distance_a22]
+                if d is not None
+            ])
+        elif n_a_chains == 1:
+            distance_a = [
+                d for d in [distance_a11, distance_a12, distance_a22]
+                if d is not None
+            ][0]
+        else:
+            distance_a = None
 
-        distance_b22 = np.array([[levenshtein_distance(x, y) for y in trb2]
-                                 for x in trb2])
-        pbar.update(1)
-        distance_b = np.minimum(distance_b11, distance_b12, distance_b22)
-        distances = distance_a + distance_b
+        if trb1 is not None:
+            distance_b11 = np.array(
+                [[levenshtein_distance(x, y) for y in trb1] for x in trb1])
+            pbar.update(1)
+        else:
+            distance_b11 = np.inf
+
+        if trb1 is not None and trb2 is not None:
+            distance_b12 = np.array(
+                [[levenshtein_distance(x, y) for y in trb1] for x in trb2])
+            pbar.update(1)
+        else:
+            distance_b12 = np.inf
+
+        if trb2 is not None:
+            distance_b22 = np.array(
+                [[levenshtein_distance(x, y) for y in trb2] for x in trb2])
+            pbar.update(1)
+        else:
+            distance_b22 = np.inf
+
+        if n_b_chains >= 2:
+            distance_b = np.minimum(*[
+                d for d in [distance_b11, distance_b12, distance_b22]
+                if d is not None
+            ])
+        elif n_b_chains == 1:
+            distance_b = [
+                d for d in [distance_b11, distance_b12, distance_b22]
+                if d is not None
+            ][0]
+        else:
+            distance_b = None
+
+        if distance_b is None:
+            distances = distance_a
+        elif distance_a is None:
+            distances = distance_b
+        else:
+            distances = distance_a + distance_b
+
         return distances
+
+
+def get_clumpiness(distances, clusteringcachedir='/tmp', verbose=False):
+    from sklearn.metrics import silhouette_score
+    from sklearn.cluster import AgglomerativeClustering
+    from tqdm import tqdm
+    import pandas as pd
+
+    clustering = AgglomerativeClustering(n_clusters=2,
+                                         memory=clusteringcachedir,
+                                         affinity='precomputed',
+                                         compute_full_tree=True,
+                                         linkage='average')
+    scores = []
+    minnk = 2
+    X = distances
+    for nk in tqdm(range(minnk, np.min([1000, X.shape[0]]), 1)):
+        clustering.set_params(n_clusters=nk)
+        clustering.fit(X)
+
+        score = silhouette_score(X,
+                                 clustering.labels_,
+                                 metric='cosine',
+                                 sample_size=None)
+        # sample_size=np.min([5000, X.shape[0]]))
+        scores.append(score)
+        #break
+
+    clustering.set_params(n_clusters=np.argmax(scores) + minnk)
+    clustering.fit(X)
+    if verbose:
+        print(
+            np.argmax(scores) + minnk, "clusters, with",
+            list(pd.DataFrame(clustering.labels_)[0].value_counts().values),
+            "clonotypes")
+    df = pd.DataFrame(clustering.labels_,columns=['cluster'])
+    cluster2meandistance = {}
+    
+    for cluster in df['cluster'].unique():
+        mask = df['cluster'] == cluster
+        if mask.sum()>1:
+            cluster2meandistance[cluster] = distances[mask][:,mask].sum()/(mask.sum()**2-mask.sum())
+        else:
+            cluster2meandistance[cluster] = np.nan
+    cluster_counts = pd.DataFrame(pd.DataFrame(clustering.labels_)[0].value_counts())
+    cluster_counts.columns = ['clonotype count']
+    cluster_counts['mean intracluster levenshtein distances'] = [cluster2meandistance[x] for x in cluster_counts.index.values]
+    return cluster_counts
+ 
