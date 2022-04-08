@@ -18,6 +18,7 @@ Panopticon
     Overview <overview>
     Installation <installation>
     Tutorial <tutorial>
+    Style Guide <styleguide>
     Dependencies <dependencies>
     API <api>
     Command-line tools (deprecated) <cli>
