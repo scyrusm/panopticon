@@ -27,4 +27,5 @@ A few unique features include
 
 - convenient iterative subclustering (by default agglomerative clustering with a Pearson correlation or cosine metric, with number of clusters selected by silhouette score)
 
-Panopticon relies on `loom <http://loompy.org/>`__ files with certain demands on column and row attributes.  These follow the spirit of `the Linnarsson lab style guide <https://github.com/linnarsson-lab/loompy/issues/19>`__, albeit with some different choices.  For details please see the `panopticon style guide <https://panopticon-single-cell.readthedocs.io/en/latest/styleguide.html`.
+Panopticon relies on `loom <http://loompy.org/>`__ files with certain demands on column and row attributes.  These follow the spirit of `the Linnarsson lab style guide <https://github.com/linnarsson-lab/loompy/issues/19>`__, albeit with some different choices.  For details please see the :doc:`styleguide`.
+
