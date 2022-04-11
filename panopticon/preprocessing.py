@@ -393,27 +393,30 @@ def generate_guide_rna_prediction(
         ncell_threshold_for_guide=10,
         nguide_threshold_for_cell=10):
     """
+    This approach is inspired by Replogle et a. 2018 (https://doi.org/10.1038/s41587-020-0470-y). However, instead of a Gaussian/Poisson mixture, this routine uses a Poisson/Poisson mixture. 
+    This routine uses the pomegranate package (https://github.com/jmschrei/pomegranate). 
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection
+        A LoomConnection object upon which guide rna predictions will be made
         
-    guide_rnas :
-        
-    nguide_ca :
-         (Default value = 'nGuide')
+    guide_rnas : iterable of strings
+        a list or other iterable of the strings, each corresponding to a column attribute of `loom` indicate the raw counts of a given guide RNA over cells 
+    nguide_ca : str
+         QC metric, indicating the name of the column attribute to use to indicate the number of predicted guide RNAs for a cell (Default value = 'nGuide')
     nguide_reads_ca :
-         (Default value = 'nGuideReads')
-    cell_prediction_summary_ca :
-         (Default value = 'CellGuidePrediction')
-    overwrite :
-         (Default value = False)
-    only_generate_log2 :
-         (Default value = False)
-    ncell_threshold_for_guide :
-         (Default value = 10)
-    nguide_threshold_for_cell :
-         (Default value = 10)
+         QC metric, indicating the name of the column attribute to use to indicate the total number of guide RNA reads for a cell(Default value = 'nGuideReads')
+    cell_prediction_summary_ca : str
+         Indicates the name of the column attribute to use to indicate a summary of positively-predicted guide RNAs for a cell(Default value = 'CellGuidePrediction')
+    overwrite : bool
+         If False, will raise exception if requested column attributes have already been written.  If True, will overwrite existing column attributes. (Default value = False)
+    only_generate_log2 : bool
+         If true, will generate log2 guide RNA counts, but will not apply any mixture model prediction. (Default value = False)
+    ncell_threshold_for_guide : int
+         Threshold for the number of cells wherein guide should have nonzero counts for mixture model to attempt prediction. (Default value = 10)
+    nguide_threshold_for_cell : int
+         Threshold for the number of guides to be detected in a given cell to attempt to make a prediction for that particular cell. (Default value = 10)
 
     Returns
     -------
