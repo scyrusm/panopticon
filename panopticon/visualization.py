@@ -163,37 +163,66 @@ def plot_cluster_umap(loom,
     return embedding
 
 
-def get_cluster_differential_expression_heatmap(loom,
-                                                layer,
-                                                clusteringlevel,
-                                                diffex={},
-                                                output=None,
-                                                bracketwidth=3.5,
-                                                ff_offset=0,
-                                                ff_scale=7,
-                                                bracket_width=3.5):
+def cluster_differential_expression_heatmap(
+        loom,
+        layer,
+        clusteringlevel,
+        diffex={},
+        output=None,
+        min_cluster_size=2,
+        figsize=(5, 5),
+        cbar_label=None,
+        n_top_genes=10,
+        gene_sort_criterion='CommonLanguageEffectSize',
+        vmin=None,
+        vmax=None,
+        cmap='coolwarm',
+        average_over_clusters=True,
+        return_fig_ax=False,
+        custom_gene_list=None,
+        gene_ra='gene'):
     """
+    Generates a heatmap, with expression of marker genes displayed in heatmap form. Can also be used with hand-picked genes using the `custom_gene_list` argument, as well as with custom labels by setting `clusteringlevel` to be a column attribute representing the clusters of interest.
+    When using a custom set of genes, this command will automatically cluster those genes using the seaborn `clustermap` command. 
+
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection
+        LoomConnection object for which the differential expression over clusters will be computed
         param layer:
-    clusteringlevel :
-        param diffex: (Default value = {})
-    output :
-        Default value = None)
-    bracketwidth :
-        Default value = 3.5)
-    ff_offset :
-        Default value = 0)
-    ff_scale :
-        Default value = 7)
-    bracket_width :
-        Default value = 3.5)
-    layer :
-        
-    diffex :
-        (Default value = {})
+    layer : str
+        Specified loom layer to be used as values for heatmap.
+    clusteringlevel : int or str
+        Specifies column attribute of `loom` to be uses as clusters. Typical values might be `ClusteringIteration0`.  However, any column attribute can be used if the diffex dictionary object is pre-computed. (Default value = {})
+    diffex : dict
+        Specifies pre-computed output of get_cluster_differential expression.  Differential expression for clusters that don't exist as keys in `diffex` will be computed on-the-fly. (Default value = {})
+    output : NoneType or str
+        If str, then will write heatmap to file with filename `output`. (Default value = None)
+    min_cluster_size : int
+         Minimum number of cells in cluster for cluster to be included in plot. (Default value = 2)
+    figsize : tuple
+         Size of figure, in inches. (Default value = (5, 5)) :
+    cbar_label : str
+         Specifies the label of colorbar axis. (Default value = None)
+    n_top_genes : int
+         Specifies the number of top marker genes for each cluster to be displayed in heatmap. (Default value = 10)
+    gene_sort_criterion : str
+         (Default value = 'CommonLanguageEffectSize')
+    vmin : float
+         Sets the minimum value for heatmap/clustermap. None indicates no minimum value. (Default value = None)
+    vmax : float
+         Sets the maximum value for heatmap/clustermap. None indicates no maximum value. (Default value = None)
+    cmap : str
+         Sets the colormap to be used for heatmap/clustermap. Must be a valid matplotlib colormap. (Default value = 'coolwarm')
+    average_over_clusters : bool
+         If set to `True`, will average expression over all cells of a given cluster. If `False`, will group clusters together, without averaging. (Default value = True)
+    return_fig_ax : bool
+         If set to `True` will return a tuple (`fig`,`ax`) for the figure and axis respectively with the heatmap of interest. If a seaborn clustermap was generated, will instead return the full seaborn.clustermap output, wherefrom figure and axis objects can be accessed. (Default value = False)
+    custom_gene_list : list, ndarry or NoneType
+         If not None, specifies a custome gene list to use for heatmap/clustermap. (Default value = None)
+    gene_ra : str
+         Specifies the row attribute of LoomConnection `loom` indicating the gene name. (Default value = 'gene')
 
     Returns
     -------
@@ -204,92 +233,116 @@ def get_cluster_differential_expression_heatmap(loom,
     import seaborn as sns
     import pandas as pd
 
+    if custom_gene_list is not None:
+        print("Using custom gene list: ")
+        print("Removing the following genes:\n",np.unique([x for x in custom_gene_list if x not in loom.ra[gene_ra]]))
+        custom_gene_list = np.unique([x for x in custom_gene_list if x in loom.ra[gene_ra]])
+        print("Using the following genes:\n",custom_gene_list)
+
+
+    if cbar_label is None:
+        cbar_label = layer
+
     clusteredmask = []
+    clusters = []
+    cluster_cols = []
     for cluster in np.unique(loom.ca[clusteringlevel]):
         mask = loom.ca[clusteringlevel] == cluster
-        if mask.sum() > 2:
+        if mask.sum() >= min_cluster_size:
             clusteredmask.append(np.where(mask)[0])
+            clusters.append(cluster)
+            cluster_cols += mask.sum() * [cluster]
     clusteredmask = np.hstack(clusteredmask)
     allgenes = []
     rawX = []
-    clusters = np.unique(loom.ca[clusteringlevel])
     for cluster in clusters:
         mask = loom.ca[clusteringlevel] == cluster
-        if mask.sum() > 2:
-            if cluster not in diffex.keys():
-                diffex[cluster] = get_cluster_differential_expression(
-                    loom, clusteringlevel, layer, cluster)
-            if np.sum(loom.ca[clusteringlevel] == cluster) > 1:
-                genes = diffex[cluster][~diffex[cluster]['gene'].isin(
-                    allgenes)].query('MeanExpr1 > MeanExpr2').query(
-                        'FracExpr2<.9').head(10)['gene'].values
-                genemask = np.isin(loom.ra['gene'], genes)
+        if mask.sum() >= min_cluster_size:
+            if custom_gene_list is None:
+                if cluster not in diffex.keys():
+                    diffex[cluster] = get_cluster_differential_expression(
+                        loom, clusteringlevel, layer, cluster)
+                if type(diffex[cluster]) != float:
+                    genes = diffex[cluster][~diffex[cluster]['gene'].isin(
+                        allgenes)].query('MeanExpr1 > MeanExpr2').sort_values(
+                            gene_sort_criterion,
+                            ascending=False).head(n_top_genes)['gene'].values
+                    genemask = np.isin(loom.ra[gene_ra], genes)
+                    rawX.append(
+                        loom[layer][genemask.nonzero()[0], :][:, clusteredmask])
+                    allgenes.append(genes)
+                else:
+                    clusters.remove(cluster)
+            else:
+                if type(custom_gene_list)!=list and type(custom_gene_list)!=np.ndarray:
+                    raise Exception("custom_gene_list must have type List")
+                genemask = np.isin(loom.ra[gene_ra], custom_gene_list)
                 rawX.append(
-                    loom[layer][genemask, :][:, clusteredmask.nonzero()[0]])
-                allgenes.append(genes)
+                    loom[layer][genemask.nonzero()[0], :][:, clusteredmask])
+                allgenes.append(custom_gene_list)
+                break
+
+
 
     clusteredmask = np.hstack(clusteredmask)
 
     hmdf = pd.DataFrame(np.vstack(rawX))
     hmdf.index = np.hstack(allgenes)
+    hmdf.columns = cluster_cols
+    if average_over_clusters:
+        hmdf = hmdf.T.reset_index().groupby('index').mean().T
 
-    #fig, ax = plt.subplots(figsize=(5,12))
-    fig = plt.figure(figsize=(5, 12))
-    ax = fig.add_axes([0.4, 0.1, 0.4, .8])
-    sns.heatmap(hmdf,
-                cmap='coolwarm',
-                yticklabels=1,
-                xticklabels=False,
-                ax=ax,
-                cbar_kws={'label': r'log${}_2$(TP100k+1) Expression'})
-    plt.ylabel('Gene')
-    plt.xlabel('Cell')
+    if custom_gene_list is None:
+        fig = plt.figure(figsize=figsize)
+        ax = fig.add_axes([0.4, 0.1, 0.4, .8])
+        sns.heatmap(hmdf,
+                    cmap=cmap,
+                    yticklabels=1,
+                    ax=ax,
+                    cbar_kws={'label': cbar_label},
+                    vmin=vmin,
+                    vmax=vmax)
+        for i, cluster in enumerate(clusters):
+            ax.annotate(cluster,
+                        xy=(-.7, (len(clusters) - i - 0.5) / len(clusters)),
+                        xytext=(-.9, (len(clusters) - i - 0.5) / len(clusters)),
+                        ha='center',
+                        va='center',
+                        bbox=dict(boxstyle='square', fc='white'),
+                        arrowprops=dict(
+                            arrowstyle='-[, widthB={}, lengthB=1'.format(
+                                2.54 * fig.get_size_inches()[1] / len(clusters)),
+                            lw=2.0),
+                        annotation_clip=False,
+                        xycoords='axes fraction')
+        ax.set_ylabel('Gene')
+        if average_over_clusters:
+            ax.set_xlabel('Cluster')
+        else:
+            ax.set_xlabel('Cell')
+            ax.set_xticklabels([])
+    else:
+        g = sns.clustermap(hmdf,
+                    cmap=cmap,
+                    yticklabels=1,
+                    cbar_kws={'label': cbar_label},
+                    vmin=vmin,
+                    vmax=vmax,
+                    col_cluster=False,
+                    figsize=figsize)
 
-    for i, cluster in enumerate(clusters):
-        ax.annotate(
-            cluster,
-            xy=(-hmdf.shape[1] * 0.8,
-                hmdf.shape[0] - ff_offset - 3.5 - i * ff_scale),
-            xytext=(-hmdf.shape[1] * 0.9,
-                    hmdf.shape[0] - ff_offset - 3.5 - i * ff_scale),
-            ha='right',
-            va='center',
-            bbox=dict(boxstyle='square', fc='white'),
-            arrowprops=dict(
-                arrowstyle='-[, widthB={}, lengthB=1.5'.format(bracket_width),
-                lw=2.0),
-            annotation_clip=False)
-    #plt.savefig("./figures/AllCD8TCellClustersHeatmap14Sept2020.pdf")
+
+    plt.tight_layout()
+
     if output is not None:
         plt.savefig(output)
-    plt.show()
-    return diffex
-
-    #print(expr)
-
-    ax.set_xticklabels(markernames)
-    ax.set_xticks(range(len(markers)))
-    ax.set_yticklabels(
-        [key for key in key2x.keys() if key not in keyblacklist])
-    #print(np.array([val for val in diffex.values() if key not in keyblacklist]))
-    ax.set_yticks(
-        np.array([val for val in key2x.values() if key not in keyblacklist]))
-    ax.set_xlim([-0.5, len(markers) - 0.5])
-    ax.set_ylim([-0.5, len(key2x) - 0.5])
-    for i in np.arange(-0.5, len(markers) - 0.5, topn)[1::]:
-        plt.axvline(ls='--', x=i, color='k')
-        #if flag:
-    cbar = plt.colorbar(sc, )
-    cbar.set_label(
-        'Mean {} Expression'.format(layername),
-        rotation=90,
-    )
-    plt.xticks(rotation=90)
-    if output is not None:
-        plt.savefig(output)
-    if title is not None:
-        plt.title(title)
-    plt.show()
+    if return_fig_ax:
+        if custom_gene_list is None:
+            return fig, ax
+        else:
+            return g
+    else:
+        plt.show()
 
 
 def swarmviolin(data,
@@ -670,12 +723,12 @@ def repertoire_plot(x=None,
 
     Parameters
     ----------
-    x : Column of data indicating sample
-        Default value = None)
-    y : Column of data indicate clone
-        Default value = None)
+    x : str
+       Column of data indicating sample. (Default value = None)
+    y :  str
+        Column of data indicate clone. (Default value = None)
     data : pandas.DataFrame object, with necessary columns specified by arguments x, y.
-        Default value = None)
+        (Default value = None)
     hue : Optional column of data indicating additional grouping of samples
         Default value = None)
     ax : matplotlib matplotlib.axes._subplots.AxesSubplot object or array thereof, optional
@@ -951,13 +1004,13 @@ def data_to_grid_kde(x, y, xmin=None, xmax=None, ymin=None, ymax=None, px=100):
     px :
         (Default value = 100)
     xmin :
-         (Default value = None)
+        (Default value = None)
     xmax :
-         (Default value = None)
+        (Default value = None)
     ymin :
-         (Default value = None)
+        (Default value = None)
     ymax :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
@@ -998,13 +1051,14 @@ def plot_differential_density(x, y, mask1, mask2, ax=None, cmap=plt.cm.RdBu_r):
     mask2 :
         
     ax :
-         (Default value = None)
+        (Default value = None)
     cmap :
-         (Default value = plt.cm.RdBu_r)
+        (Default value = plt.cm.RdBu_r)
 
     Returns
     -------
 
+    
     """
     xmin, xmax = (x.min(), x.max())
     ymin, ymax = (y.min(), y.max())
@@ -1047,13 +1101,14 @@ def plot_density(x, y, ax=None, cmap=plt.cm.twilight_r):
     y :
         
     ax :
-         (Default value = None)
+        (Default value = None)
     cmap :
-         (Default value = plt.cm.twilight_r)
+        (Default value = plt.cm.twilight_r)
 
     Returns
     -------
 
+    
     """
 
     from panopticon.visualization import data_to_grid_kde
@@ -1088,27 +1143,28 @@ def cluster_enrichment_heatmap(x,
     data :
         
     show :
-         (Default value = True)
+        (Default value = True)
     output :
-         (Default value = None)
+        (Default value = None)
     fig :
-         (Default value = None)
+        (Default value = None)
     cax :
-         (Default value = None)
+        (Default value = None)
     ax :
-         (Default value = None)
+        (Default value = None)
     side_annotation :
-         (Default value = True)
+        (Default value = True)
     heatmap_shading_key :
-         (Default value = 'ClusterFraction')
+        (Default value = 'ClusterFraction')
     annotation_key :
-         (Default value = 'Counts')
+        (Default value = 'Counts')
     annotation_fmt :
-         (Default value = '.5g')
+        (Default value = '.5g')
 
     Returns
     -------
 
+    
     """
     from panopticon.analysis import get_cluster_enrichment_dataframes
     import matplotlib.pyplot as plt
@@ -1155,8 +1211,10 @@ def cluster_enrichment_heatmap(x,
     cax.xaxis.set_label_position('top')
     if side_annotation:
         for (i, fep_row), (j, phi_row) in zip(
-                cluster_enrichment_dataframes.FishersExactP.iterrows(),
-                cluster_enrichment_dataframes.PhiCoefficient.iterrows()):
+                cluster_enrichment_dataframes.FishersExactP.reset_index(
+                    drop=True).iterrows(),
+                cluster_enrichment_dataframes.PhiCoefficient.reset_index(
+                    drop=True).iterrows()):
             phi = phi_row.values[0]
             pval = fep_row.values[0]
             ax.annotate('p = {0:.2e}, '.format(pval) + r'$\phi$' +

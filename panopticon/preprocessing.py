@@ -2,17 +2,20 @@ import numpy as np
 
 
 def generate_gene_variances(loom, layername):
-    """Computes the variance (across cells) of genes, and assigns this to the row attribute "GeneVar"
+    """Computes the variance (across cells) of genes, and assigns this to the row attribute `GeneVar`
 
     Parameters
     ----------
-    loom : The LoomConnection instance upon which gene variance will be calculated
+    loom : LoomConnection
+        The LoomConnection instance upon which gene variance will be calculated
         
-    layername : The name of the layer of the LoomConnection upon which the gene variance will be calculated.
+    layername : str
+        The name of the layer of the LoomConnection upon which the gene variance will be calculated.
         
 
     Returns
     -------
+    Writes a new variable `Genevar` as a row attribute to LoomConnection `loom`.Returns NoneType object.
 
     
     """
@@ -26,26 +29,32 @@ def generate_cell_and_gene_quality_metrics(loom,
                                            mitochondrial_qc=False,
                                            ribosomal_gene_mask=None,
                                            mitochondrial_gene_mask=None):
-    """Calculates five quantities and writes them to the LoomConnection instance specified in loom:
-    
+    """Calculates multiple QC-related quantities and writes them to the LoomConnection instance specified in loom:
+   
+    - nCountsForCell: absolute number of non-normalized counts for a given cell (across all genes)
+    - nCountsForGene: absolute number of non-normalized counts for a give gene (across all cells)
     - RibosomalRelativeMeanAbsolutionDeviation:  this is madrp / meanrp, where madrp is the mean absolute deviation of ribosomal protein genes (RP*) and meanrp is the mean expression of ribosomal protein genes (RP*) (means, mads compute on a cell-by-cell basis).
     - RibosomalMaxOverMean: this is maxrp / meanrp, where maxrp is the maximum RP* expression over all RP* genes; meanrp is as above (max, mean on a cell-by-cell basis).
+    - MitochondrialMean: this is the mean expression of genes from the mitochondrial genome.
+    - MitochondrialRelativeMeanAbsoluteDeviation: this is madmt / meanmt, where madmt is the mean absolute deviation of mitochondrial genes (MT*) and meanmt is the mean expression of mitochondrial protein genes (MT*) (means, mads computed on a cell-by-cell basis). 
     - AllGeneRelativeMeanAbsoluteDeviation: this is madall / meanall, where madall is the MAD over all genes, and meanall is the mean over all genes (mad, mean on a cell-by-cell basis).
-    - nGene: number of unique genes expressed (>0) on a cell-by-cell basis.
+    - nGene: number of unique genes expressed (>0) on a cell-by-cell basis (also known as complexity).
     - nCell: number of unique cells expressing a gene (>0), on a gene-by-gene basis.
 
     Parameters
     ----------
-    loom : The LoomConnection instance upon which cell and gene quality metrics will be annotated.
+    loom : LoomConnection
+        The LoomConnection instance upon which cell and gene quality metrics will be annotated.
         
-    layername : The name of the layer upon which cell and gene quality metrics will be calculated.
+    layername : str
+        The name of the layer upon which cell and gene quality metrics will be calculated.
         
-    gene_ra :
-         (Default value = 'gene')
-    ribosomal_qc :
-         (Default value = False)
+    gene_ra : str
+         The row attribute used for genes (recommended to use the HUGO names for genes, as this is used by default to determine which genes are mitochondrial or ribosomal) (Default value = 'gene')
+    ribosomal_qc : bool
+         If True, will compute ribosomal-based QC metrics (RibosomalRelativeMeanAbsolutionDeviation:, RibosomalMaxOverMean) (Default value = False)
     mitochondrial_qc :
-         (Default value = False)
+         If True, will compute mitochondrial-based QC metric ((Default value = False)
     ribosomal_gene_mask :
          (Default value = None)
     mitochondrial_gene_mask :
@@ -53,6 +62,7 @@ def generate_cell_and_gene_quality_metrics(loom,
 
     Returns
     -------
+    Calculated qualities are written to LoomConnection `loom`. Returns NoneType object.
 
     
     """
@@ -266,24 +276,31 @@ def generate_antibody_prediction(loom,
                                  overwrite=False,
                                  only_generate_zscore=False):
     """
+    This approach takes some inspiration from the dsb approach: https://doi.org/10.1101/2020.02.24.963603.
+    However, there is no use of isotypes.  Therefore, is amounts only to "step 1" of that procedure. This routine can also take into
+    acccount the distribution of antibody/feature barcode counts from empty droplet using the optional argument `raw_antibody_counts_df`. 
+    This routine using a 2-component Gaussian-mixture model on z-scored log1p antibody counts (with or without background correction) 
+    to predict whether a given cells is "positive" or "negative" for the feature barcode in question.
 
     Parameters
     ----------
-    loom :
+    loom : LoomConnection
+        The LoomConnection object on which to make antibody predictions. 
         
-    raw_antibody_counts_df :
-         (Default value = None)
-    antibodies :
-         (Default value = None)
-    pseudocount :
-         (Default value = 1)
-    overwrite :
-         (Default value = False)
-    only_generate_zscore :
-         (Default value = False)
+    raw_antibody_counts_df : pandas.DataFrame object, or NoneType
+        If `None`(Default value = None)
+    antibodies : str, or iterable of strings
+        interable of strings, each of which should be a column attribute of `loom`. Each should represent the column attributes indicating the raw counts of a particular feature barcode. (Default value = None)
+    pseudocount : int
+        Indicates the pseudocount of the feature barcode to use when taking the log(count+pseudocount) (Default value = 1)
+    overwrite : bool
+        If True, will overwrite existing prediction. If False, with raise an Exception if prediction had previously been generated. (Default value = False)
+    only_generate_zscore : bool
+        If True, will only generate log1pseudo(counts) and z-score thereof, but will not compute a Gaussian mixture model nor make subsequent prediction. (Default value = False)
 
     Returns
     -------
+    None (all output are written as column attributes to LoomConnection `loom`)
 
     """
     if raw_antibody_counts_df is None and antibodies is None:

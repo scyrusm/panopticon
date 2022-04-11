@@ -11,6 +11,8 @@ def get_module_score_loom(loom,
                           ncontrol=5):
     """Calculates a module score over a loom file.  This routine is deprecated--use generate masked module score (S Markson 3 June 2020).
 
+    .. deprecated:: 0.1 
+
     Parameters
     ----------
     loom : loom object on which to calculate score

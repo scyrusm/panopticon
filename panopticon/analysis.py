@@ -915,7 +915,7 @@ def get_cluster_embedding(loom,
     if genemask is None:
         data = loom[layername][:, mask.nonzero()[0]]
     else:
-        data = loom[layername][genemask, :][:, mask.nonzero()[0]]
+        data = loom[layername][genemask.nonzero()[0], :][:, mask.nonzero()[0]]
 
     pca = PCA(n_components=np.min([n_components_pca, data.shape[1]]))
     pca.fit(data[:, :].transpose())
