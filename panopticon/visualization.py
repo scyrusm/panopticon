@@ -1145,6 +1145,7 @@ def cluster_enrichment_heatmap(x,
     - If `heatmap_shading_key` = "FishersExactP", heatmap color will depict Fisher's exact test p-values (described below).
 
     P-values and phi-coefficients are computed by constructing the contigency matrices as follows:
+
     .. list-table:: 
        :widths: 25 25
     
@@ -1152,6 +1153,7 @@ def cluster_enrichment_heatmap(x,
          - b
        * - c
          - d
+
     where `a` represents counts in cluster (**not** normalized) in group, `b` counts not in cluster in group, `c` counts in group, not in cluster, and `d` counts not in group, not in cluster. This is most intuitive for two groups, but can be computed in all cases (margins of the contingency matrix will be unchanged).
      P-values are computed via `scipy.stats.fisher_exact`, and effect sizes by phi coefficient (`utilities.phi_coefficient`).
 
@@ -1194,9 +1196,9 @@ def cluster_enrichment_heatmap(x,
     See Also
     --------
 
-    analysis.get_cluster_enrichment_dataframes : routine for generating dataframes used in this visualization
+    panopticon.analysis.get_cluster_enrichment_dataframes : routine for generating dataframes used in this visualization
     scipy.stats.fisher_exact : Fisher's exact test
-    utilities.phi_coefficient : phi coefficient
+    panopticon.utilities.phi_coefficient : phi coefficient
 
     
     """
