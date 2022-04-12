@@ -1138,6 +1138,7 @@ def cluster_enrichment_heatmap(x,
     Produces a heatmap indicating the fraction of cell clusters across groups.  For example, if there are `m` experimental groups and `n` clusters of cells, will produce a heatmap with
     `n` rows and `m` columns. 
     `heatmap_shading_key` can be any field of the named tuple output of `panopticon.analysis.get_cluster_enrichment_dataframes`. These include:
+
     - If `heatmap_shading_key` = "FractionOfCluster", heatmap color will be row-normalized; that is, it will indicate the fraction of cells in a cluster that are in groups.
     - If `heatmap_shading_key` = "FractionOfGroup", heatmap color will be column-normalized; that is, it will indicate the fraction of cells in a group that are in a given cluster. 
     - If `heatmap_shading_key` = "Counts", heatmap color will depict raw counts.
@@ -1155,7 +1156,7 @@ def cluster_enrichment_heatmap(x,
          - d
 
     where `a` represents counts in cluster (**not** normalized) in group, `b` counts not in cluster in group, `c` counts in group, not in cluster, and `d` counts not in group, not in cluster. This is most intuitive for two groups, but can be computed in all cases (margins of the contingency matrix will be unchanged).
-     P-values are computed via `scipy.stats.fisher_exact`, and effect sizes by phi coefficient (`utilities.phi_coefficient`).
+    P-values are computed via `scipy.stats.fisher_exact`, and effect sizes by phi coefficient (`panopticon.utilities.phi_coefficient`).
 
     If there are only two groups, side annotation can also be used in order to display counts, normalized counts, fisher's exact p-values and phi-coefficients all on one plot (see https://doi.org/10.1101/2021.08.25.456956, Fig. 4c, f and Fig. 5c). This will only work in the two-group case however. 
 
