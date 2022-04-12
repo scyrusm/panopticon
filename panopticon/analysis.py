@@ -20,6 +20,12 @@ def get_module_score_matrix(loom,
         (Default value = 10)
     ncontrol : Number of genes in each matched quantile
         (Default value = 5)
+    loom :
+        
+    layername :
+        
+    cellmask :
+        
 
     Returns
     -------
@@ -1653,19 +1659,20 @@ def get_enrichment_score(genes,
     geneset :
         
     scores :
-         (Default value = None)
+        (Default value = None)
     presorted :
-         (Default value = False)
+        (Default value = False)
     return_es_curve :
-         (Default value = True)
+        (Default value = True)
     return_pvalue :
-         (Default value = False)
+        (Default value = False)
     n_pvalue_permutations :
-         (Default value = 1000)
+        (Default value = 1000)
 
     Returns
     -------
 
+    
     """
     from collections import namedtuple
     from tqdm import tqdm
@@ -1719,6 +1726,19 @@ def get_enrichment_score(genes,
 
 
 def hutcheson_t(x, y):
+    """
+
+    Parameters
+    ----------
+    x :
+        
+    y :
+        
+
+    Returns
+    -------
+
+    """
     from collections import namedtuple
     from panopticon.utilities import import_check
     exit_code = import_check(
@@ -1750,6 +1770,27 @@ def generate_diffusion_coordinates(loom,
                                    n_coordinates=10,
                                    verbose=False,
                                    metric='euclidean'):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layername :
+        
+    sigma :
+        
+    n_coordinates :
+         (Default value = 10)
+    verbose :
+         (Default value = False)
+    metric :
+         (Default value = 'euclidean')
+
+    Returns
+    -------
+
+    """
     from sklearn.metrics import pairwise_distances
     from numpy.linalg import eig
     if verbose:
@@ -1769,14 +1810,23 @@ def generate_diffusion_coordinates(loom,
 
 
 def conditional_simpson(x, x_conditional, x_total, with_replacement=False):
-    """For computing simpson index directly from counts (or frequencies, if with_replacement=True), where the first selected element is conditional on some feature                                                                                                                                           
-    Parameters                                                                                                                                                                                                                               
-    ----------                                                                                                                                                                                                                               
-    x :                                                                                                                                                                                                                                      
-    with_replacement :                                                                                                                                                                                                                       
-        (Default value = False)                                                                                                                                                                                                              
-    Returns                                                                                                                                                                                                                                  
-    -------                                                                                                                                                                                                                                  
+    """For computing simpson index directly from counts (or frequencies, if with_replacement=True), where the first selected element is conditional on some feature
+
+    Parameters
+    ----------
+    x :
+        
+    with_replacement :
+         (Default value = False)
+    x_conditional :
+        
+    x_total :
+        
+
+    Returns
+    -------
+
+    
     """
     #total = np.sum(x)
     total_conditional = np.sum(x_conditional)
@@ -1794,6 +1844,21 @@ def conditional_simpson(x, x_conditional, x_total, with_replacement=False):
 
 
 def get_cluster_enrichment_dataframes(x, y, data):
+    """
+
+    Parameters
+    ----------
+    x :
+        
+    y :
+        
+    data :
+        
+
+    Returns
+    -------
+
+    """
     from panopticon.utilities import phi_coefficient
     from collections import namedtuple
     from scipy.stats import fisher_exact
