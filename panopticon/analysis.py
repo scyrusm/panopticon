@@ -1820,16 +1820,18 @@ def get_cluster_enrichment_dataframes(x, y, data):
             fishers_exact_p_dict[group][cluster] = fisher_exact(table)[1]
             phi_coefficient_dict[group][cluster] = phi_coefficient(table)
             counts_dict[group][cluster] = t11
-            cluster_fraction_dict[group][cluster] = t11 / (t11 + t21)
+            cluster_fraction_incluster_dict[group][cluster] = t11 / (t11 + t21)  # this represents the fraction of cells in a cluster that are in a group
+            cluster_fraction_ingroup_dict[group][cluster] = t11 / (t11 + t12)  # this represents the fraction of cells in a group that are in a cluster
 
     fishers_exact_p_df = pd.DataFrame.from_dict(fishers_exact_p_dict)
     phi_coefficient_df = pd.DataFrame.from_dict(phi_coefficient_dict)
     counts_df = pd.DataFrame.from_dict(counts_dict)
-    cluster_fraction_df = pd.DataFrame.from_dict(cluster_fraction_dict)
+    cluster_fraction_incluster_df = pd.DataFrame.from_dict(cluster_fraction_incluster_dict)
+    cluster_fraction_ingroup_df = pd.DataFrame.from_dict(cluster_fraction_ingroup_dict)
 
     ClusterEnrichment = namedtuple(
         'ClusterEnrichment',
-        ['FishersExactP', 'PhiCoefficient', 'Counts', 'ClusterFraction'])
+        ['FishersExactP', 'PhiCoefficient', 'Counts', 'FractionOfCluster','FractionOfGroup'])
 
     return ClusterEnrichment(fishers_exact_p_df, phi_coefficient_df, counts_df,
-                             cluster_fraction_df)
+                             cluster_fraction_incluster_df, cluster_fraction_ingroup_df)

@@ -1129,10 +1129,24 @@ def cluster_enrichment_heatmap(x,
                                cax=None,
                                ax=None,
                                side_annotation=True,
-                               heatmap_shading_key='ClusterFraction',
+                               heatmap_shading_key='FractionOfCluster',
                                annotation_key='Counts',
                                annotation_fmt='.5g'):
     """
+    Produces a heatmap indicating the fraction of cell clusters across groups.  For example, if there are `m` experimental groups and `n` clusters of cells, will produce a heatmap with
+    `n` rows and `m` columns. 
+    `heatmap_shading_key` can be any field of the named tuple output of `panopticon.analysis.get_cluster_enrichment_dataframes`. These include:
+    - If `heatmap_shading_key`="FractionOfCluster", heatmap color will be row-normalized; that is, it will indicate the fraction of cells in a cluster that are in groups.
+    - If `heatmap_shading_key`="FractionOfGroup", heatmap color will be column-normalized; that is, it will indicate the fraction of cells in a group that are in a given cluster. 
+    - If `heatmap_shading_key`="Counts", heatmap color will depict raw counts.
+    - If `heatmap_shading_key`="PhiCoefficient", heatmap color will depict phi-coefficients (described below).
+    - If `heatmap_shading_key`="FishersExactP", heatmap color will depict Fisher's exact test p-values (described below).
+
+    P-values and phi-coefficients are computed by constructing the contigency matrices as follows:
+        [ a  b ]
+        [ c  d ]
+     where `a` represents counts in cluster (**not** normalized) in group, `b` counts not in cluster in group, `c` counts in group, not in cluster, and `d` counts not in group, not in cluster. This is most intuitive for two groups, but can be computed in all cases (margins of the contingency matrix will be unchanged).
+     P-values are computed via `scipy.stats.fisher_exact`, and effect sizes by phi coefficient (`utilities.phi_coefficient`).
 
     Parameters
     ----------
@@ -1163,6 +1177,14 @@ def cluster_enrichment_heatmap(x,
 
     Returns
     -------
+    None.  
+
+    See Also
+    --------
+
+    analysis.get_cluster_enrichment_dataframes : routine for generating dataframes used in this visualization
+    scipy.stats.fisher_exact : Fisher's exact test
+    utilities.phi_coefficient : phi coefficient
 
     
     """
