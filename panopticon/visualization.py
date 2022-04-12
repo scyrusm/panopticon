@@ -235,10 +235,13 @@ def cluster_differential_expression_heatmap(
 
     if custom_gene_list is not None:
         print("Using custom gene list: ")
-        print("Removing the following genes:\n",np.unique([x for x in custom_gene_list if x not in loom.ra[gene_ra]]))
-        custom_gene_list = np.unique([x for x in custom_gene_list if x in loom.ra[gene_ra]])
-        print("Using the following genes:\n",custom_gene_list)
-
+        print(
+            "Removing the following genes:\n",
+            np.unique(
+                [x for x in custom_gene_list if x not in loom.ra[gene_ra]]))
+        custom_gene_list = np.unique(
+            [x for x in custom_gene_list if x in loom.ra[gene_ra]])
+        print("Using the following genes:\n", custom_gene_list)
 
     if cbar_label is None:
         cbar_label = layer
@@ -269,20 +272,20 @@ def cluster_differential_expression_heatmap(
                             ascending=False).head(n_top_genes)['gene'].values
                     genemask = np.isin(loom.ra[gene_ra], genes)
                     rawX.append(
-                        loom[layer][genemask.nonzero()[0], :][:, clusteredmask])
+                        loom[layer][genemask.nonzero()[0], :][:,
+                                                              clusteredmask])
                     allgenes.append(genes)
                 else:
                     clusters.remove(cluster)
             else:
-                if type(custom_gene_list)!=list and type(custom_gene_list)!=np.ndarray:
+                if type(custom_gene_list) != list and type(
+                        custom_gene_list) != np.ndarray:
                     raise Exception("custom_gene_list must have type List")
                 genemask = np.isin(loom.ra[gene_ra], custom_gene_list)
                 rawX.append(
                     loom[layer][genemask.nonzero()[0], :][:, clusteredmask])
                 allgenes.append(custom_gene_list)
                 break
-
-
 
     clusteredmask = np.hstack(clusteredmask)
 
@@ -303,18 +306,18 @@ def cluster_differential_expression_heatmap(
                     vmin=vmin,
                     vmax=vmax)
         for i, cluster in enumerate(clusters):
-            ax.annotate(cluster,
-                        xy=(-.7, (len(clusters) - i - 0.5) / len(clusters)),
-                        xytext=(-.9, (len(clusters) - i - 0.5) / len(clusters)),
-                        ha='center',
-                        va='center',
-                        bbox=dict(boxstyle='square', fc='white'),
-                        arrowprops=dict(
-                            arrowstyle='-[, widthB={}, lengthB=1'.format(
-                                2.54 * fig.get_size_inches()[1] / len(clusters)),
-                            lw=2.0),
-                        annotation_clip=False,
-                        xycoords='axes fraction')
+            ax.annotate(
+                cluster,
+                xy=(-.7, (len(clusters) - i - 0.5) / len(clusters)),
+                xytext=(-.9, (len(clusters) - i - 0.5) / len(clusters)),
+                ha='center',
+                va='center',
+                bbox=dict(boxstyle='square', fc='white'),
+                arrowprops=dict(arrowstyle='-[, widthB={}, lengthB=1'.format(
+                    2.54 * fig.get_size_inches()[1] / len(clusters)),
+                                lw=2.0),
+                annotation_clip=False,
+                xycoords='axes fraction')
         ax.set_ylabel('Gene')
         if average_over_clusters:
             ax.set_xlabel('Cluster')
@@ -323,14 +326,13 @@ def cluster_differential_expression_heatmap(
             ax.set_xticklabels([])
     else:
         g = sns.clustermap(hmdf,
-                    cmap=cmap,
-                    yticklabels=1,
-                    cbar_kws={'label': cbar_label},
-                    vmin=vmin,
-                    vmax=vmax,
-                    col_cluster=False,
-                    figsize=figsize)
-
+                           cmap=cmap,
+                           yticklabels=1,
+                           cbar_kws={'label': cbar_label},
+                           vmin=vmin,
+                           vmax=vmax,
+                           col_cluster=False,
+                           figsize=figsize)
 
     plt.tight_layout()
 
@@ -1136,43 +1138,53 @@ def cluster_enrichment_heatmap(x,
     Produces a heatmap indicating the fraction of cell clusters across groups.  For example, if there are `m` experimental groups and `n` clusters of cells, will produce a heatmap with
     `n` rows and `m` columns. 
     `heatmap_shading_key` can be any field of the named tuple output of `panopticon.analysis.get_cluster_enrichment_dataframes`. These include:
-    - If `heatmap_shading_key`="FractionOfCluster", heatmap color will be row-normalized; that is, it will indicate the fraction of cells in a cluster that are in groups.
-    - If `heatmap_shading_key`="FractionOfGroup", heatmap color will be column-normalized; that is, it will indicate the fraction of cells in a group that are in a given cluster. 
-    - If `heatmap_shading_key`="Counts", heatmap color will depict raw counts.
-    - If `heatmap_shading_key`="PhiCoefficient", heatmap color will depict phi-coefficients (described below).
-    - If `heatmap_shading_key`="FishersExactP", heatmap color will depict Fisher's exact test p-values (described below).
+    - If `heatmap_shading_key` = "FractionOfCluster", heatmap color will be row-normalized; that is, it will indicate the fraction of cells in a cluster that are in groups.
+    - If `heatmap_shading_key` = "FractionOfGroup", heatmap color will be column-normalized; that is, it will indicate the fraction of cells in a group that are in a given cluster. 
+    - If `heatmap_shading_key` = "Counts", heatmap color will depict raw counts.
+    - If `heatmap_shading_key` = "PhiCoefficient", heatmap color will depict phi-coefficients (described below).
+    - If `heatmap_shading_key` = "FishersExactP", heatmap color will depict Fisher's exact test p-values (described below).
 
     P-values and phi-coefficients are computed by constructing the contigency matrices as follows:
-        [ a  b ]
-        [ c  d ]
-     where `a` represents counts in cluster (**not** normalized) in group, `b` counts not in cluster in group, `c` counts in group, not in cluster, and `d` counts not in group, not in cluster. This is most intuitive for two groups, but can be computed in all cases (margins of the contingency matrix will be unchanged).
+    .. list-table:: 
+       :widths: 25 25
+    
+       * - a
+         - b
+       * - c
+         - d
+    where `a` represents counts in cluster (**not** normalized) in group, `b` counts not in cluster in group, `c` counts in group, not in cluster, and `d` counts not in group, not in cluster. This is most intuitive for two groups, but can be computed in all cases (margins of the contingency matrix will be unchanged).
      P-values are computed via `scipy.stats.fisher_exact`, and effect sizes by phi coefficient (`utilities.phi_coefficient`).
+
+    If there are only two groups, side annotation can also be used in order to display counts, normalized counts, fisher's exact p-values and phi-coefficients all on one plot (see https://doi.org/10.1101/2021.08.25.456956, Fig. 4c, f and Fig. 5c). This will only work in the two-group case however. 
 
     Parameters
     ----------
-    x :
+    x : str
+        column of `data` indicating the group (e.g. experimental group)
         
-    y :
+    y :  str
+        column of `data` indicating the cell cluster
         
-    data :
+    data : pandas.DataFrame
+       `pandas.DataFrame` object with 
         
-    show :
+    show : bool
         (Default value = True)
-    output :
+    output : NoneType or str
         (Default value = None)
-    fig :
+    fig : matplotlib.figure.Figure or None
         (Default value = None)
-    cax :
+    cax : matplotlib.axes._subplots.AxesSubplot or None
         (Default value = None)
-    ax :
+    ax : matplotlib.axes._subplots.AxesSubplot
         (Default value = None)
-    side_annotation :
+    side_annotation : bool
         (Default value = True)
-    heatmap_shading_key :
+    heatmap_shading_key : str
         (Default value = 'ClusterFraction')
-    annotation_key :
+    annotation_key : str
         (Default value = 'Counts')
-    annotation_fmt :
+    annotation_fmt : str
         (Default value = '.5g')
 
     Returns
