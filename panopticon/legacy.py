@@ -87,6 +87,8 @@ def create_subsetted_loom_with_genemask(loom, output_loom, cellmask, genemask):
     if '' not in loom.layers.keys():
         raise Exception("Expecting '' layer, yet none found")
     rowmeta, colmeta = recover_meta(loom)
+    if len(genemask)!=loom.shape[0] or len(cellmask)!=loom.shape[1]:
+        raise Exception("genemask and cellmask must be boolean masks with length equal to the number of rows and columns of loom, respectively")
     loompy.create(output_loom, loom[''][genemask.nonzero()[0], :][:, cellmask.nonzero()[0]],
                   rowmeta[genemask].to_dict("list"),
                   colmeta[cellmask].to_dict("list"))
@@ -115,6 +117,8 @@ def create_subsetted_loom(loom, output_loom_filename, cellmask):
     """
     import loompy
 
+    if len(cellmask)!=loom.shape[1]:
+        raise Exception("cellmask must be boolean mask with length equal to the number of columns of loom")
     with loompy.new(output_loom_filename) as dsout:
         cells = np.where(cellmask)[
             0]  

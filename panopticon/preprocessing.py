@@ -28,7 +28,8 @@ def generate_cell_and_gene_quality_metrics(loom,
                                            ribosomal_qc=False,
                                            mitochondrial_qc=False,
                                            ribosomal_gene_mask=None,
-                                           mitochondrial_gene_mask=None):
+                                           mitochondrial_gene_mask=None,
+                                           verbose=False):
     """Calculates multiple QC-related quantities and writes them to the LoomConnection instance specified in loom:
    
     - nCountsForCell: absolute number of non-normalized counts for a given cell (across all genes)
@@ -53,12 +54,14 @@ def generate_cell_and_gene_quality_metrics(loom,
          The row attribute used for genes (recommended to use the HUGO names for genes, as this is used by default to determine which genes are mitochondrial or ribosomal) (Default value = 'gene')
     ribosomal_qc : bool
          If True, will compute ribosomal-based QC metrics (RibosomalRelativeMeanAbsolutionDeviation:, RibosomalMaxOverMean) (Default value = False)
-    mitochondrial_qc :
+    mitochondrial_qc : bool
          If True, will compute mitochondrial-based QC metric ((Default value = False)
-    ribosomal_gene_mask :
-         (Default value = None)
-    mitochondrial_gene_mask :
-         (Default value = None)
+    ribosomal_gene_mask : boolean mask with length equal to loom.shape[0]
+         Specifies the indices (via Boolean mask) of the rows corresponding to ribosomal genes.  If None, will generate mask from all genes whose name starts with 'RP' or 'Rp' (Default value = None)
+    mitochondrial_gene_mask : boolean mask with length equal to loom.shape[0]
+         Specifies the indices (via Boolean mask) of the rows corresponding to mitochrondrial genes.  If None, will generate mask from all genes whose name starts with 'mt.' or 'mt.' (Default value = None)
+    verbose : bool
+         If True, will print notification whenever a QC calculation is completed.  (Default value = False)
 
     Returns
     -------
@@ -68,7 +71,11 @@ def generate_cell_and_gene_quality_metrics(loom,
     """
     from statsmodels import robust
     ncounts_for_cell = loom[layername].map([np.sum], axis=1)[0]
+    if verbose:
+        print("Completed ncounts_for_cell")
     ncounts_for_gene = loom[layername].map([np.sum], axis=0)[0]
+    if verbose:
+        print("Completed ncounts_for_gene")
 
     if (ncounts_for_cell == (
             ncounts_for_cell).astype(int)).sum() == len(ncounts_for_cell):
@@ -87,6 +94,8 @@ def generate_cell_and_gene_quality_metrics(loom,
                 x.startswith('RP') or x.startswith('Rp')
                 for x in loom.ra[gene_ra]
             ])
+        if len(ribosomal_gene_mask)!=loom.shape[0]:
+            raise Exception("ribosomal_gene_mask must be boolean mask with length equal to the number of rows of loom")
         madrp, meanrp, maxrp = loom[layername].map(
             [robust.mad, np.mean, np.max],
             axis=1,
@@ -97,12 +106,16 @@ def generate_cell_and_gene_quality_metrics(loom,
             loom.ca['RibosomalCountFraction'] = loom[layername].map(
                 [np.sum], axis=1, selection=ribosomal_gene_mask.nonzero()
                 [0])[0] / ncounts_for_cell
+        if verbose:
+            print("Completed ribosomal QC")
     if mitochondrial_qc:
         if mitochondrial_gene_mask is None:
             mitochondrial_gene_mask = np.array([
                 x.lower().startswith('mt-') or x.lower().startswith('mt.')
                 for x in loom.ra[gene_ra]
             ])
+        if len(mitochondrial_gene_mask)!=loom.shape[0]:
+            raise Exception("mitochondrial_gene_mask must be boolean mask with length equal to the number of rows of loom")
         madmt, meanmt, maxmt = loom[layername].map(
             [robust.mad, np.mean, np.max],
             axis=1,
@@ -115,9 +128,13 @@ def generate_cell_and_gene_quality_metrics(loom,
                 axis=1,
                 selection=mitochondrial_gene_mask.nonzero()
                 [0])[0] / ncounts_for_cell
+        if verbose:
+            print("Completed mitochondrial QC")
 
     madall, meanall = loom[layername].map([robust.mad, np.mean], axis=1)
     loom.ca['AllGeneRelativeMeanAbsoluteDeviation'] = madall / meanall
+    if verbose:
+        print("Completed madall/meanall")
 
     def complexity(vec):
         """
@@ -135,6 +152,8 @@ def generate_cell_and_gene_quality_metrics(loom,
 
     loom.ca['nGene'] = loom[layername].map([complexity], axis=1)[0]
     loom.ra['nCell'] = loom[layername].map([complexity], axis=0)[0]
+    if verbose:
+        print("Completed nGene, nCell")
 
 
 def get_cluster_specific_greater_than_cutoff_mask(loom,
@@ -279,7 +298,7 @@ def generate_antibody_prediction(loom,
     This approach takes some inspiration from the dsb approach: https://doi.org/10.1101/2020.02.24.963603.
     However, there is no use of isotypes.  Therefore, is amounts only to "step 1" of that procedure. This routine can also take into
     acccount the distribution of antibody/feature barcode counts from empty droplet using the optional argument `raw_antibody_counts_df`. 
-    This routine using a 2-component Gaussian-mixture model on z-scored log1p antibody counts (with or without background correction) 
+    This routine uses a 2-component Gaussian-mixture model on z-scored log1p antibody counts (with or without background correction) 
     to predict whether a given cells is "positive" or "negative" for the feature barcode in question.
 
     Parameters

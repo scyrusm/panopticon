@@ -44,6 +44,10 @@ def get_module_score_matrix(loom,
                                  duplicates='drop',
                                  labels=False)
     else:
+        if len(cellmask) != loom.shape[1]:
+            raise Exception(
+                "cellmask must be boolean mask with length equal to the number of columns of loom"
+            )
         gene_quantiles = pd.qcut(loom[layername].map(
             [np.mean], axis=0, selection=cellmask.nonzero()[0])[0],
                                  nbins,
@@ -51,6 +55,10 @@ def get_module_score_matrix(loom,
                                  labels=False)
     sigdata_quantiles = gene_quantiles[signature_mask]
     nonsigdata_quantiles = gene_quantiles[~signature_mask]
+    if len(signature_mask) != loom.shape[1]:
+        raise Exception(
+            "signature_mask must be boolean mask with length equal to the number of columns of loom"
+        )
     signature = loom[layername].map([np.mean],
                                     axis=1,
                                     selection=signature_mask.nonzero()[0])[0]
@@ -260,6 +268,10 @@ def generate_nmf_and_loadings(loom,
             "Necessary to have already generated gene expression variances")
     vargenemask = loom.ra['GeneVar'] > np.sort(
         loom.ra['GeneVar'])[::-1][nvargenes]
+    if len(vargenemask) != loom.shape[0]:
+        raise Exception(
+            "vargenemask must be boolean mask with length equal to the number of rows of loom"
+        )
     X = loom[layername][vargenemask.nonzero()[0], :]
     model = NMF(n_components=n_components,
                 init='random',
@@ -916,11 +928,19 @@ def get_cluster_embedding(loom,
             clustering_level)] == cluster
     else:
         print("Clustering over custom mask--ignoring cluster argument")
+    if len(mask) != loom.shape[1]:
+        raise Exception(
+            "mask must be boolean mask with length equal to the number of columns of loom"
+        )
     if n_neighbors is None:
         n_neighbors = int(np.sqrt(np.sum(mask)))
     if genemask is None:
         data = loom[layername][:, mask.nonzero()[0]]
     else:
+        if len(genemask) != loom.shape[0]:
+            raise Exception(
+                "genemask must be boolean mask with length equal to the number of rows of loom"
+            )
         data = loom[layername][genemask.nonzero()[0], :][:, mask.nonzero()[0]]
 
     pca = PCA(n_components=np.min([n_components_pca, data.shape[1]]))
@@ -968,6 +988,10 @@ def get_metafield_breakdown(loom,
                 == cluster) & (loom.ca['nGene'] >= complexity_cutoff)
     else:
         print("ignoring cluster, using custom mask")
+        if len(mask) != loom.shape[1]:
+            raise Exception(
+                "mask must be boolean mask with length equal to the number of columns of loom"
+            )
         mask = (mask) & (loom.ca['nGene'] >= complexity_cutoff)
     return pd.DataFrame(loom.ca[field][mask.nonzero()[0]])[0].value_counts()
 
@@ -1643,6 +1667,37 @@ def simpson(x, with_replacement=False):
         return np.sum([(y / total) * ((y - 1) / (total - 1)) for y in x])
 
 
+def generate_ca_simpson_index(loom,
+                              ca,
+                              blacklisted_ca_values=[],
+                              second_ca=None,
+                              output_name=None,
+                              overwrite=False,
+                              with_replacement=False):
+
+    if output_name is None:
+        raise Exception("output_name must be specified")
+    if output_name in loom.ca.keys() and overwrite is False:
+        raise Exception(
+            "overwrite must be True to write over existing ca ({})".format(
+                output_name))
+
+    from panopticon.analysis import simpson
+    ca2counts = pd.DataFrame(loom.ca[ca])[0].value_counts().to_dict()
+    df = pd.DataFrame(loom.ca[ca], columns=[ca])
+    if second_ca is None:
+        df = df[~df[ca].isin(blacklisted_ca_values)]
+        s = df[ca].value_counts().agg(simpson,
+                                      with_replacement=with_replacement)
+        loom.ca[output_name] = s
+    else:
+        df[second_ca] = loom.ca[second_ca]
+        df = df[~df[ca].isin(blacklisted_ca_values)]
+        s_dict = df.groupby(second_ca)[ca].value_counts().groupby(second_ca).agg(
+            simpson, with_replacement=with_replacement).to_dict()
+        loom.ca[output_name] = [s_dict[x] for x in loom.ca[second_ca]]
+
+
 def get_enrichment_score(genes,
                          geneset,
                          scores=None,
@@ -1841,8 +1896,6 @@ def conditional_simpson(x, x_conditional, x_total, with_replacement=False):
         ])
 
 
-
-
 def get_cluster_enrichment_dataframes(x, y, data):
     """
 
@@ -1865,38 +1918,46 @@ def get_cluster_enrichment_dataframes(x, y, data):
     fishers_exact_p_dict = {}
     phi_coefficient_dict = {}
     counts_dict = {}
-    cluster_fraction_dict = {}
+    cluster_fraction_incluster_dict = {}
+    cluster_fraction_ingroup_dict = {}
     for group in data[x].unique():
         fishers_exact_p_dict[group] = {}
         phi_coefficient_dict[group] = {}
         counts_dict[group] = {}
-        cluster_fraction_dict[group] = {}
+        cluster_fraction_incluster_dict[group] = {}
+        cluster_fraction_ingroup_dict[group] = {}
         for cluster in data[y].unique():
             t11 = data[(data[x] == group)
                        & (data[y] == cluster)].shape[0]  #.sum()
             t12 = data[(data[x] == group)
                        & (data[y] != cluster)].shape[0]  #.sum()
-            t21 = data[(data[x] != group)
-                       & (data[y] == cluster)].shape[0]  
-            t22 = data[(data[x] != group)
-                       & (data[y] != cluster)].shape[0]
+            t21 = data[(data[x] != group) & (data[y] == cluster)].shape[0]
+            t22 = data[(data[x] != group) & (data[y] != cluster)].shape[0]
             table = np.array([[t11, t12], [t21, t22]])
 
             fishers_exact_p_dict[group][cluster] = fisher_exact(table)[1]
             phi_coefficient_dict[group][cluster] = phi_coefficient(table)
             counts_dict[group][cluster] = t11
-            cluster_fraction_incluster_dict[group][cluster] = t11 / (t11 + t21)  # this represents the fraction of cells in a cluster that are in a group
-            cluster_fraction_ingroup_dict[group][cluster] = t11 / (t11 + t12)  # this represents the fraction of cells in a group that are in a cluster
+            cluster_fraction_incluster_dict[group][cluster] = t11 / (
+                t11 + t21
+            )  # this represents the fraction of cells in a cluster that are in a group
+            cluster_fraction_ingroup_dict[group][cluster] = t11 / (
+                t11 + t12
+            )  # this represents the fraction of cells in a group that are in a cluster
 
     fishers_exact_p_df = pd.DataFrame.from_dict(fishers_exact_p_dict)
     phi_coefficient_df = pd.DataFrame.from_dict(phi_coefficient_dict)
     counts_df = pd.DataFrame.from_dict(counts_dict)
-    cluster_fraction_incluster_df = pd.DataFrame.from_dict(cluster_fraction_incluster_dict)
-    cluster_fraction_ingroup_df = pd.DataFrame.from_dict(cluster_fraction_ingroup_dict)
+    cluster_fraction_incluster_df = pd.DataFrame.from_dict(
+        cluster_fraction_incluster_dict)
+    cluster_fraction_ingroup_df = pd.DataFrame.from_dict(
+        cluster_fraction_ingroup_dict)
 
-    ClusterEnrichment = namedtuple(
-        'ClusterEnrichment',
-        ['FishersExactP', 'PhiCoefficient', 'Counts', 'FractionOfCluster','FractionOfGroup'])
+    ClusterEnrichment = namedtuple('ClusterEnrichment', [
+        'FishersExactP', 'PhiCoefficient', 'Counts', 'FractionOfCluster',
+        'FractionOfGroup'
+    ])
 
     return ClusterEnrichment(fishers_exact_p_df, phi_coefficient_df, counts_df,
-                             cluster_fraction_incluster_df, cluster_fraction_ingroup_df)
+                             cluster_fraction_incluster_df,
+                             cluster_fraction_ingroup_df)

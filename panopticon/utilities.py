@@ -551,7 +551,11 @@ def convert_10x_h5(path_10x_h5,
 
     import loompy
     from panopticon.utilities import import_check
-    exit_code = import_check("cellranger", 'conda install -c hcc cellranger')
+    exit_code = import_check(
+        "cellranger",
+        '- Download cellranger from `https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/latest?`\n - unpack cellranger tarball \n - source `sourceme.bash` or `sourceme.csh` file',
+        standard_prefix=False)
+    exit_code = import_check("lz4", 'pip install lz4')
     if exit_code != 0:
         return
     import cellranger.matrix as cr_matrix
@@ -1270,9 +1274,11 @@ def get_cluster_differential_expression_heatmap_df(loom,
 def generate_ca_frequency(loom,
                           ca,
                           blacklisted_ca_values=[],
+                          exclude_blacklisted_in_denominator=True,
                           second_ca=None,
                           output_name=None,
-                          overwrite=False):
+                          overwrite=False,
+                          output_counts_name=None):
     """
 
     Parameters
@@ -1301,23 +1307,29 @@ def generate_ca_frequency(loom,
             "overwrite must be True to write over existing ca ({})".format(
                 output_name))
     ca2counts = pd.DataFrame(loom.ca[ca])[0].value_counts().to_dict()
+    denominator_mask = [True] * loom.shape[1]
     for ca_value in blacklisted_ca_values:
         ca2counts[ca_value] = np.nan
+        if exclude_blacklisted_in_denominator:
+            denominator_mask *= ~np.isnan([ca2counts[x] for x in loom.ca[ca]])
     if second_ca is None:
-        denominator = loom.shape[1]
+        #        denominator = loom.shape[1]
+        denominator = denominator_mask.sum()
         frequencies = [ca2counts[x] / denominator for x in loom.ca[ca]]
     else:
         denominator = pd.DataFrame(
-            loom.ca[second_ca])[0].value_counts().to_dict()
+            loom.ca[second_ca][denominator_mask])[0].value_counts().to_dict()
         frequencies = [
             ca2counts[x] / denominator[y]
             for x, y in zip(loom.ca[ca], loom.ca[second_ca])
         ]
 
     loom.ca[output_name] = frequencies
+    if output_counts_name is not None:
+        loom.ca[output_counts_name] = [ca2counts[x] for x in loom.ca[ca]]
 
 
-def import_check(package, statement_upon_failure):
+def import_check(package, statement_upon_failure, standard_prefix=True):
     """
 
     Parameters
@@ -1335,9 +1347,14 @@ def import_check(package, statement_upon_failure):
         exec("import {}".format(package))
         return 0
     except:
-        print(
-            "Import of package \'{}\' failed. We recommend installing with the command \'{}\'"
-            .format(package, statement_upon_failure))
+        if standard_prefix:
+            print(
+                "Import of package \'{}\' failed. We recommend installing with the command \'{}\'"
+                .format(package, statement_upon_failure))
+        else:
+            print(
+                "Import of package \'{}\' failed. We recommend the following:  \n\'{}\'"
+                .format(package, statement_upon_failure))
         return 1
 
 
@@ -1584,17 +1601,71 @@ def get_clumpiness(distances, clusteringcachedir='/tmp', verbose=False):
             np.argmax(scores) + minnk, "clusters, with",
             list(pd.DataFrame(clustering.labels_)[0].value_counts().values),
             "clonotypes")
-    df = pd.DataFrame(clustering.labels_,columns=['cluster'])
+    df = pd.DataFrame(clustering.labels_, columns=['cluster'])
     cluster2meandistance = {}
-    
+
     for cluster in df['cluster'].unique():
         mask = df['cluster'] == cluster
-        if mask.sum()>1:
-            cluster2meandistance[cluster] = distances[mask][:,mask].sum()/(mask.sum()**2-mask.sum())
+        if mask.sum() > 1:
+            cluster2meandistance[cluster] = distances[mask][:, mask].sum() / (
+                mask.sum()**2 - mask.sum())
         else:
             cluster2meandistance[cluster] = np.nan
-    cluster_counts = pd.DataFrame(pd.DataFrame(clustering.labels_)[0].value_counts())
+    cluster_counts = pd.DataFrame(
+        pd.DataFrame(clustering.labels_)[0].value_counts())
     cluster_counts.columns = ['clonotype count']
-    cluster_counts['mean intracluster levenshtein distances'] = [cluster2meandistance[x] for x in cluster_counts.index.values]
+    cluster_counts['mean intracluster levenshtein distances'] = [
+        cluster2meandistance[x] for x in cluster_counts.index.values
+    ]
     return cluster_counts
- 
+
+
+def create_single_cell_portal_compatible_files(
+        loom,
+        layers=None,
+        cellname='cellname',
+        genename='gene',
+        gene_common_name='gene_common_name',
+        coordinate_1='log2(TP10k+1) PCA UMAP embedding 1',
+        coordinate_2='log2(TP10k+1) PCA UMAP embedding 2'):
+    from scipy.io import mmwrite
+    import pandas as pd
+    import os
+    if layers is None:
+        layers = loom.layers.keys()
+    for layer in layers:
+        output_filename = loom.filename.replace('.loom', '') + layer + '.mtx'
+        mmwrite(output_filename, loom[layer].sparse())
+        command = "gzip -f {}".format(output_filename)
+        os.system(command)
+
+    df = pd.DataFrame(loom.ra[genename], columns=['gene'])
+    df['gene_common_name'] = loom.ra[gene_common_name]
+    df['kind'] = 'Gene Expression'
+    df.to_csv(loom.filename + '.barcodes.tsv',
+              sep='\t',
+              header=None,
+              index=None)
+    #comman
+    df = pd.DataFrame(loom.ca[cellname], columns=['cellname'])
+    df.to_csv(loom.filename + '.features.tsv',
+              sep='\t',
+              header=None,
+              index=None)
+
+    df = pd.DataFrame(loom.ca[cellname], copy=True, columns=['NAME'])
+    df['X'] = loom.ca[coordinate_1]
+    df['Y'] = loom.ca[coordinate_2]
+
+    pd.concat([
+        pd.DataFrame([['TYPE', 'numeric', 'numeric']],
+                     columns=['NAME', 'X', 'Y']), df
+    ]).to_csv(loom.filename + '_clustering.tsv', index=None, sep='\t')
+
+
+def create_excel_spreadsheet_from_differential_expression_dict(
+        diffdict, filename):
+    with pd.ExcelWriter(filename) as writer:
+        for key in diffex.keys():
+            if type(diffex[key]) != float:
+                diffex[key].to_excel(writer, sheet_name=key, index=False)

@@ -7,7 +7,7 @@ Panopticon Style Guide
 
 Rows are genes, columns are cells.  **Row** attributes therefore represent genes and by-gene metadata, including
 
-- gene (can be HUGO Gene Nomenclature Committee names, **OR (!)** the Ensembl ID).
+- gene (can be HUGO Gene Nomenclature Committee names, or the Ensembl ID).
     - It is preferable to use the Ensembl ID as "gene." See `here <https://www.biostars.org/p/344244/>`_ for some discussion. When doing so, use an auxiliary row attribute for the common, HUGO names. We recommend "GeneCommonName".
 - Components from dimensionality reduction; for example, "log2(TP10k+1) PC 1" would represent the loadings of genes of the first principal component of the layer "log2(TP10k+1)"
 - chromosome

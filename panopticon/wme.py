@@ -285,6 +285,9 @@ def get_masked_wme(loom, layername, mask=None, gene_ra='gene',species='homo sapi
     if mask is None:
         X = loom[layername][:,:]
     else:
+        if len(mask)!=loom.shape[1]:
+            raise Exception("mask must be boolean mask with length equal to the number of columns of loom")
+
         if mask_option == 'load_full':  # this is to address an h5py performance bog
             X = loom[layername][:,:][:,mask.nonzero()[0]]
         elif mask_option == 'mask_first':
