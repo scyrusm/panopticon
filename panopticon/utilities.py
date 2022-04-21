@@ -1330,7 +1330,7 @@ def generate_ca_frequency(loom,
             "overwrite must be True to write over existing ca ({})".format(
                 output_name))
     ca2counts = pd.DataFrame(loom.ca[ca])[0].value_counts().to_dict()
-    denominator_mask = [True] * loom.shape[1]
+    denominator_mask = np.array([True] * loom.shape[1])
     for ca_value in blacklisted_ca_values:
         ca2counts[ca_value] = np.nan
         if exclude_blacklisted_in_denominator:
