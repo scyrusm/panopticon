@@ -32,12 +32,14 @@ def get_valid_gene_info(
         
     genes : List[str] :
         
-    genes: List[str] :
+    genes : List[str] :
         
     release :
-         (Default value = 102)
+        (Default value = 102)
     species :
-         (Default value = 'homo sapiens')
+        (Default value = 'homo sapiens')
+    genes: List[str] :
+        
 
     Returns
     -------
@@ -240,6 +242,8 @@ def we_can_pickle_it(thing, thingname: str):
         
     thingname : str :
         
+    thingname : str :
+        
     thingname: str :
         
 
@@ -258,6 +262,8 @@ def we_can_unpickle_it(thingname: str):
 
     Parameters
     ----------
+    thingname : str :
+        
     thingname : str :
         
     thingname : str :
@@ -493,11 +499,12 @@ def get_igraph_from_adjacency(adjacency, directed=None):
     adjacency :
         
     directed :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
 
+    
     """
     import igraph as ig
 
@@ -534,19 +541,20 @@ def convert_10x_h5(path_10x_h5,
     output_file :
         
     labelkey :
-         (Default value = None)
+        (Default value = None)
     label :
-         (Default value = '')
+        (Default value = '')
     genes_as_ca :
-         (Default value = [])
+        (Default value = [])
     gene_whitelist :
-         (Default value = None)
+        (Default value = None)
     output_type :
-         (Default value = 'loom')
+        (Default value = 'loom')
 
     Returns
     -------
 
+    
     """
 
     import loompy
@@ -648,6 +656,7 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
     Returns
     -------
 
+    
     """
     gtf = pd.read_table(input_gtf, header=None, comment='#')
     gtf.columns = [
@@ -677,6 +686,7 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
         Returns
         -------
 
+        
         """
         exon_number = attribute.split('exon_number')[1].split(';')[0].split(
             '\"')[-2]
@@ -737,19 +747,20 @@ def get_umap_from_matrix(X,
     X :
         
     random_state :
-         (Default value = 17)
+        (Default value = 17)
     verbose :
-         (Default value = True)
+        (Default value = True)
     min_dist :
-         (Default value = 0.001)
+        (Default value = 0.001)
     n_neighbors :
-         (Default value = 20)
+        (Default value = 20)
     metric :
-         (Default value = 'correlation')
+        (Default value = 'correlation')
 
     Returns
     -------
 
+    
     """
 
     import umap
@@ -777,17 +788,18 @@ def convert_h5ad(h5ad,
     output_loom :
         
     convert_obsm :
-         (Default value = True)
+        (Default value = True)
     convert_varm :
-         (Default value = True)
+        (Default value = True)
     convert_uns :
-         (Default value = True)
+        (Default value = True)
     convert_layers :
-         (Default value = True)
+        (Default value = True)
 
     Returns
     -------
 
+    
     """
     import scanpy
     import loompy
@@ -857,11 +869,12 @@ def get_UMI_curve_from_10x_h5(path_10x_h5, save_to_file=None):
     path_10x_h5 :
         
     save_to_file :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
 
+    
     """
     from panopticon.utilities import import_check
     exit_code = import_check("cellranger", 'conda install -c hcc cellranger')
@@ -905,27 +918,28 @@ def get_dsb_normalization(cell_antibody_counts,
     empty_droplet_antibody_counts :
         
     use_isotype_control :
-         (Default value = True)
+        (Default value = True)
     denoise_counts :
-         (Default value = True)
+        (Default value = True)
     isotype_control_name_vec :
-         (Default value = None)
+        (Default value = None)
     define_pseudocount :
-         (Default value = False)
+        (Default value = False)
     pseudocount_use :
-         (Default value = 10)
+        (Default value = 10)
     quantile_clipping :
-         (Default value = False)
+        (Default value = False)
     quantile_clip :
-         (Default value = [0.001)
+        (Default value = [0.001)
     0.9995] :
         
     return_stats :
-         (Default value = False)
+        (Default value = False)
 
     Returns
     -------
 
+    
     """
 
     import rpy2.robjects as robjects
@@ -996,19 +1010,20 @@ def get_cellphonedb_compatible_counts_and_meta(loom,
     celltype_ca :
         
     gene_ra :
-         (Default value = 'gene')
+        (Default value = 'gene')
     cellname_ca :
-         (Default value = 'cellname')
+        (Default value = 'cellname')
     return_df :
-         (Default value = False)
+        (Default value = False)
     output_prefix :
-         (Default value = None)
+        (Default value = None)
     mouse_to_human :
-         (Default value = False)
+        (Default value = False)
 
     Returns
     -------
 
+    
     """
     if output_prefix is None and not return_df:
         raise Exception(
@@ -1082,15 +1097,16 @@ def create_gsea_txt_and_cls(loom,
     phenotypes :
         
     cellmask :
-         (Default value = None)
+        (Default value = None)
     gene_ra :
-         (Default value = 'gene')
+        (Default value = 'gene')
     cellname_ca :
-         (Default value = 'cellname')
+        (Default value = 'cellname')
 
     Returns
     -------
 
+    
     """
     import os
     if cellmask is None:
@@ -1143,11 +1159,12 @@ def get_cross_column_attribute_heatmap(loom,
     ca2 :
         
     normalization_axis :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
 
+    
     """
     #if type(normalization_axis) == list:
     #    outdfs = []
@@ -1191,6 +1208,7 @@ def get_complement_contigency_tables(df):
     Returns
     -------
 
+    
     """
     if type(df) != pd.core.frame.DataFrame:
         raise Exception("pandas dataframe expected input")
@@ -1227,11 +1245,11 @@ def get_cluster_differential_expression_heatmap_df(loom,
     clusteringlevel :
         
     diffex :
-         (Default value = {})
+        (Default value = {})
     gene_name :
-         (Default value = 'gene')
+        (Default value = 'gene')
     cell_name :
-         (Default value = 'cellname')
+        (Default value = 'cellname')
 
     Returns
     -------
@@ -1288,17 +1306,22 @@ def generate_ca_frequency(loom,
     ca :
         
     blacklisted_ca_values :
-         (Default value = [])
+        (Default value = [])
     second_ca :
-         (Default value = None)
+        (Default value = None)
     output_name :
-         (Default value = None)
+        (Default value = None)
     overwrite :
-         (Default value = False)
+        (Default value = False)
+    exclude_blacklisted_in_denominator :
+         (Default value = True)
+    output_counts_name :
+         (Default value = None)
 
     Returns
     -------
 
+    
     """
     if output_name is None:
         raise Exception("output_name must be specified")
@@ -1338,10 +1361,13 @@ def import_check(package, statement_upon_failure, standard_prefix=True):
         
     statement_upon_failure :
         
+    standard_prefix :
+         (Default value = True)
 
     Returns
     -------
 
+    
     """
     try:
         exec("import {}".format(package))
@@ -1374,19 +1400,20 @@ def combine_misshaped_looms(looms,
     combined_output_loomname :
         
     filename_suffix :
-         (Default value = '_reshaped.loom')
+        (Default value = '_reshaped.loom')
     key_ras :
-         (Default value = ['gene'])
+        (Default value = ['gene'])
     key_ra_for_combining :
-         (Default value = 'gene')
+        (Default value = 'gene')
     layers_to_copy :
-         (Default value = [''])
+        (Default value = [''])
     verbose :
-         (Default value = False)
+        (Default value = False)
 
     Returns
     -------
 
+    
     """
     from panopticon.utilities import recover_meta
     import scipy
@@ -1476,6 +1503,23 @@ def combine_misshaped_looms(looms,
 
 
 def tcr_levenshtein_distance(tra1=None, tra2=None, trb1=None, trb2=None):
+    """
+
+    Parameters
+    ----------
+    tra1 :
+         (Default value = None)
+    tra2 :
+         (Default value = None)
+    trb1 :
+         (Default value = None)
+    trb2 :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     from tqdm import tqdm
     from panopticon.utilities import import_check
     exit_code = import_check("Levenshtein", 'pip install python-Levenshtein')
@@ -1569,6 +1613,21 @@ def tcr_levenshtein_distance(tra1=None, tra2=None, trb1=None, trb2=None):
 
 
 def get_clumpiness(distances, clusteringcachedir='/tmp', verbose=False):
+    """
+
+    Parameters
+    ----------
+    distances :
+        
+    clusteringcachedir :
+         (Default value = '/tmp')
+    verbose :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
     from sklearn.metrics import silhouette_score
     from sklearn.cluster import AgglomerativeClustering
     from tqdm import tqdm
@@ -1628,6 +1687,29 @@ def create_single_cell_portal_compatible_files(
         gene_common_name='gene_common_name',
         coordinate_1='log2(TP10k+1) PCA UMAP embedding 1',
         coordinate_2='log2(TP10k+1) PCA UMAP embedding 2'):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    layers :
+         (Default value = None)
+    cellname :
+         (Default value = 'cellname')
+    genename :
+         (Default value = 'gene')
+    gene_common_name :
+         (Default value = 'gene_common_name')
+    coordinate_1 :
+         (Default value = 'log2(TP10k+1) PCA UMAP embedding 1')
+    coordinate_2 :
+         (Default value = 'log2(TP10k+1) PCA UMAP embedding 2')
+
+    Returns
+    -------
+
+    """
     from scipy.io import mmwrite
     import pandas as pd
     import os
@@ -1665,6 +1747,19 @@ def create_single_cell_portal_compatible_files(
 
 def create_excel_spreadsheet_from_differential_expression_dict(
         diffdict, filename):
+    """
+
+    Parameters
+    ----------
+    diffdict :
+        
+    filename :
+        
+
+    Returns
+    -------
+
+    """
     with pd.ExcelWriter(filename) as writer:
         for key in diffex.keys():
             if type(diffex[key]) != float:
