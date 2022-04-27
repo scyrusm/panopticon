@@ -3,54 +3,114 @@
 import click
 import panopticon
 import pkg_resources
+
+
 @click.group()
 @click.version_option(version=pkg_resources.require("panopticon")[0].version)
 def cli():
     """Panopticon is a set of tools named after Jeremy Bentham's model for a prison, whereby multiple cells (!) could be observed with ease by a single individual.  
     """
-@cli.command(help="Combines multiple loom files together; convenience function to call loompy.combine")
-@click.argument('input_looms', type=click.Path(exists=True),nargs=-1)
-@click.argument('output_loom',nargs=1)
+
+
+@cli.command(
+    help=
+    "Combines multiple loom files together; convenience function to call loompy.combine"
+)
+@click.argument('input_looms', type=click.Path(exists=True), nargs=-1)
+@click.argument('output_loom', nargs=1)
 def combine_looms(input_looms, output_loom, output_type='loom'):
     import loompy
     loompy.combine(input_looms, output_loom, key='gene')
 
-@cli.command(help="Converts a 10x hdf5 file (e.g. filtered_feature_bc_matrix.h5, or raw_feature_bc_matrix) to a panopticon-compatible loom file")
+
+@cli.command(
+    help=
+    "Converts a 10x hdf5 file (e.g. filtered_feature_bc_matrix.h5, or raw_feature_bc_matrix) to a panopticon-compatible loom file"
+)
 @click.argument('h5file', type=click.Path(exists=True))
 @click.argument('output_loom')
 @click.option(
     '--label',
-    help='Add a label (e.g. cohort label) as column attribute to all cells (loom.ca[key] = value). Usage: --label key value',
-    nargs=2, default=[None, ''])
+    help=
+    'Add a label (e.g. cohort label) as column attribute to all cells (loom.ca[key] = value). Usage: --label key value',
+    nargs=2,
+    default=[None, ''])
 @click.option(
     '--convert_to_ca',
-    help='Convert a row attribute key to column attribute (e.g. for when your raw data is mixed CITE and scRNA-seq).  Usage --convert_to_ca Hash123', multiple=True)
+    help=
+    'Convert a row attribute key to column attribute (e.g. for when your raw data is mixed CITE and scRNA-seq).  Usage --convert_to_ca Hash123',
+    multiple=True)
 @click.option(
     '--whitelist_gene',
-    help='Whitelist a gene to include (will blacklist all other genes).  Intended for getting antibody counts from empty droplets, where other types of counts are not needed.  Usage --whitelist_gene Hash123', multiple=True,default=None)
-def convert_10x_h5(h5file, output_loom, label, convert_to_ca,whitelist_gene):
+    help=
+    'Whitelist a gene to include (will blacklist all other genes).  Intended for getting antibody counts from empty droplets, where other types of counts are not needed.  Usage --whitelist_gene Hash123',
+    multiple=True,
+    default=None)
+def convert_10x_h5(h5file, output_loom, label, convert_to_ca, whitelist_gene):
     from panopticon.utilities import convert_10x_h5
-    convert_10x_h5(h5file, output_loom, label[0], label[1], genes_as_ca=convert_to_ca, gene_whitelist=whitelist_gene)
+    convert_10x_h5(h5file,
+                   output_loom,
+                   label[0],
+                   label[1],
+                   genes_as_ca=convert_to_ca,
+                   gene_whitelist=whitelist_gene)
 
-@cli.command(help="Plots the UMI curve from a 10x hdf5 file (e.g. raw_feature_bc_matrix)")
-@click.argument('h5file', type=click.Path(exists=True))
-@click.option(
-    '--save_to_file',
-    default=None,
-    help='save output to file using matplotlib.pyplot.savefig' )
-def plot_UMI_curve_from_10x_h5(h5file, save_to_file):
-    from panopticon.utilities import get_UMI_curve_from_10x_h5
-    get_UMI_curve_from_10x_h5(h5file, save_to_file)
 
-@cli.command(help="Creates a new gtf where gene(s) of interest have been split into separate exonic regions and renamed accordingly")
-@click.argument('input_gtf',type=click.Path(exists=True))
+@cli.command(
+    help=
+    "Creates a new gtf where gene(s) of interest have been split into separate exonic regions and renamed accordingly"
+)
+@click.argument('input_gtf', type=click.Path(exists=True))
 @click.argument('output_gtf')
 @click.argument('gene', nargs=-1)
-def create_split_exon_gtf(input_gtf, output_gtf,gene):
+def create_split_exon_gtf(input_gtf, output_gtf, gene):
     from panopticon.utilities import create_split_exon_gtf
-    create_split_exon_gtf(input_gtf,output_gtf,gene)
+    create_split_exon_gtf(input_gtf, output_gtf, gene)
 
 
+@cli.command(
+    help=
+    "Merges a panopticon-compatible loom file containing gene expressing with 10x V(D)J information"
+)
+@click.argument('gex_loom', type=click.Path(exists=True))
+@click.argument('vdj_dir',type=click.Path(exists=True))
+@click.option(
+    '--barcode_ca',
+    help='Specifies the columna attribute in `gex_loom` corresponding to the cell barcode; this will be used to merge gex with V(D)J data. Default is "cellname"',
+    default='cellname')
+@click.option(
+    '--overwrite',
+    help='If unset, will raise Exception is column attribute associated with V(D)J already exist in loom; if set, these will be overwritten. ',
+    is_flag=True)
+def incorporate_vdj(gex_loom, vdj_dir,barcode_ca,overwrite):
+    from panopticon.utilities import incorporate_10x_vdj
+    import os
+    filtered_contig_annotations_csv = None
+    for root, dirs, files in os.walk(vdj_dir,topdown=False):
+        if 'filtered_contig_annotations.csv' in files:
+            filtered_contig_annotations_csv = os.path.join(root, 'filtered_contig_annotations.csv')
+            break
+#    if os.path.exists(vdj_dir+"/outs/filtered_contig_annotations.csv"):
+    if filtered_contig_annotations_csv is None:
+#        filtered_contig_annotations_csv = vdj_dir+"/outs/filtered_contig_annotations.csv"
+#    else:
+        raise Exception("{0} does not appear to be a valid 10x VDJ output directory; {0}/outs/filtered_contig_annotations.csv is missing".format(vdj_dir))
+    incorporate_10x_vdj(gex_loom,
+                   filtered_contig_annotations_csv,
+                   barcode_ca=barcode_ca,
+                   overwrite=overwrite)
+
+
+
+#@cli.command(help="Plots the UMI curve from a 10x hdf5 file (e.g. raw_feature_bc_matrix)")
+#@click.argument('h5file', type=click.Path(exists=True))
+#@click.option(
+#    '--save_to_file',
+#    default=None,
+#    help='save output to file using matplotlib.pyplot.savefig' )
+#def plot_UMI_curve_from_10x_h5(h5file, save_to_file):
+#    from panopticon.utilities import get_UMI_curve_from_10x_h5
+#    get_UMI_curve_from_10x_h5(h5file, save_to_file)
 #@cli.command(short_help="Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof")
 #@click.option(
 #    '--patient', help='selected patient number', required=True, multiple=True)
@@ -154,5 +214,5 @@ def create_split_exon_gtf(input_gtf, output_gtf,gene):
 #
 #
 #
-if __name__=='__main__':
+if __name__ == '__main__':
     cli()
