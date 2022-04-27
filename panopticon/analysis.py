@@ -55,9 +55,9 @@ def get_module_score_matrix(loom,
                                  labels=False)
     sigdata_quantiles = gene_quantiles[signature_mask]
     nonsigdata_quantiles = gene_quantiles[~signature_mask]
-    if len(signature_mask) != loom.shape[1]:
+    if len(signature_mask) != loom.shape[0]:
         raise Exception(
-            "signature_mask must be boolean mask with length equal to the number of columns of loom"
+            "signature_mask must be boolean mask with length equal to the number of rows of loom"
         )
     signature = loom[layername].map([np.mean],
                                     axis=1,
@@ -114,8 +114,8 @@ def generate_masked_module_score(loom,
     
     """
     from panopticon.analysis import get_module_score_matrix
-    #    if mask is None:
-    #        mask = np.array([True] * loom.shape[1])
+    #    if cellmask is None:
+    #        cellmask = np.array([True] * loom.shape[1])
     #matrix = loom[layername][:, mask]
     sigmask = np.isin(loom.ra[gene_ra], genelist)
     sig_score = get_module_score_matrix(loom,
@@ -553,7 +553,10 @@ def get_subclustering(X,
                       min_input_size=10,
                       silhouette_threshold=0.2,
                       regularization_factor=0.01,
-                      clusteringcachedir='clusteringcachedir/'):
+                      clusteringcachedir='clusteringcachedir/',
+                      show_dendrogram=False,
+                      linkage='average',
+                      silhouette_score_sample_size=None):
     """
 
     Parameters
@@ -587,27 +590,38 @@ def get_subclustering(X,
     if X.shape[0] < min_input_size:
         return np.array([0] * X.shape[0])
     else:
+        print('Computing agglomerative clustering with cosine affinity, {} linkage'.format(linkage))
         clustering = AgglomerativeClustering(n_clusters=2,
                                              memory=clusteringcachedir,
                                              affinity='cosine',
                                              compute_full_tree=True,
-                                             linkage='average')
+                                             linkage=linkage)
         scores = []
         minnk = 2
-        for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1)):
+        for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1), desc='Computing silhouette scores'):
             clustering.set_params(n_clusters=nk)
             clustering.fit(X)
-
+            if silhouette_score_sample_size is not None:
+                silhouette_score_sample_size = np.min([X.shape[0],silhouette_score_sample_size])
             score = silhouette_score(X,
                                      clustering.labels_,
                                      metric='cosine',
-                                     sample_size=None)
+                                     sample_size=silhouette_score_sample_size)
             # sample_size=np.min([5000, X.shape[0]]))
             scores.append(score)
             #break
         print("scores", np.array(scores))
-        #        scores = scores - np.arange(len(scores))*regularization_factor
-        #        print("corrected scores",np.array(scores))
+        if show_dendrogram and hasattr(clustering, 'children_'):
+            if linkage == 'average':
+                method = 'weighted'
+            else:
+                method = linkage
+            from scipy.cluster.hierarchy import dendrogram, linkage
+            import matplotlib.pyplot as plt
+            Z = linkage(X, metric='cosine', method=method)
+            d = dendrogram(Z, truncate_mode='level', p=10)
+            plt.show()
+
         if np.max(scores) >= score_threshold:
             clustering.set_params(n_clusters=np.argmax(scores) + minnk)
             clustering.fit(X)
@@ -632,11 +646,13 @@ def generate_clustering(loom,
                         silhouette_threshold=0.1,
                         clusteringcachedir='clusteringcachedir/',
                         out_of_core_batch_size=512,
-                        min_subclustering_size=50,
+                        min_subclustering_size=100,
                         first_round_leiden=False,
-                        leiden_nneighbors=20,
+                        leiden_nneighbors=100,
                         leiden_iterations=10,
-                        incremental_pca_threshold=10000):
+                        incremental_pca_threshold=10000,
+                        show_dendrogram=False,
+                        linkage='complete'):
     """
 
     Parameters
@@ -745,17 +761,16 @@ def generate_clustering(loom,
                                             layername,
                                             n_components=n_components)
             if max_clusters == 'sqrt_rule':
-                clustering = get_subclustering(
-                    X,
-                    silhouette_threshold,
-                    max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
-                    clusteringcachedir=clusteringcachedir)
-            else:
-                clustering = get_subclustering(
-                    X,
-                    silhouette_threshold,
-                    max_clusters=max_clusters,
-                    clusteringcachedir=clusteringcachedir)
+                max_clusters = int(np.floor(np.sqrt(X.shape[0])))
+            elif max_clusters == 'cbrt_rule':
+                max_clusters = int(np.floor(np.sqrt(X.shape[0])))
+            clustering = get_subclustering(
+                X,
+                silhouette_threshold,
+                max_clusters=max_clusters,
+                clusteringcachedir=clusteringcachedir,
+                show_dendrogram=show_dendrogram,
+                linkage=linkage)
 
         loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
@@ -824,19 +839,17 @@ def generate_clustering(loom,
                     X = model.fit_transform(data_c)
 
             if max_clusters == 'sqrt_rule':
-                nopath_clustering = get_subclustering(
-                    X,
-                    silhouette_threshold,
-                    max_clusters=int(np.floor(np.sqrt(X.shape[0]))),
-                    clusteringcachedir=clusteringcachedir,
-                    min_input_size=min_subclustering_size)
-            else:
-                nopath_clustering = get_subclustering(
-                    X,
-                    silhouette_threshold,
-                    max_clusters=max_clusters,
-                    clusteringcachedir=clusteringcachedir,
-                    min_input_size=min_subclustering_size)
+                max_clusters = int(np.floor(np.sqrt(X.shape[0])))
+            elif max_clusters == 'cbrt_rule':
+                max_clusters = int(np.floor(np.cbrt(X.shape[0])))
+            nopath_clustering = get_subclustering(
+                X,
+                silhouette_threshold,
+                max_clusters=max_clusters,
+                clusteringcachedir=clusteringcachedir,
+                min_input_size=min_subclustering_size,
+                show_dendrogram=show_dendrogram,
+                linkage=linkage)
 
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
@@ -1503,7 +1516,7 @@ def get_cluster_differential_expression(loom,
         altnames = [gene2altname[x] for x in genes]
         output['GeneAlternateName'] = altnames
 
-    output = output.sort_values('pvalue', ascending=True)
+    output = output.sort_values('CommonLanguageEffectSize', ascending=False)
     output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'],
                                                  is_sorted=True)[1]
     return output
@@ -1693,8 +1706,9 @@ def generate_ca_simpson_index(loom,
     else:
         df[second_ca] = loom.ca[second_ca]
         df = df[~df[ca].isin(blacklisted_ca_values)]
-        s_dict = df.groupby(second_ca)[ca].value_counts().groupby(second_ca).agg(
-            simpson, with_replacement=with_replacement).to_dict()
+        s_dict = df.groupby(second_ca)[ca].value_counts().groupby(
+            second_ca).agg(simpson,
+                           with_replacement=with_replacement).to_dict()
         loom.ca[output_name] = [s_dict[x] for x in loom.ca[second_ca]]
 
 

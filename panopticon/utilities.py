@@ -7,32 +7,16 @@ import pandas as pd
 
 def get_valid_gene_info(
     genes: List[str],
-    release=102,
-    species='homo sapiens'
+    release=106,
+    species='homo sapiens',
+    gene_info_threshold=0.95,
+    include_X_chromosome=False
 ) -> Tuple[List[str], List[int], List[int], List[int]]:
     """Returns gene locations for all genes in ensembl release 93  --S Markson 3 June 2020
 
     Parameters
     ----------
     genes : A list of genes
-        
-    genes : List[str] :
-        
-    genes : List[str] :
-        
-    genes : List[str] :
-        
-    genes : List[str] :
-        
-    genes : List[str] :
-        
-    genes : List[str] :
-        
-    genes : List[str] :
-        
-    genes : List[str] :
-        
-    genes : List[str] :
         
     release :
         (Default value = 102)
@@ -56,10 +40,21 @@ def get_valid_gene_info(
     gene_contigs = []
     gene_starts = []
     gene_ends = []
-    for gene in np.intersect1d(genes, [
-            gene.gene_name for gene in assembly.genes()
-            if gene.contig.isnumeric() or gene.contig == 'X'
-    ]):  # Toss genes not in hg38 release 93
+    valid_gene_rate = np.mean(np.isin(genes,[gene.gene_name for gene in assembly.genes()]))
+    if valid_gene_rate < gene_info_threshold:
+        raise Exception("Only {}% of genes exist in assembly, below {}% threshold.  Perhaps you are using the incorrect assembly?".format(valid_gene_rate*100, gene_info_threshold*100))
+    if include_X_chromosome:
+        filtered_genes = np.intersect1d(genes, [
+                gene.gene_name for gene in assembly.genes()
+                if gene.contig.isnumeric()
+        ])
+    else:
+        filtered_genes = np.intersect1d(genes, [
+                gene.gene_name for gene in assembly.genes()
+                if gene.contig.isnumeric() or gene.contig == 'X'
+        ])
+    for gene in filtered_genes:
+      # Toss on numeric contigs or on X chromosome
         gene_info = assembly.genes_by_name(gene)
         gene_info = gene_info[0]
         gene_names.append(gene)
@@ -244,6 +239,8 @@ def we_can_pickle_it(thing, thingname: str):
         
     thingname : str :
         
+    thingname : str :
+        
     thingname: str :
         
 
@@ -262,6 +259,8 @@ def we_can_unpickle_it(thingname: str):
 
     Parameters
     ----------
+    thingname : str :
+        
     thingname : str :
         
     thingname : str :
@@ -1314,9 +1313,9 @@ def generate_ca_frequency(loom,
     overwrite :
         (Default value = False)
     exclude_blacklisted_in_denominator :
-         (Default value = True)
+        (Default value = True)
     output_counts_name :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
@@ -1362,7 +1361,7 @@ def import_check(package, statement_upon_failure, standard_prefix=True):
     statement_upon_failure :
         
     standard_prefix :
-         (Default value = True)
+        (Default value = True)
 
     Returns
     -------
@@ -1508,17 +1507,18 @@ def tcr_levenshtein_distance(tra1=None, tra2=None, trb1=None, trb2=None):
     Parameters
     ----------
     tra1 :
-         (Default value = None)
+        (Default value = None)
     tra2 :
-         (Default value = None)
+        (Default value = None)
     trb1 :
-         (Default value = None)
+        (Default value = None)
     trb2 :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
 
+    
     """
     from tqdm import tqdm
     from panopticon.utilities import import_check
@@ -1620,13 +1620,14 @@ def get_clumpiness(distances, clusteringcachedir='/tmp', verbose=False):
     distances :
         
     clusteringcachedir :
-         (Default value = '/tmp')
+        (Default value = '/tmp')
     verbose :
-         (Default value = False)
+        (Default value = False)
 
     Returns
     -------
 
+    
     """
     from sklearn.metrics import silhouette_score
     from sklearn.cluster import AgglomerativeClustering
@@ -1694,21 +1695,22 @@ def create_single_cell_portal_compatible_files(
     loom :
         
     layers :
-         (Default value = None)
+        (Default value = None)
     cellname :
-         (Default value = 'cellname')
+        (Default value = 'cellname')
     genename :
-         (Default value = 'gene')
+        (Default value = 'gene')
     gene_common_name :
-         (Default value = 'gene_common_name')
+        (Default value = 'gene_common_name')
     coordinate_1 :
-         (Default value = 'log2(TP10k+1) PCA UMAP embedding 1')
+        (Default value = 'log2(TP10k+1) PCA UMAP embedding 1')
     coordinate_2 :
-         (Default value = 'log2(TP10k+1) PCA UMAP embedding 2')
+        (Default value = 'log2(TP10k+1) PCA UMAP embedding 2')
 
     Returns
     -------
 
+    
     """
     from scipy.io import mmwrite
     import pandas as pd
@@ -1717,7 +1719,7 @@ def create_single_cell_portal_compatible_files(
         layers = loom.layers.keys()
     for layer in layers:
         output_filename = loom.filename.replace('.loom', '') + layer + '.mtx'
-        mmwrite(output_filename, loom[layer].sparse())
+        mmwrite(output_filename, loom[layer].sparse().T)
         command = "gzip -f {}".format(output_filename)
         os.system(command)
 
@@ -1744,6 +1746,16 @@ def create_single_cell_portal_compatible_files(
                      columns=['NAME', 'X', 'Y']), df
     ]).to_csv(loom.filename + '_clustering.tsv', index=None, sep='\t')
 
+    df = pd.DataFrame(['TYPE'] + list(loom.ca[cellname]), columns=['cellname'])
+#    required_columns = [
+#        'biosample_id', 'disease', 'disease__ontology_label', 'donor_id',
+#        'library_preparation_protocol',
+#        'library_preparation_protocol__ontology_label', 'organ',
+#        'organ__ontology_label', 'sex', 'species', 'species__ontology_label'
+#    ]
+#    col2default = {'biosample_id':
+    df.to_csv(loom.filename + '_metadata.tsv', index=None, sep='\t')
+
 
 def create_excel_spreadsheet_from_differential_expression_dict(
         diffdict, filename):
@@ -1759,8 +1771,85 @@ def create_excel_spreadsheet_from_differential_expression_dict(
     Returns
     -------
 
+    
     """
     with pd.ExcelWriter(filename) as writer:
         for key in diffex.keys():
             if type(diffex[key]) != float:
                 diffex[key].to_excel(writer, sheet_name=key, index=False)
+
+
+def incorporate_10x_vdj(loomfile,
+                        filtered_contig_annotations_csv,
+                        barcode_ca='cellname',
+                        overwrite=False,
+                        barcode_match_exception_threshold=0.5):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    filtered_contig_annotations_csv :
+        
+    barcode_ca :
+         (Default value = 'cellname')
+
+    Returns
+    -------
+
+    """
+    import loompy
+    loom = loompy.connect(loomfile)
+    if len(np.unique(loom.ca[barcode_ca])) != loom.shape[1]:
+        raise Exception("`barcode_ca` must be unique to each cell")
+
+    filtered_contig_annotations = pd.read_csv(filtered_contig_annotations_csv)
+    barcode_match_rate = np.isin(
+        filtered_contig_annotations['barcode'].unique(),
+        loom.ca[barcode_ca]).mean()
+    if barcode_match_rate < barcode_match_exception_threshold:
+        raise Exception(
+            "Only {}% of V(D)J barcodes have corresponding gene expression data; GEX and V(D)J files may be mismatched"
+            .format(100 * barcode_match_rate))
+    filtered_contig_annotations_tcra = filtered_contig_annotations.query(
+        'chain=="TRA"')
+    filtered_contig_annotations_tcrb = filtered_contig_annotations.query(
+        'chain=="TRB"')
+    barcode_df_dict = {}
+    for label, fca in zip(
+        ['TRA', 'TRB'],
+        [filtered_contig_annotations_tcra, filtered_contig_annotations_tcrb]):
+        barcode_df = None
+        for col in [
+                x for x, xtype in zip(fca.columns, fca.dtypes)
+                if x != 'barcode' and xtype not in [bool, int, float]
+        ]:
+            if (~fca[col].isnull()).sum() > 0:
+                fca[col] = fca[col].astype(str)
+                if barcode_df is None:
+                    barcode_df = fca.groupby('barcode').agg({
+                        col: '---'.join
+                    }).reset_index()
+                else:
+                    barcode_df = pd.merge(barcode_df,
+                                          fca.groupby('barcode').agg({
+                                              col:
+                                              '---'.join
+                                          }).reset_index(),
+                                          on='barcode')
+        barcode_df_dict[label] = barcode_df.set_index('barcode').to_dict()
+        #break
+    for superkey in barcode_df_dict:
+        for subkey in barcode_df_dict[superkey]:
+            if '_'.join([superkey, subkey
+                         ]) in loom.ca.keys() and overwrite == False:
+                raise Exception(
+                    '{} is already a column attribute in {}; cannot re-assign while `overwrite` is False'
+                    .format('_'.join([superkey, subkey]), loom.filename))
+            else:
+                loom.ca['_'.join([superkey, subkey])] = [
+                    barcode_df_dict[superkey][subkey][x] if x
+                    in barcode_df_dict[superkey][subkey].keys() else np.nan
+                    for x in loom.ca[barcode_ca]
+                ]
