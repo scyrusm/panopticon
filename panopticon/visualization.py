@@ -55,7 +55,6 @@ def plot_subclusters(loom,
         supermask = np.isin(
             loom.ca['ClusteringIteration{}'.format(current_layer)],
             cluster) & (loom.ca['nGene'] >= complexity_cutoff)
-    print(np.sum(supermask))
     keep_probability = np.min([1, downsample_to / np.sum(supermask)])
     supermask *= np.random.choice([False, True],
                                   size=len(supermask),
@@ -149,7 +148,6 @@ def plot_cluster_umap(loom,
         supermask = np.isin(
             loom.ca['ClusteringIteration{}'.format(current_layer)],
             cluster) & (loom.ca['nGene'] >= complexity_cutoff)
-    print(np.sum(supermask))
     keep_probability = np.min([1, downsample_to / np.sum(supermask)])
     supermask *= np.random.choice([False, True],
                                   size=len(supermask),
@@ -266,10 +264,14 @@ def cluster_differential_expression_heatmap(
                     diffex[cluster] = get_cluster_differential_expression(
                         loom, clusteringlevel, layer, cluster)
                 if type(diffex[cluster]) != float:
-                    genes = diffex[cluster][~diffex[cluster]['gene'].isin(
-                        allgenes)].query('MeanExpr1 > MeanExpr2').sort_values(
-                            gene_sort_criterion,
-                            ascending=False).head(n_top_genes)['gene'].values
+                    genes = diffex[cluster][
+                        ~diffex[cluster]['GeneAlternateName'].
+                        isin(  # need to fix this...
+                            allgenes
+                        )].query('MeanExpr1 > MeanExpr2').sort_values(
+                            gene_sort_criterion, ascending=False
+                        ).head(n_top_genes)[
+                            'GeneAlternateName'].values  # need to fix this...
                     genemask = np.isin(loom.ra[gene_ra], genes)
                     rawX.append(
                         loom[layer][genemask.nonzero()[0], :][:,
@@ -286,7 +288,6 @@ def cluster_differential_expression_heatmap(
                     loom[layer][genemask.nonzero()[0], :][:, clusteredmask])
                 allgenes.append(custom_gene_list)
                 break
-
     clusteredmask = np.hstack(clusteredmask)
 
     hmdf = pd.DataFrame(np.vstack(rawX))
@@ -486,7 +487,6 @@ def swarmviolin(data,
             raise Exception(
                 "hue must be a categorical variable with 2 unique values")
         from scipy.stats import mannwhitneyu
-        print(data[y].dtype)
         if np.issubdtype(data[y].dtype, np.number):
             category_col = x
             continuous_col = y
@@ -615,7 +615,8 @@ def volcano(diffex,
             5,
         ))
     neglogpvalues = -np.log(diffex[pval_column].values) / np.log(10)
-    logfoldchange = diffex[mean_expr_left].values - diffex.MeanExpr2.values
+    logfoldchange = diffex[mean_expr_left].values - diffex[
+        mean_expr_right].values
     important_mask = (np.abs(logfoldchange) >
                       logfoldchange_importance_threshold)
     important_mask = important_mask & (neglogpvalues >
@@ -634,7 +635,6 @@ def volcano(diffex,
                c='b')
     maxx = np.nanmax(np.abs(logfoldchange))
     maxy = np.nanmax(neglogpvalues)
-    print(maxx, maxy)
     xoffset = .1
     yoffset = .1
     offsetcounter = 0
@@ -642,6 +642,18 @@ def volcano(diffex,
     #noteable_genes = diffex[diffex[gene_column].isin(genemarklist)].sort_values(pval_column)[gene_column].values
     if positions is None:
         positions = ['t'] * len(genemarklist)
+    elif positions == 'auto':
+        from sklearn.metrics import euclidean_distances
+        annomask = np.isin(diffex[gene_column], genemarklist)
+        distances = euclidean_distances(
+            np.vstack((logfoldchange[annomask], neglogpvalues[annomask])).T)
+        positions = []
+        for i in range(1, len(distances)):
+            mindist = np.min(distances[i, 0:i])
+            if mindist < 0.2:
+                positions.append('l')
+            else:
+                positions.append('r')
 
     for gene, position in zip(
             genemarklist,
@@ -719,7 +731,8 @@ def repertoire_plot(x=None,
                     ylabel='',
                     legend=False,
                     color_palette=None,
-                    stack_order='agnostic'):
+                    stack_order='agnostic',
+                    smear=False):
     """Repertoire plot, designed for plotting cluster compositions or TCR repertoires as stacked bar plots or pies, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
@@ -800,6 +813,9 @@ def repertoire_plot(x=None,
             color_palette = sns.palettes.color_palette('colorblind')
         elif stack_order == 'agnostic':
             color_palette = ['w']
+    if not smear and type(color_palette) == str:
+        raise Exception(
+            "type of `color_palette` may only be str if `smear`==True")
 
     all_heights = []
 
@@ -891,16 +907,29 @@ def repertoire_plot(x=None,
     bottoms = np.array([0.0] * all_heights.shape[0])
 
     if (not piechart) and (ax is None) and (fig is None):
-        fig, ax = plt.subplots(figsize=(5, 5))
+        if smear:
+            fig, ax = plt.subplots(1,
+                                   2,
+                                   figsize=(5.5, 5),
+                                   gridspec_kw={'width_ratios': [10, 1]})
+        else:
+            fig, ax = plt.subplots(figsize=(5, 5))
     elif (piechart) and (ax is None) and (fig is None):
         import math
         ngroups = len(groupings)
 
         nrows = int(np.round(ngroups / np.sqrt(ngroups)))
         ncols = math.ceil(ngroups / np.sqrt(ngroups))
-        print(ngroups, nrows, ncols)
-
-        fig, ax = plt.subplots(nrows, ncols, figsize=(5, 5))
+        if smear:
+            print("Constructing subplots with {} rows, {} columns".format(nrows, 2*ncols))
+            fig, ax = plt.subplots(
+                nrows,
+                2 * ncols,
+                figsize=(5.5, 5),
+                gridspec_kw={'width_ratios': [10, 1] * ncols})
+        else:
+            print("Constructing subplots with {} rows, {} columns".format(nrows,ncols))
+            fig, ax = plt.subplots(nrows, ncols, figsize=(5, 5))
 
 
 # if piechart:
@@ -911,48 +940,123 @@ def repertoire_plot(x=None,
                 labels = grouped_data[grouping].index.values
             else:
                 labels = None
+
+            if smear is True:
+                import seaborn as sns
+                countrange = range(np.min(all_heights[i, :]),
+                                   np.max(all_heights[i, :] + 1))
+                if type(color_palette) == str:
+                    count2color = {
+                        i: sns.color_palette(color_palette,
+                                             np.max(countrange) + 1)[i]
+                        for i in countrange
+                    }
+                else:
+                    raise Exception("`color_palette` must be of type str")
+
+                colors = [count2color[x] for x in all_heights[i, :]]
+                wedgeprops = {}
+            else:
+                colors = color_palette
+                wedgeprops = {"edgecolor": "k"}
             if len(np.shape(ax)) == 1:
-                ax[i].pie(all_heights[i, :],
-                          colors=color_palette,
-                          wedgeprops={"edgecolor": "k"},
-                          labels=labels)
+                if smear:
+                    subax = ax[i * 2]
+                    cbarax = ax[i * 2 + 1]
+                else:
+                    subax = ax[i]
+                    cbarax = None
             elif len(np.shape(ax)) == 2:
                 maxrows, maxcols = np.shape(ax)
-                if all_heights.shape[0] // maxrows > maxcols:
-                    raise Exception(
-                        "Insufficient number of subplots for number of grouping (pies)"
-                    )
-                ax[i % maxrows,
-                   i // maxrows].pie(all_heights[i, :],
-                                     colors=color_palette,
-                                     wedgeprops={"edgecolor": "k"},
-                                     labels=labels)
-                #edgecolor='k')
-                ax[i % maxrows, i // maxrows].set_title(groupings[i])
+                if smear:
+                    if 2 * all_heights.shape[0] // maxrows > maxcols:
+                        raise Exception(
+                            "Insufficient number of subplots for number of grouping (pies)"
+                        )
+                    subax = ax[2 * i // maxcols, 2 * i % maxcols]
+                    cbarax = ax[(2 * i + 1) // maxcols, (2 * i + 1) % maxcols]
+                    #edgecolor='k')
+                else:
+                    if all_heights.shape[0] // maxrows > maxcols:
+                        raise Exception(
+                            "Insufficient number of subplots for number of grouping (pies)"
+                        )
+                    subax = ax[i // maxcols, i % maxcols]
+                    cbarax = None
+                    #edgecolor='k')
+            subax.set_title(groupings[i])
+            subax.pie(all_heights[i, :],
+                      colors=colors,
+                      wedgeprops=wedgeprops,
+                      labels=labels)
+            if cbarax is not None:
+                import matplotlib as mpl
+
+                norm = mpl.colors.Normalize(vmin=np.min(countrange),
+                                            vmax=np.max(countrange))
+                cb1 = mpl.colorbar.ColorbarBase(cbarax,
+                                                cmap=color_palette,
+                                                norm=norm,
+                                                orientation='vertical')
+                cb1.set_label('Clone size (No. cells)')
 
     else:  # conventional stacked bar plot mode
+        if smear:
+            import seaborn as sns
+            countrange = range(np.min(all_heights), np.max(all_heights + 1))
+            if type(color_palette) == str:
+                count2color = {
+                    i: sns.color_palette(color_palette,
+                                         np.max(countrange) + 1)[i]
+                    for i in countrange
+                }
+            else:
+                raise Exception("`color_palette` must be of type str")
+        if smear:
+            subax = ax[0]
+            cbarax = ax[1]
+        else:
+            subax = ax
         for i in tqdm(range(all_heights.shape[1])):
 
-            #from IPython.core.debugger import set_trace; set_trace()
             if stack_order == 'matched':
                 label = grouped_data[grouping].index[i]
             else:
                 label = None
-            ax.bar(ind,
-                   all_heights[:, i],
-                   0.8,
-                   bottom=bottoms,
-                   color=color_palette[i % len(color_palette)],
-                   edgecolor='k',
-                   label=label)
+
+            if smear:
+                subax.bar(ind,
+                          all_heights[:, i],
+                          0.8,
+                          bottom=bottoms,
+                          color=[count2color[h] for h in all_heights[:, i]],
+                          label=label)
+                if cbarax is not None:
+                    import matplotlib as mpl
+                    norm = mpl.colors.Normalize(vmin=np.min(countrange),
+                                                vmax=np.max(countrange))
+                    cb1 = mpl.colorbar.ColorbarBase(cbarax,
+                                                    cmap=color_palette,
+                                                    norm=norm,
+                                                    orientation='vertical')
+                    cb1.set_label('Clone size (No. cells)')
+            else:
+                subax.bar(ind,
+                          all_heights[:, i],
+                          0.8,
+                          bottom=bottoms,
+                          color=color_palette[i % len(color_palette)],
+                          edgecolor='k',
+                          label=label)
+                subax.set_xticks(ind)
 
             bottoms += all_heights[:, i]
-        ax.set_xticks(ind)
+            subax.set_xticks(ind)
         if hue is None:
-            ax.set_xticklabels(groupings, rotation=90)
+            subax.set_xticklabels(groupings, rotation=90)
         else:
-            ax.set_xticklabels([grouping[1] for grouping in groupings],
-                               rotation=90)
+            subax.set_xticklabels([grouping[1] for grouping in groupings],
+                                  rotation=90)
             plt.tight_layout()
 
             xpositions = []
@@ -968,20 +1072,20 @@ def repertoire_plot(x=None,
             xpositions -= 0.5
             for xposition, label in zip(xpositions, labels):
                 trans = transforms.blended_transform_factory(
-                    ax.transData, fig.transFigure)
+                    subax.transData, fig.transFigure)
 
-                ax.annotate(label, (xposition, 0),
-                            annotation_clip=False,
-                            ha='center',
-                            va='bottom',
-                            xycoords=trans,
-                            fontsize=13)
+                subax.annotate(label, (xposition, 0),
+                               annotation_clip=False,
+                               ha='center',
+                               va='bottom',
+                               xycoords=trans,
+                               fontsize=13)
         if ylabel == '':
             if normalize:
                 ylabel = 'cell fraction'
             else:
                 ylabel = 'cell count'
-        ax.set_ylabel(ylabel)
+        subax.set_ylabel(ylabel)
     plt.tight_layout()
     if output is not None:
 

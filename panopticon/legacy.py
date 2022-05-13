@@ -94,7 +94,7 @@ def create_subsetted_loom_with_genemask(loom, output_loom, cellmask, genemask):
                   colmeta[cellmask].to_dict("list"))
     with loompy.connect(output_loom) as smallerloom:
         for layer in [x for x in loom.layer.keys() if x != '']:
-            smallerloom[layer] = loom[layer][:, cellmask][genemask.nonzero()[0], :]
+            smallerloom[layer] = loom[layer][:, cellmask.nonzero()[0]][genemask.nonzero()[0], :]
 
 
 def create_subsetted_loom(loom, output_loom_filename, cellmask):

@@ -40,21 +40,24 @@ def get_valid_gene_info(
     gene_contigs = []
     gene_starts = []
     gene_ends = []
-    valid_gene_rate = np.mean(np.isin(genes,[gene.gene_name for gene in assembly.genes()]))
+    valid_gene_rate = np.mean(
+        np.isin(genes, [gene.gene_name for gene in assembly.genes()]))
     if valid_gene_rate < gene_info_threshold:
-        raise Exception("Only {}% of genes exist in assembly, below {}% threshold.  Perhaps you are using the incorrect assembly?".format(valid_gene_rate*100, gene_info_threshold*100))
+        raise Exception(
+            "Only {}% of genes exist in assembly, below {}% threshold.  Perhaps you are using the incorrect assembly?"
+            .format(valid_gene_rate * 100, gene_info_threshold * 100))
     if include_X_chromosome:
         filtered_genes = np.intersect1d(genes, [
-                gene.gene_name for gene in assembly.genes()
-                if gene.contig.isnumeric()
+            gene.gene_name
+            for gene in assembly.genes() if gene.contig.isnumeric()
         ])
     else:
         filtered_genes = np.intersect1d(genes, [
-                gene.gene_name for gene in assembly.genes()
-                if gene.contig.isnumeric() or gene.contig == 'X'
+            gene.gene_name for gene in assembly.genes()
+            if gene.contig.isnumeric() or gene.contig == 'X'
         ])
     for gene in filtered_genes:
-      # Toss on numeric contigs or on X chromosome
+        # Toss on numeric contigs or on X chromosome
         gene_info = assembly.genes_by_name(gene)
         gene_info = gene_info[0]
         gene_names.append(gene)
@@ -1548,7 +1551,7 @@ def tcr_levenshtein_distance(tra1=None, tra2=None, trb1=None, trb2=None):
         else:
             distance_a12 = None
 
-        if tra1 is not None:
+        if tra2 is not None:
             distance_a22 = np.array(
                 [[levenshtein_distance(x, y) for y in tra2] for x in tra2])
             pbar.update(1)
@@ -1747,13 +1750,13 @@ def create_single_cell_portal_compatible_files(
     ]).to_csv(loom.filename + '_clustering.tsv', index=None, sep='\t')
 
     df = pd.DataFrame(['TYPE'] + list(loom.ca[cellname]), columns=['cellname'])
-#    required_columns = [
-#        'biosample_id', 'disease', 'disease__ontology_label', 'donor_id',
-#        'library_preparation_protocol',
-#        'library_preparation_protocol__ontology_label', 'organ',
-#        'organ__ontology_label', 'sex', 'species', 'species__ontology_label'
-#    ]
-#    col2default = {'biosample_id':
+    #    required_columns = [
+    #        'biosample_id', 'disease', 'disease__ontology_label', 'donor_id',
+    #        'library_preparation_protocol',
+    #        'library_preparation_protocol__ontology_label', 'organ',
+    #        'organ__ontology_label', 'sex', 'species', 'species__ontology_label'
+    #    ]
+    #    col2default = {'biosample_id':
     df.to_csv(loom.filename + '_metadata.tsv', index=None, sep='\t')
 
 
@@ -1773,10 +1776,11 @@ def create_excel_spreadsheet_from_differential_expression_dict(
 
     
     """
+    import pandas as pd
     with pd.ExcelWriter(filename) as writer:
-        for key in diffex.keys():
-            if type(diffex[key]) != float:
-                diffex[key].to_excel(writer, sheet_name=key, index=False)
+        for key in diffdict.keys():
+            if type(diffdict[key]) != float:
+                diffdict[key].to_excel(writer, sheet_name=str(key), index=False)
 
 
 def incorporate_10x_vdj(loomfile,
@@ -1853,3 +1857,31 @@ def incorporate_10x_vdj(loomfile,
                     in barcode_df_dict[superkey][subkey].keys() else np.nan
                     for x in loom.ca[barcode_ca]
                 ]
+
+
+def join_tra_trb_ca(loom, ca='cdr3'):
+    loom.ca['TRA_TRB_{}'.format(ca)] = [
+        '|'.join([x, y]) for x, y, in zip(loom.ca['TRA_{}'.format(ca)],
+                                          loom.ca['TRB_{}'.format(ca)])
+    ]
+
+
+def morisita(df, key, samplekey, sample1, sample2):
+    from panopticon.analysis import simpson
+    set1 = df[df[samplekey] == sample1][key].value_counts(
+        normalize=True).reset_index(name='count', ).rename({'index': key},
+                                                           axis=1)
+    set2 = df[df[samplekey] == sample2][key].value_counts(
+        normalize=True).reset_index(name='count', ).rename({'index': key},
+                                                           axis=1)
+    simpson1 = simpson(set1['count'].values, with_replacement=True)
+    simpson2 = simpson(set2['count'].values, with_replacement=True)
+    #allrearrangments = np.unique(np.hstack((set1['rearrangement'].values, set2['rearrangement'].values)))
+    mergeset = pd.merge(set1,
+                        set2,
+                        on=key,
+                        how='outer',
+                        suffixes=('_set1', '_set2'))
+    cross = (mergeset['count_set1'].fillna(0) *
+             mergeset['count_set2'].fillna(0)).sum()
+    return 2 * cross / (simpson1 + simpson2)

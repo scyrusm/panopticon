@@ -306,7 +306,7 @@ def generate_nmf_and_loadings(loom,
 
 def generate_incremental_pca(loom,
                              layername,
-                             batch_size=512,
+                             batch_size=1024,
                              n_components=50,
                              min_size_for_incrementalization=5000):
     """Computes a principal component analysis (PCA) over a layer of interest.  Defaults to incremental PCA (using IncrementalPCA from sklearn.decomposition) but will switch to conventional PCA for LoomConnections with cell
@@ -361,6 +361,7 @@ def generate_incremental_pca(loom,
                                                     batch_size=batch_size),
                                           total=loom.shape[1] // batch_size):
             #pca.partial_fit(view[:, :].transpose())
+
             pca.partial_fit(view[layername][:, :].T)
     for i in range(50):
         loom.ra['{} PC {}'.format(layername, i + 1)] = pca.components_[i]
@@ -370,7 +371,7 @@ def generate_incremental_pca(loom,
     generate_pca_loadings(loom, layername)
 
 
-def generate_pca_loadings(loom, layername, dosparse=False, batch_size=512):
+def generate_pca_loadings(loom, layername, dosparse=False, batch_size=1024):
     """
 
     Parameters
@@ -518,7 +519,6 @@ def generate_embedding(loom,
                                              n_components=n_pca_components)
     elif mode == 'nmf':
         n_nmf_cols = loom.attrs['NumberNMFComponents']
-        print(n_nmf_cols)
         nmf_loadings = []
         if components_to_use != None:
             for col in [
@@ -532,7 +532,6 @@ def generate_embedding(loom,
                     for x in range(1, n_nmf_cols + 1)
             ]:
                 nmf_loadings.append(loom.ca[col])
-        print(len(nmf_loadings))
         compressed = np.vstack(nmf_loadings).T
     reducer = umap.UMAP(random_state=None,
                         min_dist=min_dist,
@@ -645,7 +644,7 @@ def generate_clustering(loom,
                         n_components=10,
                         silhouette_threshold=0.1,
                         clusteringcachedir='clusteringcachedir/',
-                        out_of_core_batch_size=512,
+                        out_of_core_batch_size=1024,
                         min_subclustering_size=100,
                         first_round_leiden=False,
                         leiden_nneighbors=100,
@@ -727,6 +726,7 @@ def generate_clustering(loom,
             from panopticon.analysis import get_pca_loadings_matrix
             from panopticon.utilities import get_igraph_from_adjacency
             from panopticon.utilities import import_check
+#            from panopticon.analysis import get_leiden_clustering
             exit_code = import_check("leidenalg",
                                      'conda install -c conda-forge leidenalg')
             if exit_code != 0:
@@ -743,7 +743,8 @@ def generate_clustering(loom,
             part = leidenalg.find_partition(
                 ig,
                 leidenalg.RBConfigurationVertexPartition,
-                n_iterations=leiden_iterations)
+                n_iterations=leiden_iterations, 
+                seed=17)
             clustering = part.membership
         else:
             if mode == 'nmf':
@@ -761,13 +762,15 @@ def generate_clustering(loom,
                                             layername,
                                             n_components=n_components)
             if max_clusters == 'sqrt_rule':
-                max_clusters = int(np.floor(np.sqrt(X.shape[0])))
+                mc = int(np.floor(np.sqrt(X.shape[0])))
             elif max_clusters == 'cbrt_rule':
-                max_clusters = int(np.floor(np.sqrt(X.shape[0])))
+                mc = int(np.floor(np.cbrt(X.shape[0])))
+            else:
+                mc = max_clusters
             clustering = get_subclustering(
                 X,
                 silhouette_threshold,
-                max_clusters=max_clusters,
+                max_clusters=mc,
                 clusteringcachedir=clusteringcachedir,
                 show_dendrogram=show_dendrogram,
                 linkage=linkage)
@@ -783,7 +786,7 @@ def generate_clustering(loom,
         for cluster in set([
                 x for x in loom.ca['ClusteringIteration{}'.format(subi - 1)]
                 if x != 'U'
-        ]):  #will need to fix
+        ]):  #
             mask = loom.ca['ClusteringIteration{}'.format(
                 subi -
                 1)] == cluster  #first mask, check for top level clustering
@@ -805,25 +808,47 @@ def generate_clustering(loom,
             elif mode == 'pca':
 
                 if mask.sum() > incremental_pca_threshold:
-                    print(
-                        "Warning: running incremental PCA with loom.scan with masked items; this can lead to batches smaller than the number of principal components.  If computation fails, try adjusting out_of_core_batch_size, or raising incremental_pca_threshold."
-                    )
+#                    print(
+#                        "Warning: running incremental PCA with loom.scan with masked items; this can lead to batches smaller than the number of principal components.  If computation fails, try adjusting out_of_core_batch_size, or raising incremental_pca_threshold."
+#                    )
                     pca = IncrementalPCA(n_components=n_components)
+                    slice_to_merge = None
                     for (ix, selection, view) in tqdm(
                             loom.scan(axis=1,
                                       batch_size=out_of_core_batch_size,
                                       items=mask.nonzero()[0],
                                       layers=[layername]),
-                            total=loom.shape[1] // out_of_core_batch_size):
-                        pca.partial_fit(view[layername][:, :].T)
+                            total=loom.shape[1] // out_of_core_batch_size, desc='calculating masked incremental pca'):
+                        if slice_to_merge is None:
+                            #if view.shape[1]<n_components:
+                            if view.shape[1]<out_of_core_batch_size:
+                                slice_to_merge = view[layername][:,:].T
+                            else:
+                                pca.partial_fit(view[layername][:, :].T)
+                        else:
+#                            print("merging small slices: ",slice_to_merge.shape[0],view.shape[1])
+                            slice_to_merge = np.vstack([slice_to_merge, view[layername][:,:].T])
+#                            if slice_to_merge.shape[0]>=n_components:
+                            if slice_to_merge.shape[0]>=out_of_core_batch_size:
+#                                print('Merged slice: ',slice_to_merge.shape[0])
+                                pca.partial_fit(slice_to_merge)
+                                slice_to_merge = None
+                    if slice_to_merge is not None:
+                        if slice_to_merge.shape[0]>=n_components:
+#                             print('Merged slice: ',slice_to_merge.shape[0])
+                            pca.partial_fit(slice_to_merge)
+                            slice_to_merge = None
+                        else:
+                            print("Warning: {} cells neglected.  Consider re-running with different out_of_core_batch_size".format(slice_to_merge.shape[0]))
 
+    
                     compresseddatalist = []
                     for (ix, selection, view) in tqdm(
                             loom.scan(axis=1,
                                       batch_size=out_of_core_batch_size,
                                       items=mask.nonzero()[0],
                                       layers=[layername]),
-                            total=loom.shape[1] // out_of_core_batch_size):
+                            total=loom.shape[1] // out_of_core_batch_size, desc='calculating masked incremental pca loadings'):
                         compresseddatalist.append(
                             view[layername][:, :].T @ pca.components_.T)
                     X = np.vstack(compresseddatalist)
@@ -837,15 +862,17 @@ def generate_clustering(loom,
                                 random_state=0)
 
                     X = model.fit_transform(data_c)
-
+            print(X.shape)
             if max_clusters == 'sqrt_rule':
-                max_clusters = int(np.floor(np.sqrt(X.shape[0])))
+                mc = int(np.floor(np.sqrt(X.shape[0])))
             elif max_clusters == 'cbrt_rule':
-                max_clusters = int(np.floor(np.cbrt(X.shape[0])))
+                mc = int(np.floor(np.cbrt(X.shape[0])))
+            else:
+                mc = max_clusters
             nopath_clustering = get_subclustering(
                 X,
                 silhouette_threshold,
-                max_clusters=max_clusters,
+                max_clusters=mc,
                 clusteringcachedir=clusteringcachedir,
                 min_input_size=min_subclustering_size,
                 show_dendrogram=show_dendrogram,
@@ -1397,6 +1424,9 @@ def get_cluster_differential_expression(loom,
     from time import time
     from tqdm import tqdm
 
+    if gene_alternate_name is None and 'gene_common_name' in loom.ra.keys():
+        gene_alternate_name = 'gene_common_name'
+
     if (mask1 is not None) and (mask2 is not None):
         print("ignoring ident1, ident2")
 
@@ -1518,7 +1548,7 @@ def get_cluster_differential_expression(loom,
 
     output = output.sort_values('CommonLanguageEffectSize', ascending=False)
     output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'],
-                                                 is_sorted=True)[1]
+                                                 is_sorted=False)[1]
     return output
 
 
@@ -1526,7 +1556,8 @@ def get_differential_expression_over_continuum(loom,
                                                layer,
                                                mask,
                                                covariate,
-                                               method='spearman'):
+                                               method='spearman',
+                                               gene_alternate_name=None):
     """
 
     Parameters
@@ -1554,6 +1585,9 @@ def get_differential_expression_over_continuum(loom,
     if np.sum(mask) != len(covariate):
         raise Exception(
             "Length of covariate vector does not match mask length.")
+    if gene_alternate_name is None and 'gene_common_name' in loom.ra.keys():
+        gene_alternate_name='gene_common_name'
+
 
     from tqdm import tqdm
 
@@ -1580,9 +1614,9 @@ def get_differential_expression_over_continuum(loom,
         genes.append(gene)
         #except:
         #    pass
-    print(result)
     df = pd.DataFrame(genes)
     df.columns = ['gene']
+    df['GeneAlternateName'] = loom.ra[gene_alternate_name]
     df['pval'] = pvals
     df['corr'] = corrs
 

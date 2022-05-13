@@ -114,6 +114,7 @@ def generate_cell_and_gene_quality_metrics(loom,
                 x.lower().startswith('mt-') or x.lower().startswith('mt.')
                 for x in loom.ra[gene_ra]
             ])
+            print(loom.ra[gene_ra][mitochondrial_gene_mask])
         if len(mitochondrial_gene_mask)!=loom.shape[0]:
             raise Exception("mitochondrial_gene_mask must be boolean mask with length equal to the number of rows of loom")
         madmt, meanmt, maxmt = loom[layername].map(
