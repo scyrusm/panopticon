@@ -254,8 +254,10 @@ def cluster_differential_expression_heatmap(
             clusters.append(cluster)
             cluster_cols += mask.sum() * [cluster]
     clusteredmask = np.hstack(clusteredmask)
+    all_gene_common_names = []
     allgenes = []
     rawX = []
+    clusters_above_min_size_threshold = []
     for cluster in clusters:
         mask = loom.ca[clusteringlevel] == cluster
         if mask.sum() >= min_cluster_size:
@@ -265,20 +267,22 @@ def cluster_differential_expression_heatmap(
                         loom, clusteringlevel, layer, cluster)
                 if type(diffex[cluster]) != float:
                     genes = diffex[cluster][
-                        ~diffex[cluster]['GeneAlternateName'].
+                        ~diffex[cluster]['gene'].
                         isin(  # need to fix this...
                             allgenes
                         )].query('MeanExpr1 > MeanExpr2').sort_values(
                             gene_sort_criterion, ascending=False
                         ).head(n_top_genes)[
-                            'GeneAlternateName'].values  # need to fix this...
+                            'gene'].values  # need to fix this...
                     genemask = np.isin(loom.ra[gene_ra], genes)
                     rawX.append(
                         loom[layer][genemask.nonzero()[0], :][:,
                                                               clusteredmask])
-                    allgenes.append(genes)
-                else:
-                    clusters.remove(cluster)
+                    allgenes += list(genes)
+                    all_gene_common_names += list(loom.ra['gene_common_name'][genemask]) # this shouldn't be hard-coded...
+                    clusters_above_min_size_threshold.append(cluster)
+#                else:
+#                    clusters.remove(cluster)
             else:
                 if type(custom_gene_list) != list and type(
                         custom_gene_list) != np.ndarray:
@@ -288,13 +292,17 @@ def cluster_differential_expression_heatmap(
                     loom[layer][genemask.nonzero()[0], :][:, clusteredmask])
                 allgenes.append(custom_gene_list)
                 break
+    if len(clusters_above_min_size_threshold)>0:
+        clusters = clusters_above_min_size_threshold
     clusteredmask = np.hstack(clusteredmask)
 
     hmdf = pd.DataFrame(np.vstack(rawX))
-    hmdf.index = np.hstack(allgenes)
+    #return hmdf, allgenes
+    hmdf.index = all_gene_common_names
     hmdf.columns = cluster_cols
     if average_over_clusters:
         hmdf = hmdf.T.reset_index().groupby('index').mean().T
+        hmdf = hmdf[clusters]
 
     if custom_gene_list is None:
         fig = plt.figure(figsize=figsize)
@@ -364,7 +372,8 @@ def swarmviolin(data,
                 annotate_hue_effect_size=False,
                 annotate_hue_pvalue_fmt_str='p: {0:.2f}',
                 annotate_hue_effect_size_fmt_str='es: {0:.2f}',
-                effect_size='cohensd'):
+                effect_size='cohensd',
+                pvalue='mannwhitney'):
     """
 
     Parameters
@@ -486,7 +495,7 @@ def swarmviolin(data,
         if len(data[hue].unique()) != 2:
             raise Exception(
                 "hue must be a categorical variable with 2 unique values")
-        from scipy.stats import mannwhitneyu
+        from scipy.stats import mannwhitneyu, ttest_ind
         if np.issubdtype(data[y].dtype, np.number):
             category_col = x
             continuous_col = y
@@ -506,7 +515,16 @@ def swarmviolin(data,
             b = data[(data[hue] == hue2)
                      & (data[category_col] == category)][continuous_col].values
             mw = mannwhitneyu(a, b, alternative='two-sided')
-            pval = mw.pvalue
+            tt = ttest_ind(a,b)
+            if pvalue == 'mannwhitney':
+                pval = mw.pvalue
+            elif pvalue=='ttest':
+                pval = tt[1]
+            else:
+                raise Exception(
+                    "`pvalue` must be either \'mannwhitney\' or \'ttest\'")
+
+
             if effect_size == 'cohensd':
                 from panopticon.utilities import cohensd
                 es = cohensd(a, b)
@@ -732,7 +750,8 @@ def repertoire_plot(x=None,
                     legend=False,
                     color_palette=None,
                     stack_order='agnostic',
-                    smear=False):
+                    smear=False,
+                    annotate_simpson=False):
     """Repertoire plot, designed for plotting cluster compositions or TCR repertoires as stacked bar plots or pies, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
@@ -921,18 +940,20 @@ def repertoire_plot(x=None,
         nrows = int(np.round(ngroups / np.sqrt(ngroups)))
         ncols = math.ceil(ngroups / np.sqrt(ngroups))
         if smear:
-            print("Constructing subplots with {} rows, {} columns".format(nrows, 2*ncols))
+            print("Constructing subplots with {} rows, {} columns".format(
+                nrows, 2 * ncols))
             fig, ax = plt.subplots(
                 nrows,
                 2 * ncols,
                 figsize=(5.5, 5),
                 gridspec_kw={'width_ratios': [10, 1] * ncols})
         else:
-            print("Constructing subplots with {} rows, {} columns".format(nrows,ncols))
+            print("Constructing subplots with {} rows, {} columns".format(
+                nrows, ncols))
             fig, ax = plt.subplots(nrows, ncols, figsize=(5, 5))
 
 
-# if piechart:
+# if piecharNS_PD1_4D4_Hashtag2 0.059743954480796585
 #color = 'w'
     if piechart:
         for i in tqdm(range(all_heights.shape[0])):
@@ -943,14 +964,14 @@ def repertoire_plot(x=None,
 
             if smear is True:
                 import seaborn as sns
-                countrange = range(np.min(all_heights[i, :]),
-                                   np.max(all_heights[i, :] + 1))
+                countrange = range(1, np.max(all_heights[i, :] + 1))
                 if type(color_palette) == str:
                     count2color = {
                         i: sns.color_palette(color_palette,
-                                             np.max(countrange) + 1)[i]
+                                             len(countrange))[i - 1]
                         for i in countrange
                     }
+                    count2color[0] = count2color[1]
                 else:
                     raise Exception("`color_palette` must be of type str")
 
@@ -984,32 +1005,54 @@ def repertoire_plot(x=None,
                     subax = ax[i // maxcols, i % maxcols]
                     cbarax = None
                     #edgecolor='k')
-            subax.set_title(groupings[i])
+            title = groupings[i]
+            if annotate_simpson:
+                from panopticon.analysis import simpson
+                si = simpson(all_heights[i,:])
+                title += '\nSI: {0:.5f}'.format(si)
+            subax.set_title(title)
+
             subax.pie(all_heights[i, :],
                       colors=colors,
                       wedgeprops=wedgeprops,
                       labels=labels)
             if cbarax is not None:
                 import matplotlib as mpl
+                from matplotlib.colors import LinearSegmentedColormap
 
-                norm = mpl.colors.Normalize(vmin=np.min(countrange),
+                norm = mpl.colors.Normalize(vmin=0,
                                             vmax=np.max(countrange))
+                colorlist = [
+                    count2color[x]
+                    for x in range(1, 1 + np.max(list(count2color.keys())))
+                ]
+                cm = LinearSegmentedColormap.from_list('custom',
+                                                       colorlist,
+                                                       N=len(colorlist))
+
                 cb1 = mpl.colorbar.ColorbarBase(cbarax,
-                                                cmap=color_palette,
+                                                cmap=cm,
                                                 norm=norm,
                                                 orientation='vertical')
                 cb1.set_label('Clone size (No. cells)')
+                if len(colorlist)+1>=5:
+                    ticklabels = np.arange(1, len(colorlist)+1, (len(colorlist)+1)//5)
+                else:
+                    ticklabels = np.arange(1, len(colorlist)+1, 1)
+                ticks = [x -0.5 for x in ticklabels]
+                cb1.set_ticks(ticks)
+                cb1.set_ticklabels(ticklabels)
 
     else:  # conventional stacked bar plot mode
         if smear:
             import seaborn as sns
-            countrange = range(np.min(all_heights), np.max(all_heights + 1))
+            countrange = range(1, np.max(all_heights) + 1)
             if type(color_palette) == str:
                 count2color = {
-                    i: sns.color_palette(color_palette,
-                                         np.max(countrange) + 1)[i]
+                    i: sns.color_palette(color_palette, len(countrange))[i - 1]
                     for i in countrange
                 }
+                count2color[0] = count2color[1]
             else:
                 raise Exception("`color_palette` must be of type str")
         if smear:
@@ -1033,13 +1076,28 @@ def repertoire_plot(x=None,
                           label=label)
                 if cbarax is not None:
                     import matplotlib as mpl
-                    norm = mpl.colors.Normalize(vmin=np.min(countrange),
+                    from matplotlib.colors import LinearSegmentedColormap
+                    norm = mpl.colors.Normalize(vmin=0,
                                                 vmax=np.max(countrange))
+                    colorlist = [
+                        count2color[x]
+                        for x in range(1, 1 + np.max(list(count2color.keys())))
+                    ]
+                    cm = LinearSegmentedColormap.from_list('custom',
+                                                       colorlist,
+                                                       N=len(colorlist))
                     cb1 = mpl.colorbar.ColorbarBase(cbarax,
-                                                    cmap=color_palette,
+                                                    cmap=cm,
                                                     norm=norm,
                                                     orientation='vertical')
                     cb1.set_label('Clone size (No. cells)')
+                    if len(colorlist)+1>=5:
+                        ticklabels = np.arange(1, len(colorlist)+1, (len(colorlist)+1)//5)
+                    else:
+                        ticklabels = np.arange(1, len(colorlist)+1, 1)
+                    ticks = [x-0.5 for x in ticklabels]
+                    cb1.set_ticks(ticks)
+                    cb1.set_ticklabels(ticklabels)
             else:
                 subax.bar(ind,
                           all_heights[:, i],

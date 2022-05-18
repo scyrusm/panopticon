@@ -639,7 +639,7 @@ def generate_clustering(loom,
                         layername,
                         starting_clustering_depth=0,
                         n_clustering_iterations=3,
-                        max_clusters='sqrt_rule',
+                        max_clusters='cbrt_rule',
                         mode='pca',
                         n_components=10,
                         silhouette_threshold=0.1,
@@ -651,7 +651,7 @@ def generate_clustering(loom,
                         leiden_iterations=10,
                         incremental_pca_threshold=10000,
                         show_dendrogram=False,
-                        linkage='complete'):
+                        linkage='average'):
     """
 
     Parameters
