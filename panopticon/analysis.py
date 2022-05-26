@@ -1428,7 +1428,8 @@ def get_cluster_differential_expression(loom,
         gene_alternate_name = 'gene_common_name'
 
     if (mask1 is not None) and (mask2 is not None):
-        print("ignoring ident1, ident2")
+        if verbose:
+            print("ignoring ident1, ident2")
 
     elif (mask1 is not None) or (mask2 is not None):
         raise Exception(
@@ -1490,7 +1491,8 @@ def get_cluster_differential_expression(loom,
         mask2 *= np.random.choice([True, False],
                                   p=[p, 1 - p],
                                   size=mask2.shape[0])
-    print(np.sum(mask1), np.sum(mask2))
+    if verbose:
+        print('Group 1 size: ',np.sum(mask1), ', group 2 size: ',np.sum(mask2))
     pvalues = []
     uvalues = []
     genes = []

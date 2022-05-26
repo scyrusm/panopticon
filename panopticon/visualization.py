@@ -370,8 +370,10 @@ def swarmviolin(data,
                 swarm_downsample_percentage=None,
                 annotate_hue_pvalues=False,
                 annotate_hue_effect_size=False,
+                annotate_hue_n=False,
                 annotate_hue_pvalue_fmt_str='p: {0:.2f}',
                 annotate_hue_effect_size_fmt_str='es: {0:.2f}',
+                annotate_hue_n_fmt_str='n: {}, {}',
                 effect_size='cohensd',
                 pvalue='mannwhitney'):
     """
@@ -491,7 +493,7 @@ def swarmviolin(data,
         ax.legend(*zip(*unique), title='', loc=(1.05, .8))
 
     legend_without_duplicate_labels(ax)
-    if annotate_hue_pvalues or annotate_hue_effect_size:
+    if annotate_hue_pvalues or annotate_hue_effect_size or annotate_hue_n:
         if len(data[hue].unique()) != 2:
             raise Exception(
                 "hue must be a categorical variable with 2 unique values")
@@ -514,6 +516,8 @@ def swarmviolin(data,
                      & (data[category_col] == category)][continuous_col].values
             b = data[(data[hue] == hue2)
                      & (data[category_col] == category)][continuous_col].values
+            a = np.array([x for x in a if not np.isnan(x)])
+            b = np.array([x for x in b if not np.isnan(x)])
             mw = mannwhitneyu(a, b, alternative='two-sided')
             tt = ttest_ind(a,b)
             if pvalue == 'mannwhitney':
@@ -541,6 +545,8 @@ def swarmviolin(data,
                 if annotate_hue_effect_size:
                     annotation_string += annotate_hue_effect_size_fmt_str.format(
                         es) + '\n'
+                if annotate_hue_n:
+                    annotation_string += annotate_hue_n_fmt_str.format(len(a),len(b)) + '\n'
                 ax.annotate(
                     annotation_string,
                     (ticklabel.get_position()[0], np.max(np.hstack((a, b)))),
@@ -551,8 +557,9 @@ def swarmviolin(data,
                     annotation_string += ' ' + annotate_hue_pvalue_fmt_str.format(
                         pval)
                 if annotate_hue_effect_size:
-                    annotation_string += '\n ' + annotate_hue_effect_size_fmt_str.format(
-                        es)
+                    annotation_string += '\n ' + annotate_hue_effect_size_fmt_str.format(es)
+                if annotate_hue_n:
+                    annotation_string += '\n'+ annotate_hue_n_fmt_str.format(len(a),len(b))
                 ax.annotate(annotation_string, (
                     np.max(np.hstack((a, b))),
                     ticklabel.get_position()[1],
@@ -1294,7 +1301,8 @@ def cluster_enrichment_heatmap(x,
                                side_annotation=True,
                                heatmap_shading_key='FractionOfCluster',
                                annotation_key='Counts',
-                               annotation_fmt='.5g'):
+                               annotation_fmt='.5g',
+                               figsize=(5,5)):
     """
     Produces a heatmap indicating the fraction of cell clusters across groups.  For example, if there are `m` experimental groups and `n` clusters of cells, will produce a heatmap with
     `n` rows and `m` columns. 
@@ -1373,7 +1381,7 @@ def cluster_enrichment_heatmap(x,
     if fig is None and cax is None and ax is None:
         fig, (cax,
               ax) = plt.subplots(nrows=2,
-                                 figsize=(5, 5.025),
+                                 figsize=figsize,
                                  gridspec_kw={"height_ratios": [0.025, 1]})
     elif fig is not None and cax is not None and ax is not None:
         pass
@@ -1429,5 +1437,8 @@ def cluster_enrichment_heatmap(x,
                         annotation_clip=False)  #scipy.stats.chisquare
     if output is not None:
         plt.tight_layout()
-        plt.savefig(output)
+        if output.endswith('.png'):
+            plt.savefig(output,dpi=600)
+        else:
+            plt.savefig(output)
     plt.show()

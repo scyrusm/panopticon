@@ -1780,7 +1780,9 @@ def create_excel_spreadsheet_from_differential_expression_dict(
     with pd.ExcelWriter(filename) as writer:
         for key in diffdict.keys():
             if type(diffdict[key]) != float:
-                diffdict[key].to_excel(writer, sheet_name=str(key), index=False)
+                diffdict[key].to_excel(writer,
+                                       sheet_name=str(key),
+                                       index=False)
 
 
 def incorporate_10x_vdj(loomfile,
@@ -1885,3 +1887,25 @@ def morisita(df, key, samplekey, sample1, sample2):
     cross = (mergeset['count_set1'].fillna(0) *
              mergeset['count_set2'].fillna(0)).sum()
     return 2 * cross / (simpson1 + simpson2)
+
+
+def bracket_annotate(ax, xy1, xy2, text='', bracket_drop=-.1):
+    ax.annotate('',
+                xy=xy1,
+                xytext=xy2,
+                arrowprops=dict(
+                    arrowstyle='-',
+                    color="0.5",
+                    shrinkA=5,
+                    shrinkB=5,
+                    patchA=None,
+                    patchB=None,
+                    connectionstyle='bar,fraction={}'.format(bracket_drop),
+                ),
+                ha='center',
+                va='center')
+    ax.annotate(text,
+                xy=(np.mean([xy1[0], xy2[0]]),
+                    -bracket_drop + np.mean([xy1[1], xy2[1]])),
+                ha='center',
+                va='center')
