@@ -1909,3 +1909,20 @@ def bracket_annotate(ax, xy1, xy2, text='', bracket_drop=-.1):
                     -bracket_drop + np.mean([xy1[1], xy2[1]])),
                 ha='center',
                 va='center')
+
+
+class Panocular:
+
+    def __init__(self, sc_object):
+        self.sc_object = sc_object
+        self.ca = sc_object.obs
+        self.ra = sc_object.var
+        for key in sc_object.obsm.keys():
+            for i in range(sc_object.obsm[key].shape[1]):
+                self.ca['{} {}'.format(key, i + 1)] = sc_object.obsm[key][:, i]
+        self.shape = sc_object.T.shape
+        self.ca['cellname'] = sc_object.obs.index
+
+    def __getitem__(self, attribute):
+        return self.sc_object.__getattribute__(attribute)
+        #self.ca['']

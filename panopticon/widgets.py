@@ -1,4 +1,8 @@
-def panopticopter(loom):
+def panopticopter(loom,
+        layername,
+        coord=None,
+        coord1=None,
+        coord2=None):
     import numpy as np
     from panopticon.utilities import import_check
     exit_code = import_check("bqplot", 'pip install bqplot')
@@ -7,7 +11,16 @@ def panopticopter(loom):
     exit_code = import_check("ipywidgets", 'pip install ipywidgets')
     if exit_code != 0:
         return
-
+    if coord is not None and coord1 is None and coord2 is None:
+        coord1 = coord+' 1'
+        coord2 = coord+' 2'
+    elif coord is None and coord1 is not None and coord2 is not None:
+        pass
+    else:
+        raise Exception("Either coord must be None, xor coord1 and coord2 must be None")
+    for coordi in [coord1, coord2]:
+        if coordi not in loom.ca.keys():
+            raise Exception("{} not in loom.ca.keys()".format(coordi))
 
     from bqplot import pyplot as plt
 
@@ -42,8 +55,8 @@ def panopticopter(loom):
     #diffex_output2 = widgets.Output()
 
     scatter_lasso = Scatter(
-        x=loom.ca['log2(TP10k+1) PCA UMAP embedding 1'][subset_mask],
-        y=loom.ca['log2(TP10k+1) PCA UMAP embedding 2'][subset_mask],
+        x=loom.ca[coord1][subset_mask],
+        y=loom.ca[coord2][subset_mask],
         scales={
             "x": xs,
             "y": ys
@@ -114,7 +127,7 @@ def panopticopter(loom):
 
             if mask1 is not None and mask2 is not None:
                 diffex = get_cluster_differential_expression(loom,
-                                                             'log2(TP10k+1)',
+                                                            layername,
                                                              mask1=mask1,
                                                              mask2=mask2,
                                                              verbose=True)
