@@ -368,7 +368,7 @@ def generate_incremental_pca(loom,
     loom.attrs['NumberPrincipalComponents_{}'.format(layername)] = n_components
     loom.attrs['PCAExplainedVarianceRatio_{}'.format(
         layername)] = pca.explained_variance_ratio_
-    generate_pca_loadings(loom, layername)
+    generate_pca_loadings(loom, layername, batch_size=batch_size)
 
 
 def generate_pca_loadings(loom, layername, dosparse=False, batch_size=1024):
@@ -733,7 +733,7 @@ def generate_clustering(loom,
                 return
             import leidenalg
 
-            X = get_pca_loadings_matrix(loom, layername)
+            X = get_pca_loadings_matrix(loom, layername, n_components=n_components)
             A = kneighbors_graph(X,
                                  leiden_nneighbors,
                                  mode='connectivity',
