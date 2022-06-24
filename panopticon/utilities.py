@@ -1926,3 +1926,8 @@ class Panocular:
     def __getitem__(self, attribute):
         return self.sc_object.__getattribute__(attribute)
         #self.ca['']
+
+
+def gravy_index(cdr3):
+    from Bio.SeqUtils.ProtParam import ProteinAnalysis
+    return [ProteinAnalysis(x.replace('-', '')).gravy() for x in cdr3]

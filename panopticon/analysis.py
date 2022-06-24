@@ -647,6 +647,7 @@ def generate_clustering(loom,
                         out_of_core_batch_size=1024,
                         min_subclustering_size=100,
                         first_round_leiden=False,
+                        optimized_leiden=True,
                         leiden_nneighbors=100,
                         leiden_iterations=10,
                         incremental_pca_threshold=10000,
@@ -726,26 +727,16 @@ def generate_clustering(loom,
             from panopticon.analysis import get_pca_loadings_matrix
             from panopticon.utilities import get_igraph_from_adjacency
             from panopticon.utilities import import_check
-#            from panopticon.analysis import get_leiden_clustering
-            exit_code = import_check("leidenalg",
-                                     'conda install -c conda-forge leidenalg')
-            if exit_code != 0:
-                return
-            import leidenalg
 
             X = get_pca_loadings_matrix(loom, layername, n_components=n_components)
-            A = kneighbors_graph(X,
-                                 leiden_nneighbors,
-                                 mode='connectivity',
-                                 include_self=True,
-                                 metric='cosine')
-            ig = get_igraph_from_adjacency(A)
-            part = leidenalg.find_partition(
-                ig,
-                leidenalg.RBConfigurationVertexPartition,
-                n_iterations=leiden_iterations, 
-                seed=17)
-            clustering = part.membership
+            if optimized_leiden:
+                from panopticon.clustering import silhouette_optimized_leiden
+                leiden_output = silhouette_optimized_leiden(X)
+                clustering = leiden_output.clustering 
+            else:
+                from panopticon.clustering import leiden_with_silhouette_score
+                leiden_output = leiden_with_silhouette_score(X, leiden_nneighbors, leiden_iterations=leiden_iterations)
+
         else:
             if mode == 'nmf':
                 n_nmf_cols = loom.attrs['NumberNMFComponents']

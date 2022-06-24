@@ -161,6 +161,10 @@ def plot_cluster_umap(loom,
     return embedding
 
 
+import numpy as np
+import matplotlib.pyplot as plt
+
+
 def cluster_differential_expression_heatmap(
         loom,
         layer,
@@ -178,7 +182,9 @@ def cluster_differential_expression_heatmap(
         average_over_clusters=True,
         return_fig_ax=False,
         custom_gene_list=None,
-        gene_ra='gene'):
+        gene_ra='gene',
+        rotate=False,
+        cluster_blacklist=[]):
     """
     Generates a heatmap, with expression of marker genes displayed in heatmap form. Can also be used with hand-picked genes using the `custom_gene_list` argument, as well as with custom labels by setting `clusteringlevel` to be a column attribute representing the clusters of interest.
     When using a custom set of genes, this command will automatically cluster those genes using the seaborn `clustermap` command. 
@@ -264,23 +270,30 @@ def cluster_differential_expression_heatmap(
             if custom_gene_list is None:
                 if cluster not in diffex.keys():
                     diffex[cluster] = get_cluster_differential_expression(
-                        loom, clusteringlevel, layer, cluster)
-                if type(diffex[cluster]) != float:
+                        loom,
+                        layer,
+                        cluster_level=clusteringlevel,
+                        ident1=cluster)
+                if type(diffex[cluster]
+                        ) != float and cluster not in cluster_blacklist:
                     genes = diffex[cluster][
-                        ~diffex[cluster]['gene'].
-                        isin(  # need to fix this...
-                            allgenes
-                        )].query('MeanExpr1 > MeanExpr2').sort_values(
-                            gene_sort_criterion, ascending=False
-                        ).head(n_top_genes)[
-                            'gene'].values  # need to fix this...
+                        ~diffex[cluster]['gene'].isin(  # need to fix this...
+                            allgenes)].query(
+                                'MeanExpr1 > MeanExpr2').sort_values(
+                                    gene_sort_criterion,
+                                    ascending=False).head(n_top_genes)[
+                                        'gene'].values  # need to fix this...
                     genemask = np.isin(loom.ra[gene_ra], genes)
                     rawX.append(
                         loom[layer][genemask.nonzero()[0], :][:,
                                                               clusteredmask])
                     allgenes += list(genes)
-                    all_gene_common_names += list(loom.ra['gene_common_name'][genemask]) # this shouldn't be hard-coded...
+                    all_gene_common_names += list(
+                        loom.ra['gene_common_name']
+                        [genemask])  # this shouldn't be hard-coded...
                     clusters_above_min_size_threshold.append(cluster)
+
+
 #                else:
 #                    clusters.remove(cluster)
             else:
@@ -292,7 +305,7 @@ def cluster_differential_expression_heatmap(
                     loom[layer][genemask.nonzero()[0], :][:, clusteredmask])
                 allgenes.append(custom_gene_list)
                 break
-    if len(clusters_above_min_size_threshold)>0:
+    if len(clusters_above_min_size_threshold) > 0:
         clusters = clusters_above_min_size_threshold
     clusteredmask = np.hstack(clusteredmask)
 
@@ -303,7 +316,8 @@ def cluster_differential_expression_heatmap(
     if average_over_clusters:
         hmdf = hmdf.T.reset_index().groupby('index').mean().T
         hmdf = hmdf[clusters]
-
+    if rotate:
+        hmdf = hmdf.T
     if custom_gene_list is None:
         fig = plt.figure(figsize=figsize)
         ax = fig.add_axes([0.4, 0.1, 0.4, .8])
@@ -315,24 +329,48 @@ def cluster_differential_expression_heatmap(
                     vmin=vmin,
                     vmax=vmax)
         for i, cluster in enumerate(clusters):
-            ax.annotate(
-                cluster,
-                xy=(-.7, (len(clusters) - i - 0.5) / len(clusters)),
-                xytext=(-.9, (len(clusters) - i - 0.5) / len(clusters)),
-                ha='center',
-                va='center',
-                bbox=dict(boxstyle='square', fc='white'),
-                arrowprops=dict(arrowstyle='-[, widthB={}, lengthB=1'.format(
-                    2.54 * fig.get_size_inches()[1] / len(clusters)),
-                                lw=2.0),
-                annotation_clip=False,
-                xycoords='axes fraction')
-        ax.set_ylabel('Gene')
-        if average_over_clusters:
-            ax.set_xlabel('Cluster')
+            if rotate:
+                xy = ((i + 0.5) / len(clusters), -.3)
+                xytext = (
+                    (i + 0.5) / len(clusters),
+                    -.6,
+                )
+                rotation = 90
+                # ff = 2.54*4
+                scale = 2.54 * fig.get_size_inches()[0] * .4
+            else:
+                xy = (-.7, (len(clusters) - i - 0.5) / len(clusters))
+                xytext = (-.9, (len(clusters) - i - 0.5) / len(clusters))
+                rotation = 0
+                # ff = 2.54
+                scale = 2.54 * fig.get_size_inches()[1]
+            ax.annotate(cluster,
+                        xy=xy,
+                        xytext=xytext,
+                        ha='center',
+                        va='center',
+                        bbox=dict(boxstyle='square', fc='white'),
+                        arrowprops=dict(
+                            arrowstyle='-[, widthB={}, lengthB=1'.format(
+                                scale / len(clusters)),
+                            lw=2.0),
+                        annotation_clip=False,
+                        xycoords='axes fraction',
+                        rotation=rotation)
+        if rotate:
+            ax.set_xlabel('Gene')
+            if average_over_clusters:
+                ax.set_ylabel('Cluster')
+            else:
+                ax.set_ylabel('Cell')
+                ax.set_yticklabels([])
         else:
-            ax.set_xlabel('Cell')
-            ax.set_xticklabels([])
+            ax.set_ylabel('Gene')
+            if average_over_clusters:
+                ax.set_xlabel('Cluster')
+            else:
+                ax.set_xlabel('Cell')
+                ax.set_xticklabels([])
     else:
         g = sns.clustermap(hmdf,
                            cmap=cmap,
@@ -519,15 +557,14 @@ def swarmviolin(data,
             a = np.array([x for x in a if not np.isnan(x)])
             b = np.array([x for x in b if not np.isnan(x)])
             mw = mannwhitneyu(a, b, alternative='two-sided')
-            tt = ttest_ind(a,b)
+            tt = ttest_ind(a, b)
             if pvalue == 'mannwhitney':
                 pval = mw.pvalue
-            elif pvalue=='ttest':
+            elif pvalue == 'ttest':
                 pval = tt[1]
             else:
                 raise Exception(
                     "`pvalue` must be either \'mannwhitney\' or \'ttest\'")
-
 
             if effect_size == 'cohensd':
                 from panopticon.utilities import cohensd
@@ -546,7 +583,8 @@ def swarmviolin(data,
                     annotation_string += annotate_hue_effect_size_fmt_str.format(
                         es) + '\n'
                 if annotate_hue_n:
-                    annotation_string += annotate_hue_n_fmt_str.format(len(a),len(b)) + '\n'
+                    annotation_string += annotate_hue_n_fmt_str.format(
+                        len(a), len(b)) + '\n'
                 ax.annotate(
                     annotation_string,
                     (ticklabel.get_position()[0], np.max(np.hstack((a, b)))),
@@ -557,9 +595,11 @@ def swarmviolin(data,
                     annotation_string += ' ' + annotate_hue_pvalue_fmt_str.format(
                         pval)
                 if annotate_hue_effect_size:
-                    annotation_string += '\n ' + annotate_hue_effect_size_fmt_str.format(es)
+                    annotation_string += '\n ' + annotate_hue_effect_size_fmt_str.format(
+                        es)
                 if annotate_hue_n:
-                    annotation_string += '\n'+ annotate_hue_n_fmt_str.format(len(a),len(b))
+                    annotation_string += '\n' + annotate_hue_n_fmt_str.format(
+                        len(a), len(b))
                 ax.annotate(annotation_string, (
                     np.max(np.hstack((a, b))),
                     ticklabel.get_position()[1],
@@ -1015,7 +1055,7 @@ def repertoire_plot(x=None,
             title = groupings[i]
             if annotate_simpson:
                 from panopticon.analysis import simpson
-                si = simpson(all_heights[i,:])
+                si = simpson(all_heights[i, :])
                 title += '\nSI: {0:.5f}'.format(si)
             subax.set_title(title)
 
@@ -1027,8 +1067,7 @@ def repertoire_plot(x=None,
                 import matplotlib as mpl
                 from matplotlib.colors import LinearSegmentedColormap
 
-                norm = mpl.colors.Normalize(vmin=0,
-                                            vmax=np.max(countrange))
+                norm = mpl.colors.Normalize(vmin=0, vmax=np.max(countrange))
                 colorlist = [
                     count2color[x]
                     for x in range(1, 1 + np.max(list(count2color.keys())))
@@ -1042,11 +1081,13 @@ def repertoire_plot(x=None,
                                                 norm=norm,
                                                 orientation='vertical')
                 cb1.set_label('Clone size (No. cells)')
-                if len(colorlist)+1>=5:
-                    ticklabels = np.arange(1, len(colorlist)+1, (len(colorlist)+1)//5)
+                if len(colorlist) + 1 >= 5:
+                    ticklabels = np.arange(1,
+                                           len(colorlist) + 1,
+                                           (len(colorlist) + 1) // 5)
                 else:
-                    ticklabels = np.arange(1, len(colorlist)+1, 1)
-                ticks = [x -0.5 for x in ticklabels]
+                    ticklabels = np.arange(1, len(colorlist) + 1, 1)
+                ticks = [x - 0.5 for x in ticklabels]
                 cb1.set_ticks(ticks)
                 cb1.set_ticklabels(ticklabels)
 
@@ -1091,18 +1132,20 @@ def repertoire_plot(x=None,
                         for x in range(1, 1 + np.max(list(count2color.keys())))
                     ]
                     cm = LinearSegmentedColormap.from_list('custom',
-                                                       colorlist,
-                                                       N=len(colorlist))
+                                                           colorlist,
+                                                           N=len(colorlist))
                     cb1 = mpl.colorbar.ColorbarBase(cbarax,
                                                     cmap=cm,
                                                     norm=norm,
                                                     orientation='vertical')
                     cb1.set_label('Clone size (No. cells)')
-                    if len(colorlist)+1>=5:
-                        ticklabels = np.arange(1, len(colorlist)+1, (len(colorlist)+1)//5)
+                    if len(colorlist) + 1 >= 5:
+                        ticklabels = np.arange(1,
+                                               len(colorlist) + 1,
+                                               (len(colorlist) + 1) // 5)
                     else:
-                        ticklabels = np.arange(1, len(colorlist)+1, 1)
-                    ticks = [x-0.5 for x in ticklabels]
+                        ticklabels = np.arange(1, len(colorlist) + 1, 1)
+                    ticks = [x - 0.5 for x in ticklabels]
                     cb1.set_ticks(ticks)
                     cb1.set_ticklabels(ticklabels)
             else:
@@ -1302,7 +1345,7 @@ def cluster_enrichment_heatmap(x,
                                heatmap_shading_key='FractionOfCluster',
                                annotation_key='Counts',
                                annotation_fmt='.5g',
-                               figsize=(5,5)):
+                               figsize=(5, 5)):
     """
     Produces a heatmap indicating the fraction of cell clusters across groups.  For example, if there are `m` experimental groups and `n` clusters of cells, will produce a heatmap with
     `n` rows and `m` columns. 
@@ -1438,7 +1481,7 @@ def cluster_enrichment_heatmap(x,
     if output is not None:
         plt.tight_layout()
         if output.endswith('.png'):
-            plt.savefig(output,dpi=600)
+            plt.savefig(output, dpi=600)
         else:
             plt.savefig(output)
     plt.show()
