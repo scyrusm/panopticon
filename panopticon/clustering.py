@@ -16,6 +16,10 @@ def kt_cluster(mean_window_expression_ranks: np.ndarray, t: int = 4) -> Any:
         
     t : Number of clusters to look for
         (Default value = 4)
+    mean_window_expression_ranks : np.ndarray :
+        
+    t : int :
+        (Default value = 4)
     mean_window_expression_ranks: np.ndarray :
         
     t: int :
@@ -35,6 +39,10 @@ def kt_cluster(mean_window_expression_ranks: np.ndarray, t: int = 4) -> Any:
         a : First vector
             
         b : Second vector
+            
+        a : np.ndarray :
+            
+        b : np.ndarray :
             
         a: np.ndarray :
             
@@ -59,6 +67,23 @@ def kt_cluster(mean_window_expression_ranks: np.ndarray, t: int = 4) -> Any:
 
 
 def leiden_with_silhouette_score(X, leiden_nneighbors, skip_silhouette=False, leiden_iterations=10):
+    """
+
+    Parameters
+    ----------
+    X :
+        
+    leiden_nneighbors :
+        
+    skip_silhouette :
+         (Default value = False)
+    leiden_iterations :
+         (Default value = 10)
+
+    Returns
+    -------
+
+    """
     from sklearn.neighbors import kneighbors_graph
     from panopticon.utilities import get_igraph_from_adjacency
     from panopticon.utilities import import_check
@@ -102,6 +127,25 @@ def silhouette_optimized_leiden(X,
                                 initial_intermediate=128,
                                 max_neighbors=1024,
                                 verbose=True):
+    """
+
+    Parameters
+    ----------
+    X :
+        
+    min_neighbors :
+         (Default value = 2)
+    initial_intermediate :
+         (Default value = 128)
+    max_neighbors :
+         (Default value = 1024)
+    verbose :
+         (Default value = True)
+
+    Returns
+    -------
+
+    """
 
     from collections import namedtuple
     from panopticon.clustering import leiden_with_silhouette_score
