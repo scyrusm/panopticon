@@ -306,7 +306,7 @@ def generate_nmf_and_loadings(loom,
 
 def generate_incremental_pca(loom,
                              layername,
-                             batch_size=1024,
+                             batch_size=512,
                              n_components=50,
                              min_size_for_incrementalization=5000):
     """Computes a principal component analysis (PCA) over a layer of interest.  Defaults to incremental PCA (using IncrementalPCA from sklearn.decomposition) but will switch to conventional PCA for LoomConnections with cell

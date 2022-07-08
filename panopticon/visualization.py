@@ -318,6 +318,19 @@ def cluster_differential_expression_heatmap(
         hmdf = hmdf[clusters]
     if rotate:
         hmdf = hmdf.T
+    if vmax is None and vmin is None:
+        annotations = None
+    else:
+        annotations = np.round(hmdf.values,decimals=1)
+        if vmax is not None and vmin is not None:
+            mask = (annotations <= vmax) & (annotations >= vmin)
+        elif vmax is not None:
+            mask = (annotations <= vmax)
+        elif vmin is not None:
+            mask = (annotations >= vmin)
+        annotations = annotations.astype(str)
+        annotations[mask] = ""
+
     if custom_gene_list is None:
         fig = plt.figure(figsize=figsize)
         ax = fig.add_axes([0.4, 0.1, 0.4, .8])
@@ -326,6 +339,10 @@ def cluster_differential_expression_heatmap(
                     yticklabels=1,
                     ax=ax,
                     cbar_kws={'label': cbar_label},
+                    annot_kws={"fontsize":8},
+                    annot=annotations,
+                    fmt='s',
+
                     vmin=vmin,
                     vmax=vmax)
         for i, cluster in enumerate(clusters):
@@ -376,8 +393,11 @@ def cluster_differential_expression_heatmap(
                            cmap=cmap,
                            yticklabels=1,
                            cbar_kws={'label': cbar_label},
+                           annot_kws={"fontsize":8},
                            vmin=vmin,
                            vmax=vmax,
+                           annot=annotations,
+                           fmt='s',
                            col_cluster=False,
                            figsize=figsize)
 
@@ -791,10 +811,10 @@ def repertoire_plot(x=None,
                     fig=None,
                     show=False,
                     output=None,
+                    pre_normalize_by_cohort=False,
                     normalize=False,
                     piechart=False,
                     ylabel='',
-                    legend=False,
                     color_palette=None,
                     stack_order='agnostic',
                     smear=False,
@@ -967,6 +987,8 @@ def repertoire_plot(x=None,
         all_heights.append(heights)
     all_heights = np.vstack(all_heights)
     all_heights = all_heights[:, ::-1]
+    if pre_normalize_by_cohort:
+        all_heights = np.divide(all_heights, all_heights.sum(axis=0))
     if normalize:
         all_heights = np.divide(all_heights.T, all_heights.sum(axis=1)).T
 
