@@ -321,7 +321,7 @@ def cluster_differential_expression_heatmap(
     if vmax is None and vmin is None:
         annotations = None
     else:
-        annotations = np.round(hmdf.values,decimals=1)
+        annotations = np.round(hmdf.values, decimals=1)
         if vmax is not None and vmin is not None:
             mask = (annotations <= vmax) & (annotations >= vmin)
         elif vmax is not None:
@@ -339,10 +339,9 @@ def cluster_differential_expression_heatmap(
                     yticklabels=1,
                     ax=ax,
                     cbar_kws={'label': cbar_label},
-                    annot_kws={"fontsize":8},
+                    annot_kws={"fontsize": 8},
                     annot=annotations,
                     fmt='s',
-
                     vmin=vmin,
                     vmax=vmax)
         for i, cluster in enumerate(clusters):
@@ -393,7 +392,7 @@ def cluster_differential_expression_heatmap(
                            cmap=cmap,
                            yticklabels=1,
                            cbar_kws={'label': cbar_label},
-                           annot_kws={"fontsize":8},
+                           annot_kws={"fontsize": 8},
                            vmin=vmin,
                            vmax=vmax,
                            annot=annotations,
@@ -899,9 +898,14 @@ def repertoire_plot(x=None,
             color_palette = sns.palettes.color_palette('colorblind')
         elif stack_order == 'agnostic':
             color_palette = ['w']
-    if not smear and type(color_palette) == str:
+    if (not smear and type(color_palette)
+            == str) or (smear and type(color_palette) != str):
         raise Exception(
-            "type of `color_palette` may only be str if `smear`==True")
+            "type of `color_palette` must be str if and only if `smear`==True")
+    if smear and normalize and piechart is False:
+        raise Exception(
+            "Color smear only permissible in stacked barplot mode without normalization"
+        )
 
     all_heights = []
 
@@ -977,6 +981,8 @@ def repertoire_plot(x=None,
             ind.append(counter)
             counter += 1
         ind = np.array(ind)
+
+
 # return grouped_data
     for grouping in groupings:
         heights = []
@@ -1021,9 +1027,6 @@ def repertoire_plot(x=None,
                 nrows, ncols))
             fig, ax = plt.subplots(nrows, ncols, figsize=(5, 5))
 
-
-# if piecharNS_PD1_4D4_Hashtag2 0.059743954480796585
-#color = 'w'
     if piechart:
         for i in tqdm(range(all_heights.shape[0])):
             if stack_order == 'matched':
@@ -1216,6 +1219,8 @@ def repertoire_plot(x=None,
             else:
                 ylabel = 'cell count'
         subax.set_ylabel(ylabel)
+    if stack_order=='matched':
+        plt.legend(bbox_to_anchor=(1,1))
     plt.tight_layout()
     if output is not None:
 
@@ -1507,3 +1512,8 @@ def cluster_enrichment_heatmap(x,
         else:
             plt.savefig(output)
     plt.show()
+
+
+def expand_value_counts(df, counts_col):
+    return df.iloc[np.hstack([[i] * df[counts_col].values[i]
+                              for i in range(len(df_filtered))])]
