@@ -886,10 +886,6 @@ def repertoire_plot(x=None,
             raise Exception(
                 "ax must be a list or array of matplotlib.axes._subplots.AxesSubplot objects when argument piechart==True"
             )
-    if piechart and not normalize:
-        print(
-            "Warning: Pie charts must be normalized, because they are pie charts."
-        )
     if stack_order not in ['matched', 'agnostic']:
         raise Exception("stack_order must be one of \'matched\', \'agnostic\'")
     if color_palette is None:
@@ -902,9 +898,9 @@ def repertoire_plot(x=None,
             == str) or (smear and type(color_palette) != str):
         raise Exception(
             "type of `color_palette` must be str if and only if `smear`==True")
-    if smear and normalize and piechart is False:
+    if smear and normalize:
         raise Exception(
-            "Color smear only permissible in stacked barplot mode without normalization"
+            "Color smear only permissible in without normalization"
         )
 
     all_heights = []
