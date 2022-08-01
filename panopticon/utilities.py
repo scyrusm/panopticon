@@ -1683,14 +1683,18 @@ def get_clumpiness(distances, clusteringcachedir='/tmp', verbose=False):
     return cluster_counts
 
 
+
 def create_single_cell_portal_compatible_files(
         loom,
         layers=None,
         cellname='cellname',
         genename='gene',
+        metadata_dict = {},
         gene_common_name='gene_common_name',
         coordinate_1='log2(TP10k+1) PCA UMAP embedding 1',
-        coordinate_2='log2(TP10k+1) PCA UMAP embedding 2'):
+        coordinate_2='log2(TP10k+1) PCA UMAP embedding 2',
+        clustering_ca_list=[],
+groupvsnumeric_dict={}):
     """
 
     Parameters
@@ -1720,11 +1724,7 @@ def create_single_cell_portal_compatible_files(
     import os
     if layers is None:
         layers = loom.layers.keys()
-    for layer in layers:
-        output_filename = loom.filename.replace('.loom', '') + layer + '.mtx'
-        mmwrite(output_filename, loom[layer].sparse().T)
-        command = "gzip -f {}".format(output_filename)
-        os.system(command)
+
 
     df = pd.DataFrame(loom.ra[genename], columns=['gene'])
     df['gene_common_name'] = loom.ra[gene_common_name]
@@ -1740,24 +1740,53 @@ def create_single_cell_portal_compatible_files(
               header=None,
               index=None)
 
-    df = pd.DataFrame(loom.ca[cellname], copy=True, columns=['NAME'])
-    df['X'] = loom.ca[coordinate_1]
-    df['Y'] = loom.ca[coordinate_2]
+    df = pd.DataFrame(['TYPE'] +list(loom.ca[cellname]), copy=True, columns=['NAME'])
+    df['X'] = ['numeric'] + list(loom.ca[coordinate_1])
+    df['Y'] = ['numeric'] + list(loom.ca[coordinate_2])
+    for key in clustering_ca_list:
+        if key not in groupvsnumeric_dict.keys():
+            if loom.ca[key].dtype==np.dtype('O') or \
+            pd.DataFrame(loom.ca[key])[0].value_counts().shape[0]<loom.shape[1]*0.1: # this is a rough heuristic... S. Markson 1 Aug 2022
+                df[key] = ['group'] + list(loom.ca[key])
+            else:
+                df[key] = ['numeric'] + list(loom.ca[key])
+        else:
+            df[key] = groupvsnumeric_dict[key] + list(loom.ca[key])
 
-    pd.concat([
-        pd.DataFrame([['TYPE', 'numeric', 'numeric']],
-                     columns=['NAME', 'X', 'Y']), df
-    ]).to_csv(loom.filename + '_clustering.tsv', index=None, sep='\t')
+    df.to_csv(loom.filename + '_clustering.tsv', index=None, sep='\t')
+    #display()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+    df = pd.DataFrame(['TYPE'] + list(loom.ca[cellname]), columns=['NAME'])  
+    # https://singlecell.zendesk.com/hc/en-us/articles/360060609852-Required-Metadata
+    
+    required_columns = [                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+        'biosample_id', # specify a ca
+        'donor_id',  # specify a ca
+        'disease', #e.g. MONDO_0004992 (if no disease, use ontology ID "PATO_0000461")
+        'disease__ontology_label', # e.g. cancer (if no disease, use ontology label "normal")                                                                                                                                                                                                                                                                                                                                                                                              
+        'library_preparation_protocol',   # e.g. EFO_0009900                                                                                                                                                                                                                                                                                                                                                                                                                                            
+        'library_preparation_protocol__ontology_label', # e.g. 10x 5' v2
+        'organ', # e.g. CL_0000084                                                                                                                                                                                                                                                                                                                                                                                                              
+        'organ__ontology_label', # e.g. T cell
+        'sex',  # ["male", "female", "mixed", "unknown"]
+        'species', # e.g. NCBITaxon_10090
+        'species__ontology_label' # e.g. Mus Musculus                                                                                                                                                                                                                                                                                                                                                                                                         
+    ]    
+    
+    for column in required_columns:
+        if metadata_dict[column] in loom.ca.keys():
+            df[column] = ['group']+list(loom.ca[metadata_dict[column]])
+        else:
+            df[column] = ['group']+loom.shape[1]*[metadata_dict[column]]
+            
+    #    col2default = {'biosample_id':                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+    df.to_csv(loom.filename + '_metadata.tsv', index=None, sep='\t') 
+    
+    for layer in layers:
+        output_filename = loom.filename.replace('.loom', '') + layer + '.mtx'
+        mmwrite(output_filename, loom[layer].sparse().T)
+        command = "gzip -f {}".format(output_filename)
+        os.system(command)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 
-    df = pd.DataFrame(['TYPE'] + list(loom.ca[cellname]), columns=['cellname'])
-    #    required_columns = [
-    #        'biosample_id', 'disease', 'disease__ontology_label', 'donor_id',
-    #        'library_preparation_protocol',
-    #        'library_preparation_protocol__ontology_label', 'organ',
-    #        'organ__ontology_label', 'sex', 'species', 'species__ontology_label'
-    #    ]
-    #    col2default = {'biosample_id':
-    df.to_csv(loom.filename + '_metadata.tsv', index=None, sep='\t')
 
 
 def create_excel_spreadsheet_from_differential_expression_dict(
@@ -1783,8 +1812,6 @@ def create_excel_spreadsheet_from_differential_expression_dict(
                 diffdict[key].to_excel(writer,
                                        sheet_name=str(key),
                                        index=False)
-
-
 
 
 def bracket_annotate(ax, xy1, xy2, text='', bracket_drop=-.1):

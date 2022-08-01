@@ -732,10 +732,10 @@ def generate_clustering(loom,
             if optimized_leiden:
                 from panopticon.clustering import silhouette_optimized_leiden
                 leiden_output = silhouette_optimized_leiden(X)
-                clustering = leiden_output.clustering 
             else:
                 from panopticon.clustering import leiden_with_silhouette_score
                 leiden_output = leiden_with_silhouette_score(X, leiden_nneighbors, leiden_iterations=leiden_iterations)
+            clustering = leiden_output.clustering 
 
         else:
             if mode == 'nmf':

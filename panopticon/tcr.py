@@ -319,7 +319,8 @@ def generate_tcr_multichain_summary(loom,
                 .format(key + suffix, loom.filename))
         else:
             if sample_ca is None:
-                iterator = zip(['full dataset'] * len(loom), loom.ca[tcr_ca])
+                iterator = zip(['full dataset'] * loom.shape[1],
+                               loom.ca[tcr_ca])
             else:
                 iterator = zip(loom.ca[sample_ca], loom.ca[tcr_ca])
             loom.ca[key + suffix] = [
@@ -432,10 +433,10 @@ def morisita(df, key, samplekey, sample1, sample2):
              mergeset['count_set2'].fillna(0)).sum()
     return 2 * cross / (simpson1 + simpson2)
 
+
 def _morisita(counts1, counts2):
     from panopticon.analysis import simpson
     simpson1 = simpson(counts1, with_replacement=True)
     simpson2 = simpson(counts2, with_replacement=True)
     cross = (counts1 * counts2).sum()
     return 2 * cross / (simpson1 + simpson2)
-
