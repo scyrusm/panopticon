@@ -1683,18 +1683,17 @@ def get_clumpiness(distances, clusteringcachedir='/tmp', verbose=False):
     return cluster_counts
 
 
-
 def create_single_cell_portal_compatible_files(
         loom,
         layers=None,
         cellname='cellname',
         genename='gene',
-        metadata_dict = {},
+        metadata_dict={},
         gene_common_name='gene_common_name',
         coordinate_1='log2(TP10k+1) PCA UMAP embedding 1',
         coordinate_2='log2(TP10k+1) PCA UMAP embedding 2',
         clustering_ca_list=[],
-groupvsnumeric_dict={}):
+        groupvsnumeric_dict={}):
     """
 
     Parameters
@@ -1725,22 +1724,23 @@ groupvsnumeric_dict={}):
     if layers is None:
         layers = loom.layers.keys()
 
-
     df = pd.DataFrame(loom.ra[genename], columns=['gene'])
     df['gene_common_name'] = loom.ra[gene_common_name]
     df['kind'] = 'Gene Expression'
-    df.to_csv(loom.filename + '.barcodes.tsv',
+    df.to_csv(loom.filename + '.features.tsv',
               sep='\t',
               header=None,
               index=None)
     #comman
     df = pd.DataFrame(loom.ca[cellname], columns=['cellname'])
-    df.to_csv(loom.filename + '.features.tsv',
+    df.to_csv(loom.filename + '.barcodes.tsv',
               sep='\t',
               header=None,
               index=None)
 
-    df = pd.DataFrame(['TYPE'] +list(loom.ca[cellname]), copy=True, columns=['NAME'])
+    df = pd.DataFrame(['TYPE'] + list(loom.ca[cellname]),
+                      copy=True,
+                      columns=['NAME'])
     df['X'] = ['numeric'] + list(loom.ca[coordinate_1])
     df['Y'] = ['numeric'] + list(loom.ca[coordinate_2])
     for key in clustering_ca_list:
@@ -1754,39 +1754,38 @@ groupvsnumeric_dict={}):
             df[key] = groupvsnumeric_dict[key] + list(loom.ca[key])
 
     df.to_csv(loom.filename + '_clustering.tsv', index=None, sep='\t')
-    #display()                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
-    df = pd.DataFrame(['TYPE'] + list(loom.ca[cellname]), columns=['NAME'])  
+    #display()
+    df = pd.DataFrame(['TYPE'] + list(loom.ca[cellname]), columns=['NAME'])
     # https://singlecell.zendesk.com/hc/en-us/articles/360060609852-Required-Metadata
-    
-    required_columns = [                                                                                                                                                                                                                                                                                                                                                                                                                                                              
-        'biosample_id', # specify a ca
+
+    required_columns = [
+        'biosample_id',  # specify a ca
         'donor_id',  # specify a ca
-        'disease', #e.g. MONDO_0004992 (if no disease, use ontology ID "PATO_0000461")
-        'disease__ontology_label', # e.g. cancer (if no disease, use ontology label "normal")                                                                                                                                                                                                                                                                                                                                                                                              
-        'library_preparation_protocol',   # e.g. EFO_0009900                                                                                                                                                                                                                                                                                                                                                                                                                                            
-        'library_preparation_protocol__ontology_label', # e.g. 10x 5' v2
-        'organ', # e.g. CL_0000084                                                                                                                                                                                                                                                                                                                                                                                                              
-        'organ__ontology_label', # e.g. T cell
+        'disease',  #e.g. MONDO_0004992 (if no disease, use ontology ID "PATO_0000461")
+        'disease__ontology_label',  # e.g. cancer (if no disease, use ontology label "normal")
+        'library_preparation_protocol',  # e.g. EFO_0009900
+        'library_preparation_protocol__ontology_label',  # e.g. 10x 5' v2
+        'organ',  # e.g. CL_0000084
+        'organ__ontology_label',  # e.g. T cell
         'sex',  # ["male", "female", "mixed", "unknown"]
-        'species', # e.g. NCBITaxon_10090
-        'species__ontology_label' # e.g. Mus Musculus                                                                                                                                                                                                                                                                                                                                                                                                         
-    ]    
-    
+        'species',  # e.g. NCBITaxon_10090
+        'species__ontology_label'  # e.g. Mus Musculus
+    ]
+
     for column in required_columns:
         if metadata_dict[column] in loom.ca.keys():
-            df[column] = ['group']+list(loom.ca[metadata_dict[column]])
+            df[column] = ['group'] + list(loom.ca[metadata_dict[column]])
         else:
-            df[column] = ['group']+loom.shape[1]*[metadata_dict[column]]
-            
-    #    col2default = {'biosample_id':                                                                                                                                                                                                                                                                                                                                                                                                                                                    
-    df.to_csv(loom.filename + '_metadata.tsv', index=None, sep='\t') 
-    
+            df[column] = ['group'] + loom.shape[1] * [metadata_dict[column]]
+
+    #    col2default = {'biosample_id':
+    df.to_csv(loom.filename + '_metadata.tsv', index=None, sep='\t')
+
     for layer in layers:
         output_filename = loom.filename.replace('.loom', '') + layer + '.mtx'
-        mmwrite(output_filename, loom[layer].sparse().T)
+        mmwrite(output_filename, loom[layer].sparse())
         command = "gzip -f {}".format(output_filename)
-        os.system(command)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
-
+        os.system(command)
 
 
 def create_excel_spreadsheet_from_differential_expression_dict(
