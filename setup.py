@@ -21,8 +21,8 @@ def get_requirements(path):
 install_requires = get_requirements('requirements.txt')
 
 setup(
-    name='panopticon',
-    version='0.1dev',
+    name='panopticon-single-cell',
+    version='0.3',
     author='Samuel C. Markson',
     author_email='smarkson@alum.mit.edu',
     install_requires=install_requires, 

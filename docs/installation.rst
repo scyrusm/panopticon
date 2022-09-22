@@ -1,9 +1,16 @@
 ============
 Installation
 ============
+Panopticon can be installed from pypi using:
+::
 
-You can install the panopticon on the command line by cloning this git
-repository. Because this package is in a rather alpha mode, I recommend
+       pip install panopticon-single-cell
+
+::
+
+
+Or you can install panopticon on the command line by cloning this git
+repository. Because this package is in active development, I recommend
 installing with the ``--editable`` flag.
 
 ::
@@ -12,7 +19,7 @@ installing with the ``--editable`` flag.
         cd panopticon
         pip install --editable .
 
-For some functions you will also need to run
+For some functions you will also need to run (release subject to change)
 
 ::
 
