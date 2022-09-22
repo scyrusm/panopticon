@@ -438,5 +438,5 @@ def _morisita(counts1, counts2):
     from panopticon.analysis import simpson
     simpson1 = simpson(counts1, with_replacement=True)
     simpson2 = simpson(counts2, with_replacement=True)
-    cross = (counts1 * counts2).sum()
+    cross = (counts1 * counts2).sum()/counts1.sum()/counts2.sum()
     return 2 * cross / (simpson1 + simpson2)

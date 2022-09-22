@@ -432,7 +432,9 @@ def swarmviolin(data,
                 annotate_hue_effect_size_fmt_str='es: {0:.2f}',
                 annotate_hue_n_fmt_str='n: {}, {}',
                 effect_size='cohensd',
-                pvalue='mannwhitney'):
+                pvalue='mannwhitney',
+                custom_annotation_dict={},
+                custom_annotation_fontsize=6):
     """
 
     Parameters
@@ -550,7 +552,8 @@ def swarmviolin(data,
         ax.legend(*zip(*unique), title='', loc=(1.05, .8))
 
     legend_without_duplicate_labels(ax)
-    if annotate_hue_pvalues or annotate_hue_effect_size or annotate_hue_n:
+    if annotate_hue_pvalues or annotate_hue_effect_size or annotate_hue_n and len(
+            custom_annotation_dict.keys()) == 0:
         if len(data[hue].unique()) != 2:
             raise Exception(
                 "hue must be a categorical variable with 2 unique values")
@@ -619,12 +622,51 @@ def swarmviolin(data,
                 if annotate_hue_n:
                     annotation_string += '\n' + annotate_hue_n_fmt_str.format(
                         len(a), len(b))
+
                 ax.annotate(annotation_string, (
                     np.max(np.hstack((a, b))),
                     ticklabel.get_position()[1],
                 ),
                             ha='left',
                             va='center')
+    if len(custom_annotation_dict.keys()) > 0:
+        if np.issubdtype(data[y].dtype, np.number):
+            category_col = x
+            continuous_col = y
+            vertical_violins = True
+            ticklabels = ax.get_xmajorticklabels()
+        else:
+            category_col = y
+            continuous_col = x
+            vertical_violins = False
+            ticklabels = ax.get_ymajorticklabels()
+
+        for ticklabel in ticklabels:
+            annotation_string = ''
+            category = ticklabel.get_text()
+            annotation_pos = np.max(data[data[category_col]==category][continuous_col].values)
+
+            if vertical_violins:
+                if ticklabel.get_text() in custom_annotation_dict.keys():
+                    annotation_string += '\n' + custom_annotation_dict[
+                        ticklabel.get_text()]
+                ax.annotate(annotation_string,
+                            (ticklabel.get_position()[0], annotation_pos),
+                            ha='center',
+                            va='bottom',
+                            fontsize=custom_annotation_fontsize)
+            else:
+                if ticklabel in custom_annotation_dict.keys():
+                    annotation_string += '\n' + custom_annotation_dict[
+                        ticklabel]
+
+                ax.annotate(annotation_string, (
+                    annotation_pos,
+                    ticklabel.get_position()[1],
+                ),
+                            ha='left',
+                            va='center',
+                            fontsize=custom_annotation_fontsize)
 
     return ax
 
@@ -900,8 +942,7 @@ def repertoire_plot(x=None,
             "type of `color_palette` must be str if and only if `smear`==True")
     if smear and normalize:
         raise Exception(
-            "Color smear only permissible in without normalization"
-        )
+            "Color smear only permissible in without normalization")
 
     all_heights = []
 
@@ -1215,8 +1256,8 @@ def repertoire_plot(x=None,
             else:
                 ylabel = 'cell count'
         subax.set_ylabel(ylabel)
-    if stack_order=='matched':
-        plt.legend(bbox_to_anchor=(1,1))
+    if stack_order == 'matched':
+        plt.legend(bbox_to_anchor=(1, 1))
     plt.tight_layout()
     if output is not None:
 

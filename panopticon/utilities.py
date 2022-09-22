@@ -1855,3 +1855,31 @@ class Panocular:
 def expand_value_counts(df, counts_col):
     return df.iloc[np.hstack([[i] * df[counts_col].values[i]
                               for i in range(len(df_filtered))])]
+
+
+def downsample(counts, p=None, total=None, with_replacement=True):
+    import pandas as pd
+    import numpy as np
+
+    counts = np.array(counts)
+    if counts.dtype.kind != 'i':
+        raise Exception("counts must have integer type")
+    if total is None and p is None:
+        raise Exception("either total or p must be specified")
+    elif total is None:
+        if p > 1 or p < 0:
+            raise Exception("p must be in range [0,1]")
+
+        total = int(np.sum(counts) * p)
+    else:
+        if total > np.sum(counts):
+            raise Exception(
+                "total cannot be less than sum(counts) to downsample")
+    choices = np.random.choice(range(len(counts)),
+                               p=np.array(counts) / np.sum(counts),
+                               size=total)
+    counted_choices = pd.DataFrame(choices)[0].value_counts().sort_index()
+    new_index = range(len(counts))
+    counted_choices = counted_choices.reindex(
+        index=new_index).fillna(0).astype(int).values
+    return counted_choices
