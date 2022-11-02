@@ -487,18 +487,30 @@ def swarmviolin(data,
         hue_order = None
     else:
         hue_order = data[hue].unique()
-    sns.violinplot(data=data,
-                   x=x,
-                   hue=hue,
-                   hue_order=hue_order,
-                   y=y,
-                   split=split,
-                   inner='quartile',
-                   cut=0,
-                   alpha=alpha,
-                   ax=ax,
-                   width=.8,
-                   **violinplot_kwargs)
+    if dodge:
+        sns.violinplot(data=data,
+                       x=x,
+                       hue=hue,
+                       hue_order=hue_order,
+                       y=y,
+                       split=split,
+                       inner='quartile',
+                       cut=0,
+                       alpha=alpha,
+                       ax=ax,
+                       width=.8,
+                       **violinplot_kwargs)
+    else:
+        sns.violinplot(data=data,
+                       x=x,
+                       y=y,
+                       split=split,
+                       inner='quartile',
+                       cut=0,
+                       alpha=alpha,
+                       ax=ax,
+                       width=.8,
+                       **violinplot_kwargs)
     for violin in ax.collections:
         violin.set_alpha(alpha)
     if not noswarm:
@@ -644,7 +656,8 @@ def swarmviolin(data,
         for ticklabel in ticklabels:
             annotation_string = ''
             category = ticklabel.get_text()
-            annotation_pos = np.max(data[data[category_col]==category][continuous_col].values)
+            annotation_pos = np.max(
+                data[data[category_col] == category][continuous_col].values)
 
             if vertical_violins:
                 if ticklabel.get_text() in custom_annotation_dict.keys():
@@ -859,7 +872,8 @@ def repertoire_plot(x=None,
                     color_palette=None,
                     stack_order='agnostic',
                     smear=False,
-                    annotate_simpson=False):
+                    annotate_simpson=False,
+                    weights=None):
     """Repertoire plot, designed for plotting cluster compositions or TCR repertoires as stacked bar plots or pies, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
@@ -948,9 +962,22 @@ def repertoire_plot(x=None,
 
     if hue is None:
         if stack_order == 'agnostic':
-            grouped_data = data.groupby(x)[y].value_counts()
+            if weights is None:
+                grouped_data = data.groupby(x)[y].value_counts()
+            else:
+                if data[weights].dtypes != int:
+                    raise Exception(
+                        "dtype of column \'{}\' must be int".format(weights))
+                grouped_data = data.groupby(
+                    [x, y])[weights].sum().sort_values(ascending=False)
         elif stack_order == 'matched':
-            grouped_data = data.groupby(x)[y].value_counts(sort=False)
+            if weights is None:
+                grouped_data = data.groupby(x)[y].value_counts(sort=False)
+            else:
+                if data[weights].dtypes != int:
+                    raise Exception(
+                        "dtype of column \'{}\' must be int".format(weights))
+                grouped_data = data.groupby([x, y])[weights].sum()
 
             # this code ensures that all categories are represented (even with 0) in all bars
             newname = "{}_{} count".format(x, y)  # to cover an edge case
@@ -980,9 +1007,25 @@ def repertoire_plot(x=None,
 
     else:
         if stack_order == 'agnostic':
-            grouped_data = data.groupby([x, hue])[y].value_counts()
+            if weights is None:
+                grouped_data = data.groupby([x, hue])[y].value_counts()
+            else:
+                if data[weights].dtypes != int:
+                    raise Exception(
+                        "dtype of column \'{}\' must be int".format(weights))
+                grouped_data = data.groupby(
+                    [x, hue, y])[weights].sum().sort_values(ascending=False)
+
         elif stack_order == 'matched':
-            grouped_data = data.groupby([x, hue])[y].value_counts(sort=False)
+            if weights is None:
+                grouped_data = data.groupby([x,
+                                             hue])[y].value_counts(sort=False)
+            else:
+                if data[weights].dtypes != int:
+                    raise Exception(
+                        "dtype of column \'{}\' must be int".format(weights))
+                grouped_data = data.groupby([x, hue, y])[weights].sum()
+
             original_order = data[y].unique()
             newname = "{}_{}_{} count".format(x, y,
                                               hue)  # to cover an edge case
@@ -1114,7 +1157,7 @@ def repertoire_plot(x=None,
                     subax = ax[i // maxcols, i % maxcols]
                     cbarax = None
                     #edgecolor='k')
-            title = groupings[i]
+            title = str(groupings[i])
             if annotate_simpson:
                 from panopticon.analysis import simpson
                 si = simpson(all_heights[i, :])
@@ -1551,6 +1594,56 @@ def cluster_enrichment_heatmap(x,
     plt.show()
 
 
-def expand_value_counts(df, counts_col):
+def expand_value_counts(df, counts_col, scale=500):
     return df.iloc[np.hstack([[i] * df[counts_col].values[i]
                               for i in range(len(df_filtered))])]
+
+    import matplotlib.pyplot as plt
+    fig, (ax, cax) = plt.subplots(1,
+                                  2,
+                                  figsize=(4, 20),
+                                  gridspec_kw={'width_ratios': [20, 1]})
+    key2x = {key: x for key, x in zip(df.index.values, range(df.shape[0]))}
+    marker2y = {
+        marker: x
+        for marker, x in zip(df.columns, range(len(df.columns)))
+    }
+    exprs = []
+    for col in df.columns:
+        for key in [key for key in df.index.values]:
+            exprs.append(df.loc[key][col])
+
+    for col in df.columns:
+        exprs = []
+        for key in [key for key in df.index.values]:
+            exprs.append(df.loc[key][col])
+        for key in [key for key in df.index.values]:
+            expr = df.loc[key][col]
+            sc = ax.scatter(key2x[key],
+                            marker2y[col],
+                            s=(expr - np.min(exprs)) * scale,
+                            cmap='coolwarm',
+                            c=expr,
+                            vmin=np.min(exprs),
+                            vmax=np.max(exprs))
+
+    ax.set_yticklabels([x.split('_With')[0] for x in df.columns])
+    ax.set_yticks(range(len(df.columns)))
+
+    ax.set_xticks(range(len(df.index.values)))
+    ax.set_xticklabels(list(range(len(df.index.values))))
+    ax.set_xlabel('Cluster')
+    ax.set_ylim([-0.5, len(df.columns)])
+    cbar = plt.colorbar(
+        sc,
+        aspect=30,
+        cax=cax,
+    )
+    cbar.set_label('module score (min-max normalized)',
+                   rotation=90,
+                   fontsize=17)
+    yticklabels = cbar.ax.get_yticklabels()
+    cax_ylims = cax.get_ylim()
+    cbar.ax.set_yticks(cax_ylims)
+    cbar.ax.set_yticklabels([0, 1])
+    plt.tight_layout()

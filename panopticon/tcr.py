@@ -3,15 +3,64 @@ import pandas as pd
 
 
 def gravy_index(cdr3):
+    """
+
+    Parameters
+    ----------
+    cdr3 :
+        
+
+    Returns
+    -------
+
+    """
     from Bio.SeqUtils.ProtParam import ProteinAnalysis
     return [ProteinAnalysis(x.replace('-', '')).gravy() for x in cdr3]
 
 
 def multinomial_test(x1, x2, x12, n, doublet_rate):
+    """
+
+    Parameters
+    ----------
+    x1 :
+        
+    x2 :
+        
+    x12 :
+        
+    n :
+        
+    doublet_rate :
+        
+
+    Returns
+    -------
+
+    """
     c = doublet_rate / (1 - doublet_rate) / (1 - doublet_rate)
     from scipy.special import comb
 
     def g(x1, x2, x12, n, c):
+        """
+
+        Parameters
+        ----------
+        x1 :
+            
+        x2 :
+            
+        x12 :
+            
+        n :
+            
+        c :
+            
+
+        Returns
+        -------
+
+        """
         return c**x12 * comb(x1 + x12, x12, exact=False) * comb(
             n - x2 - x12, x1, exact=False)
 
@@ -33,6 +82,29 @@ def get_tcr_summary_df(tcrs,
                        sample_separator='_',
                        tcrblacklist=[],
                        multinomial_test=True):
+    """
+
+    Parameters
+    ----------
+    tcrs :
+        
+    samples :
+         (Default value = None)
+    multichain_separator :
+         (Default value = '---')
+    alpha_beta_separator :
+         (Default value = '|')
+    sample_separator :
+         (Default value = '_')
+    tcrblacklist :
+         (Default value = [])
+    multinomial_test :
+         (Default value = True)
+
+    Returns
+    -------
+
+    """
 
     from panopticon.tcr import get_tcr_doublet_likelihood
 
@@ -110,6 +182,35 @@ def get_tcr_doublet_likelihood(tcrs,
                                alpha_beta_separator='|',
                                sample_separator='_',
                                doublet_rate=0.05):
+    """
+
+    Parameters
+    ----------
+    tcrs :
+        
+    samples :
+         (Default value = None)
+    tcrblacklist :
+         (Default value = [])
+    n_tra :
+         (Default value = 2)
+    n_trb :
+         (Default value = 2)
+    verbose :
+         (Default value = False)
+    multichain_separator :
+         (Default value = '---')
+    alpha_beta_separator :
+         (Default value = '|')
+    sample_separator :
+         (Default value = '_')
+    doublet_rate :
+         (Default value = 0.05)
+
+    Returns
+    -------
+
+    """
     from panopticon.tcr import multinomial_test
     from panopticon.tcr import get_tcr_summary_df
     from statsmodels.stats.multitest import fdrcorrection
@@ -300,6 +401,33 @@ def generate_tcr_multichain_summary(loom,
                                     alpha_beta_separator='|',
                                     sample_separator='_',
                                     overwrite=False):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    tcr_ca :
+         (Default value = 'TCR')
+    sample_ca :
+         (Default value = None)
+    tcrblacklist :
+         (Default value = [])
+    suffix :
+         (Default value = '_multichain_summary')
+    multichain_separator :
+         (Default value = '---')
+    alpha_beta_separator :
+         (Default value = '|')
+    sample_separator :
+         (Default value = '_')
+    overwrite :
+         (Default value = False)
+
+    Returns
+    -------
+
+    """
     from panopticon.tcr import get_tcr_summary_df
     if sample_ca is None:
         samples = None
@@ -344,11 +472,18 @@ def incorporate_10x_vdj(loomfile,
     filtered_contig_annotations_csv :
         
     barcode_ca :
-         (Default value = 'cellname')
+        (Default value = 'cellname')
+    loomfile :
+        
+    overwrite :
+         (Default value = False)
+    barcode_match_exception_threshold :
+         (Default value = 0.5)
 
     Returns
     -------
 
+    
     """
     import loompy
     loom = loompy.connect(loomfile)
@@ -407,36 +542,92 @@ def incorporate_10x_vdj(loomfile,
 
 
 def join_tra_trb_ca(loom, ca='cdr3'):
+    """
+
+    Parameters
+    ----------
+    loom :
+        
+    ca :
+         (Default value = 'cdr3')
+
+    Returns
+    -------
+
+    """
     loom.ca['TRA_TRB_{}'.format(ca)] = [
         '|'.join([x, y]) for x, y, in zip(loom.ca['TRA_{}'.format(ca)],
                                           loom.ca['TRB_{}'.format(ca)])
     ]
 
 
-def morisita(df, key, samplekey, sample1, sample2):
+def morisita(df, key, samplekey, sample1, sample2, countkey=None):
+    """
+
+    Parameters
+    ----------
+    df :
+        
+    key :
+        
+    samplekey :
+        
+    sample1 :
+        
+    sample2 :
+        
+    countkey :
+         (Default value = None)
+
+    Returns
+    -------
+
+    """
     from panopticon.analysis import simpson
-    set1 = df[df[samplekey] == sample1][key].value_counts(
-        normalize=True).reset_index(name='count', ).rename({'index': key},
-                                                           axis=1)
-    set2 = df[df[samplekey] == sample2][key].value_counts(
-        normalize=True).reset_index(name='count', ).rename({'index': key},
-                                                           axis=1)
-    simpson1 = simpson(set1['count'].values, with_replacement=True)
-    simpson2 = simpson(set2['count'].values, with_replacement=True)
+    if countkey is None:
+        print("Running without countkey--every row of df assumed to be a single count!")
+        set1 = df[df[samplekey] == sample1][key].value_counts(
+            normalize=True).reset_index(name='count', ).rename({'index': key},
+                                                               axis=1)
+        set2 = df[df[samplekey] == sample2][key].value_counts(
+            normalize=True).reset_index(name='count', ).rename({'index': key},
+                                                               axis=1)
+        countkey = 'count'
+    else:
+        set1 = df[df[samplekey] == sample1]
+        set2 = df[df[samplekey] == sample2]
+
+    simpson1 = simpson(set1[countkey].values, with_replacement=True)
+    simpson2 = simpson(set2[countkey].values, with_replacement=True)
     #allrearrangments = np.unique(np.hstack((set1['rearrangement'].values, set2['rearrangement'].values)))
     mergeset = pd.merge(set1,
                         set2,
                         on=key,
                         how='outer',
                         suffixes=('_set1', '_set2'))
-    cross = (mergeset['count_set1'].fillna(0) *
-             mergeset['count_set2'].fillna(0)).sum()
+    cross = (mergeset[countkey + '_set1'].fillna(0) *
+             mergeset[countkey + '_set2'].fillna(0)).sum() / (
+                 mergeset[countkey + '_set1'].fillna(0).sum()) / (
+                     mergeset[countkey + '_set2'].fillna(0).sum())
     return 2 * cross / (simpson1 + simpson2)
 
 
 def _morisita(counts1, counts2):
+    """
+
+    Parameters
+    ----------
+    counts1 :
+        
+    counts2 :
+        
+
+    Returns
+    -------
+
+    """
     from panopticon.analysis import simpson
     simpson1 = simpson(counts1, with_replacement=True)
     simpson2 = simpson(counts2, with_replacement=True)
-    cross = (counts1 * counts2).sum()/counts1.sum()/counts2.sum()
+    cross = (counts1 * counts2).sum() / counts1.sum() / counts2.sum()
     return 2 * cross / (simpson1 + simpson2)
