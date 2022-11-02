@@ -873,7 +873,8 @@ def repertoire_plot(x=None,
                     stack_order='agnostic',
                     smear=False,
                     annotate_simpson=False,
-                    weights=None):
+                    weights=None,
+                    colorkey_col=None):
     """Repertoire plot, designed for plotting cluster compositions or TCR repertoires as stacked bar plots or pies, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
@@ -957,8 +958,12 @@ def repertoire_plot(x=None,
     if smear and normalize:
         raise Exception(
             "Color smear only permissible in without normalization")
+    if colorkey_col is not None and (stack_order!='agnostic' or piechart==True or weights is None):
+        raise Exception("Color key currently implemented only for agnostic stack order stacked bar plot, with weights")
 
     all_heights = []
+    if colorkey_col is not None:
+        all_colorkeys = []
 
     if hue is None:
         if stack_order == 'agnostic':
@@ -968,8 +973,12 @@ def repertoire_plot(x=None,
                 if data[weights].dtypes != int:
                     raise Exception(
                         "dtype of column \'{}\' must be int".format(weights))
-                grouped_data = data.groupby(
-                    [x, y])[weights].sum().sort_values(ascending=False)
+                if colorkey_col is None:
+                    grouped_data = data.groupby(
+                        [x, y])[weights].sum().sort_values(ascending=False)
+                else:
+                    grouped_data = data.groupby(
+                        [x, y, colorkey_col])[weights].sum().sort_values(ascending=False)
         elif stack_order == 'matched':
             if weights is None:
                 grouped_data = data.groupby(x)[y].value_counts(sort=False)
@@ -1013,8 +1022,12 @@ def repertoire_plot(x=None,
                 if data[weights].dtypes != int:
                     raise Exception(
                         "dtype of column \'{}\' must be int".format(weights))
-                grouped_data = data.groupby(
-                    [x, hue, y])[weights].sum().sort_values(ascending=False)
+                if colorkey_col is None:
+                    grouped_data = data.groupby(
+                        [x, hue, y])[weights].sum().sort_values(ascending=False)
+                else:
+                    grouped_data = data.groupby(
+                        [x, hue, y, colorkey_col])[weights].sum().sort_values(ascending=False)
 
         elif stack_order == 'matched':
             if weights is None:
@@ -1071,8 +1084,22 @@ def repertoire_plot(x=None,
         heights = heights + [0] * (total - len(heights))
         heights = np.array(heights)[::-1]
         all_heights.append(heights)
+
+        if colorkey_col is not None:
+            colors = []
+            for index in grouped_data[grouping].index.values:
+                colors.append(index[-1])
+            all_colorkeys.append(colors)
+
+
     all_heights = np.vstack(all_heights)
     all_heights = all_heights[:, ::-1]
+
+
+    if colorkey_col is not None:
+        all_colorkeys = np.vstack(all_colorkeys)
+#        all_colorkeys = all_colorkeys[:,::-1]
+
     if pre_normalize_by_cohort:
         all_heights = np.divide(all_heights, all_heights.sum(axis=0))
     if normalize:
@@ -1254,14 +1281,27 @@ def repertoire_plot(x=None,
                     cb1.set_ticks(ticks)
                     cb1.set_ticklabels(ticklabels)
             else:
-                subax.bar(ind,
-                          all_heights[:, i],
-                          0.8,
-                          bottom=bottoms,
-                          color=color_palette[i % len(color_palette)],
-                          edgecolor='k',
-                          label=label)
-                subax.set_xticks(ind)
+                if colorkey_col is not None:
+#                    return np.unique(all_colorkeys)
+                    colorkey2color = {key:color_palette[i%len(color_palette)] for i, key in enumerate(np.unique(all_colorkeys))}
+                    subax.bar(ind,
+                              all_heights[:, i],
+                              0.8,
+                              bottom=bottoms,
+                              color=[colorkey2color[x] for x in all_colorkeys[:,i]],
+                              edgecolor='k',
+                              lw=0.1,
+                              label=label)
+                    subax.set_xticks(ind)
+                else:
+                    subax.bar(ind,
+                              all_heights[:, i],
+                              0.8,
+                              bottom=bottoms,
+                              color=color_palette[i % len(color_palette)],
+                              edgecolor='k',
+                              label=label)
+                    subax.set_xticks(ind)
 
             bottoms += all_heights[:, i]
             subax.set_xticks(ind)
@@ -1301,6 +1341,13 @@ def repertoire_plot(x=None,
         subax.set_ylabel(ylabel)
     if stack_order == 'matched':
         plt.legend(bbox_to_anchor=(1, 1))
+    elif colorkey_col is not None:
+        from matplotlib.patches import Patch
+
+        legend_elements = [Patch(facecolor=colorkey2color[colorkey], edgecolor='k',label=colorkey) for colorkey in colorkey2color.keys()]
+        plt.legend(handles=legend_elements,bbox_to_anchor=(1,1),
+                title=colorkey_col)
+
     plt.tight_layout()
     if output is not None:
 
