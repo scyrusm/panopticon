@@ -482,10 +482,10 @@ def phi_coefficient(contingency_table):
     table2 = contingency_table[1]
     table = np.vstack([table1, table2])
     phitop = (table1[0] * table2[1] - table1[1] * table2[0])
-    phibottom = np.sqrt((table2[1]+table2[0])*\
-                        (table1[1]+table1[0])*\
-                        (table1[0]+table2[0])*\
-                        (table2[1]+table1[1]))
+    phibottom = np.sqrt(table2[1]+table2[0])*\
+                        np.sqrt(table1[1]+table1[0])*\
+                        np.sqrt(table1[0]+table2[0])*\
+                        np.sqrt(table2[1]+table1[1])  # This helps in the cases of large numbers to avoid overflow
     phi = phitop / phibottom
     return phi
 

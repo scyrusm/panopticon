@@ -1937,7 +1937,7 @@ def conditional_simpson(x, x_conditional, x_total, with_replacement=False):
         ])
 
 
-def get_cluster_enrichment_dataframes(x, y, data):
+def get_cluster_enrichment_dataframes(x, y, data, weights=None):
     """
 
     Parameters
@@ -1968,12 +1968,21 @@ def get_cluster_enrichment_dataframes(x, y, data):
         cluster_fraction_incluster_dict[group] = {}
         cluster_fraction_ingroup_dict[group] = {}
         for cluster in data[y].unique():
-            t11 = data[(data[x] == group)
-                       & (data[y] == cluster)].shape[0]  #.sum()
-            t12 = data[(data[x] == group)
-                       & (data[y] != cluster)].shape[0]  #.sum()
-            t21 = data[(data[x] != group) & (data[y] == cluster)].shape[0]
-            t22 = data[(data[x] != group) & (data[y] != cluster)].shape[0]
+            if weights is None:
+                t11 = data[(data[x] == group)
+                           & (data[y] == cluster)].shape[0]  #.sum()
+                t12 = data[(data[x] == group)
+                           & (data[y] != cluster)].shape[0]  #.sum()
+                t21 = data[(data[x] != group) & (data[y] == cluster)].shape[0]
+                t22 = data[(data[x] != group) & (data[y] != cluster)].shape[0]
+            else:
+                t11 = data[(data[x] == group)
+                           & (data[y] == cluster)][weights].sum()  #.sum()
+                t12 = data[(data[x] == group)
+                           & (data[y] != cluster)][weights].sum()  #.sum()
+                t21 = data[(data[x] != group) & (data[y] == cluster)][weights].sum()
+                t22 = data[(data[x] != group) & (data[y] != cluster)][weights].sum()
+
             table = np.array([[t11, t12], [t21, t22]])
 
             fishers_exact_p_dict[group][cluster] = fisher_exact(table)[1]

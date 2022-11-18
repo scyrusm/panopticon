@@ -412,6 +412,10 @@ def cluster_differential_expression_heatmap(
     else:
         plt.show()
 
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+
 
 def swarmviolin(data,
                 x,
@@ -431,6 +435,7 @@ def swarmviolin(data,
                 annotate_hue_pvalue_fmt_str='p: {0:.2f}',
                 annotate_hue_effect_size_fmt_str='es: {0:.2f}',
                 annotate_hue_n_fmt_str='n: {}, {}',
+                paired_hue_matching_col=None,
                 effect_size='cohensd',
                 pvalue='mannwhitney',
                 custom_annotation_dict={},
@@ -495,6 +500,7 @@ def swarmviolin(data,
                        y=y,
                        split=split,
                        inner='quartile',
+                       scale='width',
                        cut=0,
                        alpha=alpha,
                        ax=ax,
@@ -506,6 +512,7 @@ def swarmviolin(data,
                        y=y,
                        split=split,
                        inner='quartile',
+                       scale='width',
                        cut=0,
                        alpha=alpha,
                        ax=ax,
@@ -569,7 +576,7 @@ def swarmviolin(data,
         if len(data[hue].unique()) != 2:
             raise Exception(
                 "hue must be a categorical variable with 2 unique values")
-        from scipy.stats import mannwhitneyu, ttest_ind
+        from scipy.stats import mannwhitneyu, ttest_ind, ttest_rel, wilcoxon
         if np.issubdtype(data[y].dtype, np.number):
             category_col = x
             continuous_col = y
@@ -583,22 +590,47 @@ def swarmviolin(data,
         for ticklabel in ticklabels:
             category = ticklabel.get_text()
             hue1, hue2 = data[hue].unique()
+            if pvalue in ['wilcoxon_signed_rank', 'ttest_rel']:
+                a = data[(data[hue] == hue1)
+                         & (data[category_col]
+                            == category)]  #[continuous_col].values
+                b = data[(data[hue] == hue2)
+                         & (data[category_col] == category)]  #
+                ab = pd.merge(a,
+                              b,
+                              on=paired_hue_matching_col,
+                              suffixes=('_a', '_b'))
+                a = ab[continuous_col + '_a'].values
+                b = ab[continuous_col + '_b'].values
+                #  [continuous_col].values
+                # print(data[(data[hue] == hue1)
+                #         & (data[category_col] == category)])
+                #print(category, category_col, continuous_col)
+                if pvalue == 'wilcoxon_signed_rank':
+                    f = wilcoxon
+                elif pvalue == 'ttest_rel':
+                    f = ttest_rel
+                pval = f(a, b).pvalue
 
-            a = data[(data[hue] == hue1)
-                     & (data[category_col] == category)][continuous_col].values
-            b = data[(data[hue] == hue2)
-                     & (data[category_col] == category)][continuous_col].values
-            a = np.array([x for x in a if not np.isnan(x)])
-            b = np.array([x for x in b if not np.isnan(x)])
-            mw = mannwhitneyu(a, b, alternative='two-sided')
-            tt = ttest_ind(a, b)
-            if pvalue == 'mannwhitney':
-                pval = mw.pvalue
-            elif pvalue == 'ttest':
-                pval = tt[1]
+            elif pvalue in ['mannwhitney', 'ttest']:
+                a = data[
+                    (data[hue] == hue1)
+                    & (data[category_col] == category)][continuous_col].values
+                b = data[
+                    (data[hue] == hue2)
+                    & (data[category_col] == category)][continuous_col].values
+                a = np.array([x for x in a if not np.isnan(x)])
+                b = np.array([x for x in b if not np.isnan(x)])
+                mw = mannwhitneyu(a, b, alternative='two-sided')
+                tt = ttest_ind(a, b)
+                if pvalue == 'mannwhitney':
+                    pval = mw.pvalue
+                elif pvalue == 'ttest':
+                    pval = tt[1]
             else:
                 raise Exception(
-                    "`pvalue` must be either \'mannwhitney\' or \'ttest\'")
+                    "`pvalue` must be either \'mannwhitney\' or \'ttest\' or \'wilcoxon_signed_rank\' or \'ttest_rel\'"
+                )
 
             if effect_size == 'cohensd':
                 from panopticon.utilities import cohensd
@@ -958,8 +990,11 @@ def repertoire_plot(x=None,
     if smear and normalize:
         raise Exception(
             "Color smear only permissible in without normalization")
-    if colorkey_col is not None and (stack_order!='agnostic' or piechart==True or weights is None):
-        raise Exception("Color key currently implemented only for agnostic stack order stacked bar plot, with weights")
+    if colorkey_col is not None and (stack_order != 'agnostic'
+                                     or piechart == True or weights is None):
+        raise Exception(
+            "Color key currently implemented only for agnostic stack order stacked bar plot, with weights"
+        )
 
     all_heights = []
     if colorkey_col is not None:
@@ -977,8 +1012,9 @@ def repertoire_plot(x=None,
                     grouped_data = data.groupby(
                         [x, y])[weights].sum().sort_values(ascending=False)
                 else:
-                    grouped_data = data.groupby(
-                        [x, y, colorkey_col])[weights].sum().sort_values(ascending=False)
+                    grouped_data = data.groupby([
+                        x, y, colorkey_col
+                    ])[weights].sum().sort_values(ascending=False)
         elif stack_order == 'matched':
             if weights is None:
                 grouped_data = data.groupby(x)[y].value_counts(sort=False)
@@ -1024,10 +1060,12 @@ def repertoire_plot(x=None,
                         "dtype of column \'{}\' must be int".format(weights))
                 if colorkey_col is None:
                     grouped_data = data.groupby(
-                        [x, hue, y])[weights].sum().sort_values(ascending=False)
+                        [x, hue,
+                         y])[weights].sum().sort_values(ascending=False)
                 else:
-                    grouped_data = data.groupby(
-                        [x, hue, y, colorkey_col])[weights].sum().sort_values(ascending=False)
+                    grouped_data = data.groupby([
+                        x, hue, y, colorkey_col
+                    ])[weights].sum().sort_values(ascending=False)
 
         elif stack_order == 'matched':
             if weights is None:
@@ -1075,7 +1113,6 @@ def repertoire_plot(x=None,
             counter += 1
         ind = np.array(ind)
 
-
 # return grouped_data
     for grouping in groupings:
         heights = []
@@ -1091,13 +1128,13 @@ def repertoire_plot(x=None,
                 colors.append(index[-1])
             all_colorkeys.append(colors)
 
-
     all_heights = np.vstack(all_heights)
     all_heights = all_heights[:, ::-1]
 
-
     if colorkey_col is not None:
         all_colorkeys = np.vstack(all_colorkeys)
+
+
 #        all_colorkeys = all_colorkeys[:,::-1]
 
     if pre_normalize_by_cohort:
@@ -1282,16 +1319,20 @@ def repertoire_plot(x=None,
                     cb1.set_ticklabels(ticklabels)
             else:
                 if colorkey_col is not None:
-#                    return np.unique(all_colorkeys)
-                    colorkey2color = {key:color_palette[i%len(color_palette)] for i, key in enumerate(np.unique(all_colorkeys))}
-                    subax.bar(ind,
-                              all_heights[:, i],
-                              0.8,
-                              bottom=bottoms,
-                              color=[colorkey2color[x] for x in all_colorkeys[:,i]],
-                              edgecolor='k',
-                              lw=0.1,
-                              label=label)
+                    #                    return np.unique(all_colorkeys)
+                    colorkey2color = {
+                        key: color_palette[i % len(color_palette)]
+                        for i, key in enumerate(np.unique(all_colorkeys))
+                    }
+                    subax.bar(
+                        ind,
+                        all_heights[:, i],
+                        0.8,
+                        bottom=bottoms,
+                        color=[colorkey2color[x] for x in all_colorkeys[:, i]],
+                        edgecolor='k',
+                        lw=0.1,
+                        label=label)
                     subax.set_xticks(ind)
                 else:
                     subax.bar(ind,
@@ -1344,9 +1385,14 @@ def repertoire_plot(x=None,
     elif colorkey_col is not None:
         from matplotlib.patches import Patch
 
-        legend_elements = [Patch(facecolor=colorkey2color[colorkey], edgecolor='k',label=colorkey) for colorkey in colorkey2color.keys()]
-        plt.legend(handles=legend_elements,bbox_to_anchor=(1,1),
-                title=colorkey_col)
+        legend_elements = [
+            Patch(facecolor=colorkey2color[colorkey],
+                  edgecolor='k',
+                  label=colorkey) for colorkey in colorkey2color.keys()
+        ]
+        plt.legend(handles=legend_elements,
+                   bbox_to_anchor=(1, 1),
+                   title=colorkey_col)
 
     plt.tight_layout()
     if output is not None:
@@ -1499,7 +1545,8 @@ def cluster_enrichment_heatmap(x,
                                heatmap_shading_key='FractionOfCluster',
                                annotation_key='Counts',
                                annotation_fmt='.5g',
-                               figsize=(5, 5)):
+                               figsize=(5, 5),
+                               weights=None):
     """
     Produces a heatmap indicating the fraction of cell clusters across groups.  For example, if there are `m` experimental groups and `n` clusters of cells, will produce a heatmap with
     `n` rows and `m` columns. 
@@ -1574,7 +1621,7 @@ def cluster_enrichment_heatmap(x,
     import seaborn as sns
 
     cluster_enrichment_dataframes = get_cluster_enrichment_dataframes(
-        x, y, data)
+        x, y, data, weights=weights)
     if fig is None and cax is None and ax is None:
         fig, (cax,
               ax) = plt.subplots(nrows=2,
@@ -1638,7 +1685,8 @@ def cluster_enrichment_heatmap(x,
             plt.savefig(output, dpi=600)
         else:
             plt.savefig(output)
-    plt.show()
+    if show:
+        plt.show()
 
 
 def expand_value_counts(df, counts_col, scale=500):
