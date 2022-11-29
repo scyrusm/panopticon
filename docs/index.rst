@@ -21,7 +21,6 @@ Panopticon
     Style Guide <styleguide>
     Dependencies <dependencies>
     API <api>
-    Command-line tools (deprecated) <cli>
     Development <development>
     Acknowledgements <acknowledgements>
 
