@@ -80,7 +80,6 @@ Making a split-exon gtf file
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Suppose that you have a ``.gtf`` file (hereafter ``nameofyourgtf.gtf``). If you want to create a different ``.gtf`` file where a particular gene (say, ``GeneOfInterest``) has been replaced with separate "genes" corresponding to different exons of that gene, you run the following command on the command line:
-
 ::
     panopticon create-split-exon-gtf nameofyourgtf.gtf nameofyouroutputgtf.gtf GeneOfInterest
 
