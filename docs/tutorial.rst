@@ -75,3 +75,17 @@ where the ``''`` layer represents raw transcript counts.
 This will plot your basic UMAP of all your cells, with cells clusters
 and colored based on the first iteration of the panopticon's
 agglomerative iterative subclustering procedure.
+
+Making a split-exon gtf file
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Suppose that you have a ``.gtf`` file (hereafter ``nameofyourgtf.gtf``). If you want to create a different ``.gtf`` file where a particular gene (say, ``GeneOfInterest``) has been replaced with separate "genes" corresponding to different exons of that gene, you run the following command on the command line:
+
+::
+    panopticon create-split-exon-gtf nameofyourgtf.gtf nameofyouroutputgtf.gtf GeneOfInterest
+
+If there are multiple such genes (``GeneOfInterest1``, ``GeneOfInterest2``...), you may "split" them with the command:
+::
+    panopticon create-split-exon-gtf nameofyourgtf.gtf nameofyouroutputgtf.gtf GeneOfInterest1 GeneOfInterest2
+
+and so on. 

@@ -859,7 +859,7 @@ def convert_h5ad(h5ad,
     if convert_layers:
         loom = loompy.connect(output_loom)
         for layer_key in h5ad.layers.keys():
-            loom.layers[layer_key] = h5ad.layers[key].T
+            loom.layers[layer_key] = h5ad.layers[layer_key].T
         loom.close()
 
 

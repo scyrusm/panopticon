@@ -541,7 +541,7 @@ def incorporate_10x_vdj(loomfile,
                 ]
 
 
-def join_tra_trb_ca(loom, ca='cdr3'):
+def join_tra_trb_ca(loom, prefix1='TRA', prefix2='TRB', ca='cdr3'):
     """
 
     Parameters
@@ -555,9 +555,9 @@ def join_tra_trb_ca(loom, ca='cdr3'):
     -------
 
     """
-    loom.ca['TRA_TRB_{}'.format(ca)] = [
-        '|'.join([x, y]) for x, y, in zip(loom.ca['TRA_{}'.format(ca)],
-                                          loom.ca['TRB_{}'.format(ca)])
+    loom.ca['{}_{}_{}'.format(prefix1, prefix2, ca)] = [
+        '|'.join([x, y]) for x, y, in zip(loom.ca['{}_{}'.format(prefix1, ca)],
+                                          loom.ca['{}_{}'.format(prefix2, ca)])
     ]
 
 
@@ -585,7 +585,9 @@ def morisita(df, key, samplekey, sample1, sample2, countkey=None):
     """
     from panopticon.analysis import simpson
     if countkey is None:
-        print("Running without countkey--every row of df assumed to be a single count!")
+        print(
+            "Running without countkey--every row of df assumed to be a single count!"
+        )
         set1 = df[df[samplekey] == sample1][key].value_counts(
             normalize=True).reset_index(name='count', ).rename({'index': key},
                                                                axis=1)
