@@ -1055,6 +1055,7 @@ def repertoire_plot(x=None,
             if weights is None:
                 grouped_data = data.groupby([x, hue])[y].value_counts()
             else:
+#                from IPython.core.debugger import set_trace; set_trace()
                 if data[weights].dtypes != int:
                     raise Exception(
                         "dtype of column \'{}\' must be int".format(weights))
@@ -1114,6 +1115,7 @@ def repertoire_plot(x=None,
         ind = np.array(ind)
 
 # return grouped_data
+#    from IPython.core.debugger import set_trace; set_trace()
     for grouping in groupings:
         heights = []
         for n in grouped_data[grouping].values:
@@ -1132,7 +1134,13 @@ def repertoire_plot(x=None,
     all_heights = all_heights[:, ::-1]
 
     if colorkey_col is not None:
-        all_colorkeys = np.vstack(all_colorkeys)
+#        from IPython.core.debugger import set_trace; set_trace()
+        all_colorkeys_padded = []
+        max_colorkey_length = np.max([len(x) for x in all_colorkeys])
+        for colorkey in all_colorkeys:
+            all_colorkeys_padded.append(colorkey+(max_colorkey_length-len(colorkey))*[colorkey[-1]]) # padds the last value as a dummy
+#        from IPython.core.debugger import set_trace; set_trace()
+        all_colorkeys = np.vstack(all_colorkeys_padded)
 
 
 #        all_colorkeys = all_colorkeys[:,::-1]
@@ -1224,6 +1232,7 @@ def repertoire_plot(x=None,
             title = str(groupings[i])
             if annotate_simpson:
                 from panopticon.analysis import simpson
+#                from IPython.core.debugger import set_trace; set_trace()
                 si = simpson(all_heights[i, :])
                 title += '\nSI: {0:.5f}'.format(si)
             subax.set_title(title)
@@ -1652,10 +1661,14 @@ def cluster_enrichment_heatmap(x,
                 vmin=0,
                 vmax=1,
                 fmt=annotation_fmt)
+    if heatmap_shading_key=='FractionOfCluster':
+        cbar_label='proportion of cells (row-normalized)'
+    elif heatmap_shading_key=='FractionOfGroup':
+        cbar_label='proportion of cells (column-normalized)'
     fig.colorbar(ax.get_children()[0],
                  cax=cax,
                  orientation="horizontal",
-                 label='proportion of cells (in-cluster)')
+                 label=cbar_label)
     #      annotation_clip=False)    #scipy.stats.chisquare
     cax.xaxis.tick_top()
     cax.xaxis.set_label_position('top')
@@ -1742,3 +1755,131 @@ def expand_value_counts(df, counts_col, scale=500):
     cbar.ax.set_yticks(cax_ylims)
     cbar.ax.set_yticklabels([0, 1])
     plt.tight_layout()
+
+
+def plot_differential_expression_barplot(
+        diffex,
+        gene_col='gene',
+        effect_size='CommonLanguageEffectSize',
+        n_genes=10,
+        gene_blacklist=[],
+        fig=None,
+        ax=None,
+        output=None,
+        show=True):
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    if fig is None and ax is None:
+        fig, ax = plt.subplots(figsize=(4, 4))
+    sns.barplot(data=pd.concat([
+        diffex[~diffex[gene_col].isin(gene_blacklist)].sort_values(
+            effect_size, ascending=False).head(n_genes),
+        diffex[~diffex[gene_col].isin(gene_blacklist)].sort_values(
+            effect_size, ascending=True).head(n_genes)[::-1]
+    ]),
+                x=effect_size,
+                y=gene_col,
+                color='k',
+                ax=ax)
+    if output is not None:
+        plt.tight_layout()
+        plt.savefig(output)
+    if show:
+        plt.show()
+
+
+def plot_dot_plot(loom,
+                  x_column_attribute=None,
+                  y_genes=None,
+                  y_column_attributes=None,
+                  layername='log2(TP10k+1)',
+                  gene_ra_name='gene',
+                  scale=100,
+                  figsize=(4, 15),
+                  cbar_label='expression/module score (min-max normalized)'):
+    if x_column_attribute not in loom.ca.keys():
+        raise Exception(
+            "x_column_attribute not a column attribute of loomfile")
+    if y_genes is None and column_attributes is None:
+        raise Exception(
+            "One of genes or column_attributes must be an iterable")
+    import pandas as pd
+    import numpy as np
+    from tqdm import tqdm
+    import matplotlib.pyplot as plt
+
+    df = pd.DataFrame(loom.ca[x_column_attribute],
+                      columns=[x_column_attribute])
+    if y_genes is not None:
+        for gene in y_genes:
+            if gene not in loom.ra[gene_ra_name]:
+                raise Exception("{} not in loom.ra[{}]".format(
+                    gene, gene_ra_name))
+            else:
+                igene = np.where(loom.ra[gene_ra_name] == gene)[0]
+            df[gene] = loom[layername][igene, :].sum(axis=0)
+    if y_column_attributes is not None:
+        for y_column_attribute in y_column_attributes:
+            if y_column_attribute not in loom.ca.keys():
+                raise Exception(
+                    "{} not in loom.ca.keys()".format(y_column_attribute))
+            df[y_column_attribute] = loom.ca[y_column_attribute]
+
+    df = df.groupby(x_column_attribute).mean()
+    fig, (ax, cax) = plt.subplots(
+        1,
+        2,
+        figsize=figsize,
+        gridspec_kw={
+            'width_ratios': [20, 1],
+            'wspace': 0.05
+        },
+    )
+    #markers = np.hstack([diffex[key][(~diffex[key]['gene'].str.startswith('MT')) & (~diffex[key]['gene'].str.startswith('OLMALINC')) & (~diffex[key]['gene'].str.startswith('MALAT')) & (~diffex[key]['gene'].apply(lambda x: '.' in x)) ].query('MeanExpr1 > MeanExpr2')['gene'].head(topn).values for key in diffex.keys()])
+    key2x = {key: x for key, x in zip(df.index.values, range(df.shape[0]))}
+    marker2y = {
+        marker: x
+        for marker, x in zip(df.columns, range(len(df.columns)))
+    }
+    exprs = []
+    for col in tqdm(df.columns):
+        for key in [key for key in df.index.values]:
+            exprs.append(df.loc[key][col])
+
+    for col in df.columns:
+        exprs = []
+        for key in [key for key in df.index.values]:
+            exprs.append(df.loc[key][col])
+        for key in [key for key in df.index.values]:
+            expr = df.loc[key][col]
+            sc = ax.scatter(key2x[key],
+                            marker2y[col],
+                            s=(expr - np.min(exprs)) * scale + 1,
+                            cmap='coolwarm',
+                            c=expr,
+                            vmin=np.min(exprs),
+                            vmax=np.max(exprs))
+
+    ax.set_yticklabels([x.split('_With')[0] for x in df.columns])
+    ax.set_yticks(range(len(df.columns)))
+
+    ax.set_xticks(np.array(range(len(df.index.values))))
+    ax.set_xticklabels(list(df.index.values))
+    ax.set_xlabel('Cluster')
+    ax.set_ylim([-0.5, len(df.columns)])
+    #for i in np.arange(-0.5,len(markers)-0.5,topn)[1::]:
+    #    plt.axhline(ls='--',y=i,color='k')
+    #if flag:
+    cbar = plt.colorbar(
+        sc,
+        aspect=30,
+        cax=cax,
+    )
+    cbar.set_label(cbar_label, rotation=90, fontsize=17)
+    yticklabels = cbar.ax.get_yticklabels()
+    cax_ylims = cax.get_ylim()
+    cbar.ax.set_yticks(cax_ylims)
+    cbar.ax.set_yticklabels([0, 1])
+    plt.tight_layout()
+    plt.show()
+    return df

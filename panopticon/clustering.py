@@ -66,7 +66,10 @@ def kt_cluster(mean_window_expression_ranks: np.ndarray, t: int = 4) -> Any:
     return fcluster(Z, t=t, criterion='maxclust'), Z
 
 
-def leiden_with_silhouette_score(X, leiden_nneighbors, skip_silhouette=False, leiden_iterations=10):
+def leiden_with_silhouette_score(X,
+                                 leiden_nneighbors,
+                                 skip_silhouette=False,
+                                 leiden_iterations=10):
     """
 
     Parameters
@@ -101,11 +104,10 @@ def leiden_with_silhouette_score(X, leiden_nneighbors, skip_silhouette=False, le
                          include_self=True,
                          metric='cosine')
     ig = get_igraph_from_adjacency(A)
-    part = leidenalg.find_partition(
-        ig,
-        leidenalg.RBConfigurationVertexPartition,
-        n_iterations=leiden_iterations,
-        seed=17)
+    part = leidenalg.find_partition(ig,
+                                    leidenalg.RBConfigurationVertexPartition,
+                                    n_iterations=leiden_iterations,
+                                    seed=17)
     clustering = part.membership
     if skip_silhouette:
         score = None
@@ -115,7 +117,7 @@ def leiden_with_silhouette_score(X, leiden_nneighbors, skip_silhouette=False, le
             clustering,
             metric='cosine',
         )
-    
+
     leiden_silhouette_output = namedtuple("LeidenSilhouetteOutput",
                                           "score nneighbors clustering")
 
@@ -150,17 +152,16 @@ def silhouette_optimized_leiden(X,
     from collections import namedtuple
     from panopticon.clustering import leiden_with_silhouette_score
 
-
     nneighbors_to_silhouette_score = {}
     for leiden_nneighbors in [
             min_neighbors, initial_intermediate, max_neighbors
     ]:  # 2, 128, 1024 ??
-        nneighbors_to_silhouette_score[
-            leiden_nneighbors] = leiden_with_silhouette_score(
-                X, leiden_nneighbors).score
+        lwss = leiden_with_silhouette_score(X, leiden_nneighbors)
+        nneighbors_to_silhouette_score[leiden_nneighbors] = lwss.score
         if verbose:
-            print("Silhoutte score with", leiden_nneighbors, "neighbors: ",
-                  nneighbors_to_silhouette_score[leiden_nneighbors])
+            print("Silhouette score with", leiden_nneighbors, "neighbors: ",
+                  nneighbors_to_silhouette_score[leiden_nneighbors],
+                  'clusters: ', np.unique(lwss.clustering))
 
     converged = False
     lbound_nneighbors = min_neighbors
@@ -185,11 +186,13 @@ def silhouette_optimized_leiden(X,
             np.mean([lbound_nneighbors, rbound_nneighbors])).astype(int)
         if midpoint_nneighbors in nneighbors_to_silhouette_score.keys():
             random_shift = np.random.choice([-1, 1], p=[0.5, 0.5])
-            if midpoint_nneighbors + random_shift in nneighbors_to_silhouette_score.keys():
+            if midpoint_nneighbors + random_shift in nneighbors_to_silhouette_score.keys(
+            ):
                 midpoint_nneighbors -= random_shift
             else:
                 midpoint_nneighbors += random_shift
-                if midpoint_nneighbors - random_shift in nneighbors_to_silhouette_score.keys():
+                if midpoint_nneighbors - random_shift in nneighbors_to_silhouette_score.keys(
+                ):
                     converged = True
         if np.abs(rbound_nneighbors - lbound_nneighbors) <= 2:
             converged = True
@@ -218,7 +221,8 @@ def silhouette_optimized_leiden(X,
             print('Current nneighbors bounds: ', lbound_nneighbors,
                   rbound_nneighbors)
 
-    top_silhouette_output = leiden_with_silhouette_score(X, top_score_nneighbors)
+    top_silhouette_output = leiden_with_silhouette_score(
+        X, top_score_nneighbors)
     silhouette_optimized_leiden_output = namedtuple(
         "SilhouetteOptimizedLeidenOutput",
         "score nneighbors clustering nneighbors_to_silhouette_score")

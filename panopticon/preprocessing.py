@@ -94,8 +94,10 @@ def generate_cell_and_gene_quality_metrics(loom,
                 x.startswith('RP') or x.startswith('Rp')
                 for x in loom.ra[gene_ra]
             ])
-        if len(ribosomal_gene_mask)!=loom.shape[0]:
-            raise Exception("ribosomal_gene_mask must be boolean mask with length equal to the number of rows of loom")
+        if len(ribosomal_gene_mask) != loom.shape[0]:
+            raise Exception(
+                "ribosomal_gene_mask must be boolean mask with length equal to the number of rows of loom"
+            )
         madrp, meanrp, maxrp = loom[layername].map(
             [robust.mad, np.mean, np.max],
             axis=1,
@@ -115,8 +117,10 @@ def generate_cell_and_gene_quality_metrics(loom,
                 for x in loom.ra[gene_ra]
             ])
             print(loom.ra[gene_ra][mitochondrial_gene_mask])
-        if len(mitochondrial_gene_mask)!=loom.shape[0]:
-            raise Exception("mitochondrial_gene_mask must be boolean mask with length equal to the number of rows of loom")
+        if len(mitochondrial_gene_mask) != loom.shape[0]:
+            raise Exception(
+                "mitochondrial_gene_mask must be boolean mask with length equal to the number of rows of loom"
+            )
         madmt, meanmt, maxmt = loom[layername].map(
             [robust.mad, np.mean, np.max],
             axis=1,
@@ -195,8 +199,10 @@ def get_cluster_specific_greater_than_cutoff_mask(loom,
 def generate_count_normalization(loom,
                                  raw_count_layername,
                                  output_layername,
-                                 denominator=10**4):
-    """Generates a new layer with log2(transcripts per denominator).  By default this will produce a log2(TP100k+1) layer; adjusting the denominator will permit e.g. a log2(TP10k+1) or log2(TPM+1), etc.
+                                 denominator=10**4,
+                                 out_of_core_cell_threshold=20000,
+                                 batch_size=512):
+    """Generates a new layer with log2(transcripts per denominator).  By default this will produce a log2(TP10k+1) layer; adjusting the denominator will permit e.g. a log2(TP100k+1) or log2(TPM+1), etc.
 
     Parameters
     ----------
@@ -215,11 +221,28 @@ def generate_count_normalization(loom,
     
     """
     import numpy as np
-    colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]
-    sparselayer = loom[raw_count_layername].sparse()
-    sparselayer = sparselayer.multiply(denominator / colsums).log1p().multiply(
-        1 / np.log(2))
-    loom[output_layername] = sparselayer
+
+    if loom.shape[1] < out_of_core_cell_threshold:
+        colsums = loom[raw_count_layername].map([np.sum], axis=1)[0]
+        sparselayer = loom[raw_count_layername].sparse()
+        sparselayer = sparselayer.multiply(
+            denominator / colsums).log1p().multiply(1 / np.log(2))
+        loom[output_layername] = sparselayer
+    else:
+        from tqdm import tqdm
+        loom[output_layername] = "float64"
+
+        #colsums = loom[raw_count_layername].map([np.sum], axis=0)[0]
+
+        for (ix, selection, view) in tqdm(loom.scan(axis=1,
+                                                    batch_size=batch_size),
+                                          total=loom.shape[1] // batch_size):
+            colsums = view[raw_count_layername][:, :].sum(axis=0)
+            print(len(colsums))
+            loom[output_layername][:, selection] = (np.log1p(
+                np.multiply(view[raw_count_layername][:, :],
+                            denominator / colsums)) * (1 / np.log(2)))
+            print(loom[output_layername][:, selection].mean())
 
 
 def generate_standardized_layer(loom,
@@ -489,18 +512,27 @@ def generate_guide_rna_prediction(
                 cellmask = np.isfinite(loom.ca[new_ca_name])
                 if cellmask.sum(
                 ) >= ncell_threshold_for_guide:  # have minimum cells for guide
-                    model = GeneralMixtureModel.from_samples(
-                        [PoissonDistribution, PoissonDistribution],
-                        n_components=2,
-                        X=loom.ca[new_ca_name][cellmask.nonzero()[0]].reshape(
-                            -1, 1))
-                    predictions = []
-                    for val in loom.ca[new_ca_name]:
-                        if not np.isfinite(val):
-                            predictions.append(np.nan)
-                        else:
-                            predictions.append(
-                                model.predict(np.array(val).reshape(-1, 1))[0])
+                    try:
+                        model = GeneralMixtureModel.from_samples(
+                            [PoissonDistribution, PoissonDistribution],
+                            n_components=2,
+                            X=loom.ca[new_ca_name][cellmask.nonzero()
+                                                   [0]].reshape(-1, 1))
+                        predictions = []
+                        for val in loom.ca[new_ca_name]:
+                            if not np.isfinite(val):
+                                predictions.append(np.nan)
+                            else:
+                                predictions.append(
+                                    model.predict(
+                                        np.array(val).reshape(-1, 1))[0])
+                    except:
+                        print("Unable to model {}".format(guide_rna))
+                        print("Distribution of counts:")
+                        display(
+                            pd.DataFrame(loom.ca[guide_rna][
+                                cellmask.nonzero()[0]])[0].value_counts())
+
                 else:
                     predictions = [0] * loom.shape[1]
                 predictions = np.array(predictions)

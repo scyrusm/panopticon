@@ -79,6 +79,58 @@ def get_module_score_matrix(loom,
     return signature - control
 
 
+def get_module_score_from_matrix(X, signature_mask, nbins=10, ncontrol=5):
+    """generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).
+
+    Parameters
+    ----------
+    X : matrix
+        
+    signature_mask : indices corresponding to signature
+        
+    nbins : Number of quantile bins to use
+        (Default value = 10)
+    ncontrol : Number of genes in each matched quantile
+        (Default value = 5)
+    layername :
+        
+    cellmask :
+        
+
+    Returns
+    -------
+
+    
+    """
+    assert len(signature_mask) == X.shape[0]
+    gene_quantiles = pd.qcut(np.mean(X, axis=1),
+                             nbins,
+                             duplicates='drop',
+                             labels=False)
+    #print(gene_quantiles)
+    sigdata_quantiles = gene_quantiles[signature_mask]
+    nonsigdata_quantiles = gene_quantiles[~signature_mask]
+    if len(signature_mask) != X.shape[0]:
+        raise Exception(
+            "signature_mask must be boolean mask with length equal to the number of rows of X"
+        )
+    signature = np.mean(X[signature_mask], axis=0)
+    sigdata_quantiles = gene_quantiles[signature_mask]
+    control_group = []
+    for quantile in np.unique(sigdata_quantiles):
+        noccurrences = np.sum(sigdata_quantiles == quantile)
+        # there's an edge case wherein if size is greater than the number of genes to be taken without replacement, this will generate an error.  Will be an issue in the few-gene regime
+        control_group += list(
+            np.random.choice(np.where(nonsigdata_quantiles == quantile)[0],
+                             size=ncontrol * noccurrences,
+                             replace=False))
+
+    control_group = np.array(control_group)
+    #control = nonsigdata[control_group].mean(axis=0)
+    control = np.mean(X[control_group], axis=0)
+    return signature - control
+
+
 def generate_masked_module_score(loom,
                                  layername,
                                  cellmask,
@@ -589,7 +641,9 @@ def get_subclustering(X,
     if X.shape[0] < min_input_size:
         return np.array([0] * X.shape[0])
     else:
-        print('Computing agglomerative clustering with cosine affinity, {} linkage'.format(linkage))
+        print(
+            'Computing agglomerative clustering with cosine affinity, {} linkage'
+            .format(linkage))
         clustering = AgglomerativeClustering(n_clusters=2,
                                              memory=clusteringcachedir,
                                              affinity='cosine',
@@ -597,11 +651,13 @@ def get_subclustering(X,
                                              linkage=linkage)
         scores = []
         minnk = 2
-        for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1), desc='Computing silhouette scores'):
+        for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1),
+                       desc='Computing silhouette scores'):
             clustering.set_params(n_clusters=nk)
             clustering.fit(X)
             if silhouette_score_sample_size is not None:
-                silhouette_score_sample_size = np.min([X.shape[0],silhouette_score_sample_size])
+                silhouette_score_sample_size = np.min(
+                    [X.shape[0], silhouette_score_sample_size])
             score = silhouette_score(X,
                                      clustering.labels_,
                                      metric='cosine',
@@ -641,7 +697,7 @@ def generate_clustering(loom,
                         n_clustering_iterations=3,
                         max_clusters='cbrt_rule',
                         mode='pca',
-                        n_components=10,
+                        n_components=50,
                         silhouette_threshold=0.1,
                         clusteringcachedir='clusteringcachedir/',
                         out_of_core_batch_size=1024,
@@ -674,7 +730,7 @@ def generate_clustering(loom,
     clusteringcachedir :
         (Default value = 'clusteringcachedir/')
     n_components :
-        (Default value = 10)
+        (Default value = 50)
     out_of_core_batch_size :
         (Default value = 512)
     n_clustering_iterations :
@@ -728,14 +784,17 @@ def generate_clustering(loom,
             from panopticon.utilities import get_igraph_from_adjacency
             from panopticon.utilities import import_check
 
-            X = get_pca_loadings_matrix(loom, layername, n_components=n_components)
+            X = get_pca_loadings_matrix(loom,
+                                        layername,
+                                        n_components=n_components)
             if optimized_leiden:
                 from panopticon.clustering import silhouette_optimized_leiden
                 leiden_output = silhouette_optimized_leiden(X)
             else:
                 from panopticon.clustering import leiden_with_silhouette_score
-                leiden_output = leiden_with_silhouette_score(X, leiden_nneighbors, leiden_iterations=leiden_iterations)
-            clustering = leiden_output.clustering 
+                leiden_output = leiden_with_silhouette_score(
+                    X, leiden_nneighbors, leiden_iterations=leiden_iterations)
+            clustering = leiden_output.clustering
 
         else:
             if mode == 'nmf':
@@ -799,9 +858,9 @@ def generate_clustering(loom,
             elif mode == 'pca':
 
                 if mask.sum() > incremental_pca_threshold:
-#                    print(
-#                        "Warning: running incremental PCA with loom.scan with masked items; this can lead to batches smaller than the number of principal components.  If computation fails, try adjusting out_of_core_batch_size, or raising incremental_pca_threshold."
-#                    )
+                    #                    print(
+                    #                        "Warning: running incremental PCA with loom.scan with masked items; this can lead to batches smaller than the number of principal components.  If computation fails, try adjusting out_of_core_batch_size, or raising incremental_pca_threshold."
+                    #                    )
                     pca = IncrementalPCA(n_components=n_components)
                     slice_to_merge = None
                     for (ix, selection, view) in tqdm(
@@ -809,37 +868,43 @@ def generate_clustering(loom,
                                       batch_size=out_of_core_batch_size,
                                       items=mask.nonzero()[0],
                                       layers=[layername]),
-                            total=loom.shape[1] // out_of_core_batch_size, desc='calculating masked incremental pca'):
+                            total=loom.shape[1] // out_of_core_batch_size,
+                            desc='calculating masked incremental pca'):
                         if slice_to_merge is None:
                             #if view.shape[1]<n_components:
-                            if view.shape[1]<out_of_core_batch_size:
-                                slice_to_merge = view[layername][:,:].T
+                            if view.shape[1] < out_of_core_batch_size:
+                                slice_to_merge = view[layername][:, :].T
                             else:
                                 pca.partial_fit(view[layername][:, :].T)
                         else:
-#                            print("merging small slices: ",slice_to_merge.shape[0],view.shape[1])
-                            slice_to_merge = np.vstack([slice_to_merge, view[layername][:,:].T])
-#                            if slice_to_merge.shape[0]>=n_components:
-                            if slice_to_merge.shape[0]>=out_of_core_batch_size:
-#                                print('Merged slice: ',slice_to_merge.shape[0])
+                            #                            print("merging small slices: ",slice_to_merge.shape[0],view.shape[1])
+                            slice_to_merge = np.vstack(
+                                [slice_to_merge, view[layername][:, :].T])
+                            #                            if slice_to_merge.shape[0]>=n_components:
+                            if slice_to_merge.shape[
+                                    0] >= out_of_core_batch_size:
+                                #                                print('Merged slice: ',slice_to_merge.shape[0])
                                 pca.partial_fit(slice_to_merge)
                                 slice_to_merge = None
                     if slice_to_merge is not None:
-                        if slice_to_merge.shape[0]>=n_components:
-#                             print('Merged slice: ',slice_to_merge.shape[0])
+                        if slice_to_merge.shape[0] >= n_components:
+                            #                             print('Merged slice: ',slice_to_merge.shape[0])
                             pca.partial_fit(slice_to_merge)
                             slice_to_merge = None
                         else:
-                            print("Warning: {} cells neglected.  Consider re-running with different out_of_core_batch_size".format(slice_to_merge.shape[0]))
+                            print(
+                                "Warning: {} cells neglected.  Consider re-running with different out_of_core_batch_size"
+                                .format(slice_to_merge.shape[0]))
 
-    
                     compresseddatalist = []
                     for (ix, selection, view) in tqdm(
                             loom.scan(axis=1,
                                       batch_size=out_of_core_batch_size,
                                       items=mask.nonzero()[0],
                                       layers=[layername]),
-                            total=loom.shape[1] // out_of_core_batch_size, desc='calculating masked incremental pca loadings'):
+                            total=loom.shape[1] // out_of_core_batch_size,
+                            desc='calculating masked incremental pca loadings'
+                    ):
                         compresseddatalist.append(
                             view[layername][:, :].T @ pca.components_.T)
                     X = np.vstack(compresseddatalist)
@@ -849,7 +914,8 @@ def generate_clustering(loom,
                     )  # This is a hack to avoid computing PCA in cases where no clustering will be performed
                 else:
                     data_c = loom[layername][:, mask.nonzero()[0]].T
-                    model = PCA(n_components=np.min([10, data_c.shape[0]]),
+                    model = PCA(n_components=np.min(
+                        [n_components, data_c.shape[0]]),
                                 random_state=0)
 
                     X = model.fit_transform(data_c)
@@ -1483,7 +1549,8 @@ def get_cluster_differential_expression(loom,
                                   p=[p, 1 - p],
                                   size=mask2.shape[0])
     if verbose:
-        print('Group 1 size: ',np.sum(mask1), ', group 2 size: ',np.sum(mask2))
+        print('Group 1 size: ', np.sum(mask1), ', group 2 size: ',
+              np.sum(mask2))
     pvalues = []
     uvalues = []
     genes = []
@@ -1579,8 +1646,7 @@ def get_differential_expression_over_continuum(loom,
         raise Exception(
             "Length of covariate vector does not match mask length.")
     if gene_alternate_name is None and 'gene_common_name' in loom.ra.keys():
-        gene_alternate_name='gene_common_name'
-
+        gene_alternate_name = 'gene_common_name'
 
     from tqdm import tqdm
 
@@ -1609,7 +1675,8 @@ def get_differential_expression_over_continuum(loom,
         #    pass
     df = pd.DataFrame(genes)
     df.columns = ['gene']
-    df['GeneAlternateName'] = loom.ra[gene_alternate_name]
+    if gene_alternate_name is not None:
+        df['GeneAlternateName'] = loom.ra[gene_alternate_name]
     df['pval'] = pvals
     df['corr'] = corrs
 
@@ -1980,8 +2047,10 @@ def get_cluster_enrichment_dataframes(x, y, data, weights=None):
                            & (data[y] == cluster)][weights].sum()  #.sum()
                 t12 = data[(data[x] == group)
                            & (data[y] != cluster)][weights].sum()  #.sum()
-                t21 = data[(data[x] != group) & (data[y] == cluster)][weights].sum()
-                t22 = data[(data[x] != group) & (data[y] != cluster)][weights].sum()
+                t21 = data[(data[x] != group)
+                           & (data[y] == cluster)][weights].sum()
+                t22 = data[(data[x] != group)
+                           & (data[y] != cluster)][weights].sum()
 
             table = np.array([[t11, t12], [t21, t22]])
 

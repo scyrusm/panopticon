@@ -610,6 +610,13 @@ def convert_10x_h5(path_10x_h5,
             raise Exception(
                 "Improper mapping of row attributes; perhaps gene of interest not in loom.ra[\'gene\']?"
             )
+        if len(genes_as_ca) > 20:
+            from tqdm import tqdm
+            genes_as_ca = tqdm(
+                genes_as_ca,
+                total=len(genes_as_ca),
+                desc='converting named genes to column attributes...')
+
         for gene in genes_as_ca:
             submask = np.array(features) == gene
             gene_common_name = np.array(features_common_names)[submask][0]
@@ -1883,3 +1890,21 @@ def downsample(counts, p=None, total=None, with_replacement=True):
     counted_choices = counted_choices.reindex(
         index=new_index).fillna(0).astype(int).values
     return counted_choices
+
+
+def gene_positions(genes, start=True):
+    data = EnsemblRelease(species='mouse')
+
+    positions = []
+    for gene in genes:
+        exon_ids = data.exon_ids_of_gene_name(gene.capitalize())
+        chromosome = data.exon_by_id(exon_ids[0]).contig
+        strand = data.exon_by_id(exon_ids[0]).strand
+        if strand != '+':
+            raise Exception("strand is negative")
+        if start:
+            pos = data.exon_by_id(exon_ids[0]).start
+        else:
+            pos = data.exon_by_id(exon_ids[-1]).end
+        positions.append(pos)
+    return positions
