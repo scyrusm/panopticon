@@ -533,7 +533,9 @@ def convert_10x_h5(path_10x_h5,
                    label='',
                    genes_as_ca=[],
                    gene_whitelist=None,
-                   output_type='loom'):
+                   output_type='loom',
+                   write_chunked=False,
+                   chunk_size=512):
     """
 
     Parameters
@@ -632,7 +634,26 @@ def convert_10x_h5(path_10x_h5,
 
     ra = {'gene': features, 'gene_common_name': features_common_names}
     if output_type == 'loom':
-        loompy.create(output_file, m, ra, ca)
+        if write_chunked:
+            from tqdm import tqdm
+            with loompy.new(
+                    output_file) as dsout:  # Create a new, empty, loom file
+                ncells = len(ca['cellname'])
+                nchunks = ncells // chunk_size
+                batches = np.array_split(
+                    np.arange(len(ca['cellname'])),
+                    nchunks,
+                )
+                for batch in tqdm(batches):
+                    chunk_ca = {
+                        key: np.array(vals)[batch]
+                        for key, vals in ca.items()
+                    }
+                    dsout.add_columns(m[:, batch].todense(),
+                                      col_attrs=chunk_ca,
+                                      row_attrs=ra)
+        else:
+            loompy.create(output_file, m, ra, ca)
     if output_type == 'pkl':
         if gene_whitelist is None:
             raise Exception(
@@ -787,7 +808,9 @@ def convert_h5ad(h5ad,
                  convert_obsm=True,
                  convert_varm=True,
                  convert_uns=True,
-                 convert_layers=True):
+                 convert_layers=True,
+                 write_chunked=False,
+                 chunk_size=512):
     """
 
     Parameters
@@ -855,7 +878,27 @@ def convert_h5ad(h5ad,
                     )
                 else:
                     ra[ra_key] = h5ad.varm[varm_key][:, i]
-    loompy.create(output_loom, h5ad.X.T, ra, ca)
+
+    if write_chunked:
+        from tqdm import tqdm
+        with loompy.new(
+                output_loom) as dsout:  # Create a new, empty, loom file
+            ncells = len(ca['cellname'])
+            nchunks = ncells // chunk_size
+            batches = np.array_split(
+                np.arange(len(ca['cellname'])),
+                nchunks,
+            )
+            for batch in tqdm(batches):
+                chunk_ca = {
+                    key: np.array(vals)[batch]
+                    for key, vals in ca.items()
+                }
+                dsout.add_columns(h5ad.X.T[:, batch].todense(),
+                                  col_attrs=chunk_ca,
+                                  row_attrs=ra)
+    else:
+        loompy.create(output_loom, h5ad.X.T, ra, ca)
 
     if convert_uns:
         loom = loompy.connect(output_loom)
@@ -1908,3 +1951,29 @@ def gene_positions(genes, start=True):
             pos = data.exon_by_id(exon_ids[-1]).end
         positions.append(pos)
     return positions
+
+
+def convert_10x_h5_via_h5ad(path_10x_h5,
+                            output_file,
+                            labelkey=None,
+                            label='',
+                            genes_as_ca=[],
+                            gene_whitelist=None):
+    import scanpy
+    import numpy as np
+    from tqdm import tqdm
+
+    adata_all = scanpy.read_10x_h5(path_10x_h5, gex_only=False)
+    adata_gex_only = scanpy.read_10x_h5(path_10x_h5)
+
+    for i, non_gex in zip(
+            np.array(list(range(len(non_gex_mask))))[non_gex_mask],
+            tqdm(adata_all.var['feature_types'].index.values[non_gex_mask])):
+        # This has terrible performance
+        adata_gex_only.obs[non_gex] = np.array(adata_all.X[:, i].todense())[:,
+                                                                            0]
+    adata_gex_only.write(output_file.replace('.loom', '.h5ad'))
+    from panopticon.utilities import convert_h5ad
+    convert_h5ad(output_file.replace('.loom', '.h5ad'),
+                 output_file,
+                 write_chunked=True)
