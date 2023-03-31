@@ -836,7 +836,8 @@ def convert_h5ad(h5ad,
     import scanpy
     import loompy
 
-    h5ad = scanpy.read_h5ad(h5ad)
+    if type(h5ad) == str:
+        h5ad = scanpy.read_h5ad(h5ad)
     ra = {'gene': np.array(h5ad.var.index)}
     for col in h5ad.var.columns:
         if col == 'gene':
@@ -1962,18 +1963,37 @@ def convert_10x_h5_via_h5ad(path_10x_h5,
     import scanpy
     import numpy as np
     from tqdm import tqdm
+    import loompy
 
     adata_all = scanpy.read_10x_h5(path_10x_h5, gex_only=False)
     adata_gex_only = scanpy.read_10x_h5(path_10x_h5)
+    adata_gex_only.write(output_file.replace('.loom', '.h5ad'))
+    non_gex_mask = (adata_all.var['feature_types'] != 'Gene Expression').values
+    from panopticon.utilities import convert_h5ad
 
+    convert_h5ad(output_file.replace('.loom', '.h5ad'),
+                 output_file,
+                 write_chunked=True)
+    loom = loompy.connect(output_file)
     for i, non_gex in zip(
             np.array(list(range(len(non_gex_mask))))[non_gex_mask],
             tqdm(adata_all.var['feature_types'].index.values[non_gex_mask])):
         # This has terrible performance
-        adata_gex_only.obs[non_gex] = np.array(adata_all.X[:, i].todense())[:,
-                                                                            0]
-    adata_gex_only.write(output_file.replace('.loom', '.h5ad'))
-    from panopticon.utilities import convert_h5ad
-    convert_h5ad(output_file.replace('.loom', '.h5ad'),
-                 output_file,
-                 write_chunked=True)
+        #if np.any([x in non_gex for x in ['Zc3h12a','Ptpn2','Pdcd1']]):
+        ca = np.array(adata_all.X[:, i].todense())[:, 0]
+        if (ca != 0).sum() > 0:
+            loom.ca[non_gex] = np.array(adata_all.X[:, i].todense())[:, 0]
+        #break
+        #print(i)
+    #convert_h5ad(output_file.replace('.loom','.h5ad'), output_file, write_chunked=True)
+
+
+def p_to_stars(p, max_stars=4):
+    if p > 1 or p < 0:
+        raise Exception('p must be float between 0 and 1')
+    summary = 'n.s.'
+    if p < .05:
+        summary = '*'
+    if p < .01:
+        summary = int(np.min([max_stars, int(-np.log(p) / np.log(10))])) * '*'
+    return summary

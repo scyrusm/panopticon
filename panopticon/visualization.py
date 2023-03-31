@@ -1232,7 +1232,6 @@ def repertoire_plot(x=None,
             title = str(groupings[i])
             if annotate_simpson:
                 from panopticon.analysis import simpson
-#                from IPython.core.debugger import set_trace; set_trace()
                 si = simpson(all_heights[i, :])
                 title += '\nSI: {0:.5f}'.format(si)
             subax.set_title(title)

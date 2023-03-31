@@ -238,11 +238,9 @@ def generate_count_normalization(loom,
                                                     batch_size=batch_size),
                                           total=loom.shape[1] // batch_size):
             colsums = view[raw_count_layername][:, :].sum(axis=0)
-            print(len(colsums))
             loom[output_layername][:, selection] = (np.log1p(
                 np.multiply(view[raw_count_layername][:, :],
                             denominator / colsums)) * (1 / np.log(2)))
-            print(loom[output_layername][:, selection].mean())
 
 
 def generate_standardized_layer(loom,
