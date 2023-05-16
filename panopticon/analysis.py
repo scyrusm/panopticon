@@ -585,7 +585,7 @@ def generate_embedding(loom,
             ]:
                 nmf_loadings.append(loom.ca[col])
         compressed = np.vstack(nmf_loadings).T
-    reducer = umap.UMAP(random_state=None,
+    reducer = umap.UMAP(random_state=random_state,
                         min_dist=min_dist,
                         n_neighbors=n_neighbors,
                         metric=metric,
@@ -607,14 +607,15 @@ def get_subclustering(X,
                       clusteringcachedir='clusteringcachedir/',
                       show_dendrogram=False,
                       linkage='average',
-                      silhouette_score_sample_size=None):
+                      silhouette_score_sample_size=None,
+                      verbose=False,
+                      minimum_second_to_first_cluster_ratio=0.001):
     """
 
     Parameters
     ----------
     embedding :
-        
-    score_threshold :
+        score_threshold :
         
     max_clusters :
         (Default value = 10)
@@ -641,9 +642,10 @@ def get_subclustering(X,
     if X.shape[0] < min_input_size:
         return np.array([0] * X.shape[0])
     else:
-        print(
-            'Computing agglomerative clustering with cosine affinity, {} linkage'
-            .format(linkage))
+        if verbose:
+            print(
+                'Computing agglomerative clustering with cosine affinity, {} linkage'
+                .format(linkage))
         clustering = AgglomerativeClustering(n_clusters=2,
                                              memory=clusteringcachedir,
                                              affinity='cosine',
@@ -662,10 +664,23 @@ def get_subclustering(X,
                                      clustering.labels_,
                                      metric='cosine',
                                      sample_size=silhouette_score_sample_size)
-            # sample_size=np.min([5000, X.shape[0]]))
+            cluster_proportions = pd.DataFrame(
+                clustering.labels_)[0].value_counts(normalize=False).values
+            second_to_first_cluster_ratio = cluster_proportions[
+                1] / cluster_proportions[0]
+            if second_to_first_cluster_ratio < minimum_second_to_first_cluster_ratio:
+                score = np.nan
+            if verbose:
+                print(score)
+                print(
+                    pd.DataFrame(clustering.labels_,
+                                 columns=[
+                                     'cluster cell counts'
+                                 ])['cluster cell counts'].value_counts())
             scores.append(score)
             #break
-        print("scores", np.array(scores))
+        if verbose:
+            print("scores", np.array(scores))
         if show_dendrogram and hasattr(clustering, 'children_'):
             if linkage == 'average':
                 method = 'weighted'
@@ -677,17 +692,21 @@ def get_subclustering(X,
             d = dendrogram(Z, truncate_mode='level', p=10)
             plt.show()
 
-        if np.max(scores) >= score_threshold:
-            clustering.set_params(n_clusters=np.argmax(scores) + minnk)
+        if np.nanmax(scores) >= score_threshold:
+            clustering.set_params(n_clusters=np.nanargmax(scores) + minnk)
             clustering.fit(X)
-            print(
-                np.argmax(scores) + minnk, "clusters, with",
-                list(
-                    pd.DataFrame(clustering.labels_)[0].value_counts().values),
-                "cells")
+            if verbose:
+                print(
+                    np.nanargmax(scores) + minnk, "clusters, with",
+                    list(
+                        pd.DataFrame(
+                            clustering.labels_)[0].value_counts().values),
+                    "cells")
             return clustering.labels_
         else:
-            print("No score exceeded score threshold")
+            print(
+                "No score exceeded score threshold and minimum second-cluster-to-first-cluster ratio threshold"
+            )
             return np.array([0] * X.shape[0])
 
 
@@ -708,7 +727,9 @@ def generate_clustering(loom,
                         leiden_iterations=10,
                         incremental_pca_threshold=10000,
                         show_dendrogram=False,
-                        linkage='average'):
+                        linkage='average',
+                        verbose=False,
+                        minimum_second_to_first_cluster_ratio=0.001):
     """
 
     Parameters
@@ -823,7 +844,10 @@ def generate_clustering(loom,
                 max_clusters=mc,
                 clusteringcachedir=clusteringcachedir,
                 show_dendrogram=show_dendrogram,
-                linkage=linkage)
+                linkage=linkage,
+                verbose=verbose,
+                minimum_second_to_first_cluster_ratio=
+                minimum_second_to_first_cluster_ratio)
 
         loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
@@ -862,40 +886,48 @@ def generate_clustering(loom,
                     #                        "Warning: running incremental PCA with loom.scan with masked items; this can lead to batches smaller than the number of principal components.  If computation fails, try adjusting out_of_core_batch_size, or raising incremental_pca_threshold."
                     #                    )
                     pca = IncrementalPCA(n_components=n_components)
-                    slice_to_merge = None
-                    for (ix, selection, view) in tqdm(
-                            loom.scan(axis=1,
-                                      batch_size=out_of_core_batch_size,
-                                      items=mask.nonzero()[0],
-                                      layers=[layername]),
-                            total=loom.shape[1] // out_of_core_batch_size,
-                            desc='calculating masked incremental pca'):
-                        if slice_to_merge is None:
-                            #if view.shape[1]<n_components:
-                            if view.shape[1] < out_of_core_batch_size:
-                                slice_to_merge = view[layername][:, :].T
-                            else:
-                                pca.partial_fit(view[layername][:, :].T)
-                        else:
-                            #                            print("merging small slices: ",slice_to_merge.shape[0],view.shape[1])
-                            slice_to_merge = np.vstack(
-                                [slice_to_merge, view[layername][:, :].T])
-                            #                            if slice_to_merge.shape[0]>=n_components:
-                            if slice_to_merge.shape[
-                                    0] >= out_of_core_batch_size:
-                                #                                print('Merged slice: ',slice_to_merge.shape[0])
-                                pca.partial_fit(slice_to_merge)
-                                slice_to_merge = None
-                    if slice_to_merge is not None:
-                        if slice_to_merge.shape[0] >= n_components:
-                            #                             print('Merged slice: ',slice_to_merge.shape[0])
-                            pca.partial_fit(slice_to_merge)
-                            slice_to_merge = None
-                        else:
-                            print(
-                                "Warning: {} cells neglected.  Consider re-running with different out_of_core_batch_size"
-                                .format(slice_to_merge.shape[0]))
+                    print("Running new routine")
+                    n_splits = mask.sum() // out_of_core_batch_size
+                    selections = np.array_split(mask.nonzero()[0], n_splits)
+                    print('sizes', len(selections[0]), len(selections[-1]))
+                    for selection in tqdm(selections):
+                        pca.partial_fit(loom[layername][:, selection].T)
 
+
+#                    slice_to_merge = None
+#                    for (ix, selection, view) in tqdm(
+#                            loom.scan(axis=1,
+#                                      batch_size=out_of_core_batch_size,
+#                                      items=mask.nonzero()[0],
+#                                      layers=[layername]),
+#                            total=loom.shape[1] // out_of_core_batch_size,
+#                            desc='calculating masked incremental pca'):
+#                        if slice_to_merge is None:
+#                            #if view.shape[1]<n_components:
+#                            if view.shape[1] < out_of_core_batch_size:
+#                                slice_to_merge = view[layername][:, :].T
+#                            else:
+#                                pca.partial_fit(view[layername][:, :].T)
+#                        else:
+#                            #                            print("merging small slices: ",slice_to_merge.shape[0],view.shape[1])
+#                            slice_to_merge = np.vstack(
+#                                [slice_to_merge, view[layername][:, :].T])
+#                            #                            if slice_to_merge.shape[0]>=n_components:
+#                            if slice_to_merge.shape[
+#                                    0] >= out_of_core_batch_size:
+#                                #                                print('Merged slice: ',slice_to_merge.shape[0])
+#                                pca.partial_fit(slice_to_merge)
+#                                slice_to_merge = None
+#                    if slice_to_merge is not None:
+#                        if slice_to_merge.shape[0] >= n_components:
+#                            #                             print('Merged slice: ',slice_to_merge.shape[0])
+#                            pca.partial_fit(slice_to_merge)
+#                            slice_to_merge = None
+#                        else:
+#                            print(
+#                                "Warning: {} cells neglected.  Consider re-running with different out_of_core_batch_size"
+#                                .format(slice_to_merge.shape[0]))
+#
                     compresseddatalist = []
                     for (ix, selection, view) in tqdm(
                             loom.scan(axis=1,
@@ -933,7 +965,10 @@ def generate_clustering(loom,
                 clusteringcachedir=clusteringcachedir,
                 min_input_size=min_subclustering_size,
                 show_dendrogram=show_dendrogram,
-                linkage=linkage)
+                linkage=linkage,
+                verbose=verbose,
+                minimum_second_to_first_cluster_ratio=
+                minimum_second_to_first_cluster_ratio)
 
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
@@ -1595,6 +1630,7 @@ def get_cluster_differential_expression(loom,
     output['MeanExpr2'] = meanexpr2
     output['MeanExpExpr1'] = meanexpexpr1
     output['MeanExpExpr2'] = meanexpexpr2
+    output['Log2FoldChange'] = np.log(meanexpexpr1)/np.log(2) - np.log(meanexpexpr2)/np.log(2)
     output['FracExpr1'] = fracexpr1
     output['FracExpr2'] = fracexpr2
     if gene_alternate_name is not None:

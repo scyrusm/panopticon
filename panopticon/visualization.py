@@ -720,18 +720,17 @@ def volcano(diffex,
             ax=None,
             gene_column='gene',
             pval_column='pvalue',
-            mean_expr_left='MeanExpr1',
-            mean_expr_right='MeanExpr2',
+            effect_size_col='CommonLanguageEffectSize',
             left_name='',
             right_name='',
             genemarklist=[],
-            logfoldchange_importance_threshold=0.5,
             neglogpval_importance_threshold=5,
             title='',
             output=None,
             positions=None,
             show=True,
-            gene_label_offset_scale=1):
+            gene_label_offset_scale=1,
+            no_effect_line=0):
     """
 
     Parameters
@@ -742,17 +741,13 @@ def volcano(diffex,
         Default value = 'gene')
     pval_column :
         Default value = 'pvalue')
-    mean_expr_left :
-        Default value = 'MeanExpr1')
-    mean_expr_right :
-        Default value = 'MeanExpr2')
     left_name : Genes toward the left in the volcano plot, which are upregulated in group2 of 'diffex'
         Default value = '')
     right_name : Genes toward the right in the volcano plot, which are upregulated in group1 of 'diffex'
         Default value = '')
     genemarklist :
         Default value = [])
-    logfoldchange_importance_threshold :
+    effect_size_importance_threshold :
         Default value = 0.5)
     neglogpval_importance_threshold :
         Default value = 5)
@@ -786,25 +781,23 @@ def volcano(diffex,
             5,
         ))
     neglogpvalues = -np.log(diffex[pval_column].values) / np.log(10)
-    logfoldchange = diffex[mean_expr_left].values - diffex[
-        mean_expr_right].values
-    important_mask = (np.abs(logfoldchange) >
-                      logfoldchange_importance_threshold)
-    important_mask = important_mask & (neglogpvalues >
-                                       neglogpval_importance_threshold)
-    ax.scatter(logfoldchange[important_mask],
+    effect_size = diffex[effect_size_col].values
+    important_mask = (neglogpvalues > neglogpval_importance_threshold)
+    ax.scatter(effect_size[important_mask],
                neglogpvalues[important_mask],
                alpha=1,
                marker='.',
                s=3,
                c='b')
-    ax.scatter(logfoldchange[~important_mask],
+    ax.scatter(effect_size[~important_mask],
                neglogpvalues[~important_mask],
                alpha=.1,
                marker='.',
                s=2,
                c='b')
-    maxx = np.nanmax(np.abs(logfoldchange))
+    maxx = np.nanmax(effect_size)
+    minx = np.nanmin(effect_size)
+
     maxy = np.nanmax(neglogpvalues)
     xoffset = .1
     yoffset = .1
@@ -817,7 +810,7 @@ def volcano(diffex,
         from sklearn.metrics import euclidean_distances
         annomask = np.isin(diffex[gene_column], genemarklist)
         distances = euclidean_distances(
-            np.vstack((logfoldchange[annomask], neglogpvalues[annomask])).T)
+            np.vstack((effect_size[annomask], neglogpvalues[annomask])).T)
         positions = []
         for i in range(1, len(distances)):
             mindist = np.min(distances[i, 0:i])
@@ -832,54 +825,50 @@ def volcano(diffex,
     ):
         genedf = diffex[diffex[gene_column] == gene]
         negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
-        logfoldchange = genedf.iloc[0].MeanExpr1 - genedf.iloc[0].MeanExpr2
-        ax.scatter(logfoldchange, negpval, marker='.', color='k')
+        effect_size = genedf.iloc[0].MeanExpr1 - genedf.iloc[0].MeanExpr2
+        ax.scatter(effect_size, negpval, marker='.', color='k')
         if position == 'b':
             ax.annotate(
-                gene, (logfoldchange, negpval),
-                (logfoldchange,
-                 negpval + .015 * maxy * gene_label_offset_scale),
+                gene, (effect_size, negpval),
+                (effect_size, negpval + .015 * maxy * gene_label_offset_scale),
                 va='bottom',
                 ha='center',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
         elif position == 't':
             ax.annotate(
-                gene, (logfoldchange, negpval),
-                (logfoldchange,
-                 negpval - .015 * maxy * gene_label_offset_scale),
+                gene, (effect_size, negpval),
+                (effect_size, negpval - .015 * maxy * gene_label_offset_scale),
                 va='top',
                 ha='center',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
         elif position == 'l':
             ax.annotate(
-                gene, (logfoldchange, negpval),
-                (logfoldchange + .03 * maxx * gene_label_offset_scale,
-                 negpval),
+                gene, (effect_size, negpval),
+                (effect_size + .03 * maxx * gene_label_offset_scale, negpval),
                 va='center',
                 ha='left',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
         elif position == 'r':
             ax.annotate(
-                gene, (logfoldchange, negpval),
-                (logfoldchange - .03 * maxx * gene_label_offset_scale,
-                 negpval),
+                gene, (effect_size, negpval),
+                (effect_size - .03 * maxx * gene_label_offset_scale, negpval),
                 va='center',
                 ha='right',
                 path_effects=[pe.withStroke(linewidth=1, foreground="white")])
         else:
             raise Exception("invalid position character selection")
-    plt.axvline(0, ls='--')
+    plt.axvline(no_effect_line, ls='--')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.tick_params(axis='both', which='major', labelsize=14)
     ax.tick_params(axis='both', which='minor', labelsize=14)
-    ax.set_xlabel('log fold change\n' + '$\leftarrow$' + left_name + '\n' +
+    ax.set_xlabel(effect_size_col + '\n' + '$\leftarrow$' + left_name + '\n' +
                   right_name + r'$\rightarrow$',
                   fontsize=14)
 
     ax.set_ylabel('-log' + r'${}_{10}$' + '(p-value)', fontsize=14)
 
-    ax.set_xlim([-maxx * 1.04, maxx * 1.04])
+    ax.set_xlim([minx + .4 * (minx - maxx), maxx + .4 * (maxx - minx)])
     ax.set_ylim([0, maxy * 1.01])
     plt.tight_layout()
     ax.set_title(title)
@@ -1055,7 +1044,7 @@ def repertoire_plot(x=None,
             if weights is None:
                 grouped_data = data.groupby([x, hue])[y].value_counts()
             else:
-#                from IPython.core.debugger import set_trace; set_trace()
+                #                from IPython.core.debugger import set_trace; set_trace()
                 if data[weights].dtypes != int:
                     raise Exception(
                         "dtype of column \'{}\' must be int".format(weights))
@@ -1134,11 +1123,13 @@ def repertoire_plot(x=None,
     all_heights = all_heights[:, ::-1]
 
     if colorkey_col is not None:
-#        from IPython.core.debugger import set_trace; set_trace()
+        #        from IPython.core.debugger import set_trace; set_trace()
         all_colorkeys_padded = []
         max_colorkey_length = np.max([len(x) for x in all_colorkeys])
         for colorkey in all_colorkeys:
-            all_colorkeys_padded.append(colorkey+(max_colorkey_length-len(colorkey))*[colorkey[-1]]) # padds the last value as a dummy
+            all_colorkeys_padded.append(
+                colorkey + (max_colorkey_length - len(colorkey)) *
+                [colorkey[-1]])  # padds the last value as a dummy
 #        from IPython.core.debugger import set_trace; set_trace()
         all_colorkeys = np.vstack(all_colorkeys_padded)
 
@@ -1660,10 +1651,10 @@ def cluster_enrichment_heatmap(x,
                 vmin=0,
                 vmax=1,
                 fmt=annotation_fmt)
-    if heatmap_shading_key=='FractionOfCluster':
-        cbar_label='proportion of cells (row-normalized)'
-    elif heatmap_shading_key=='FractionOfGroup':
-        cbar_label='proportion of cells (column-normalized)'
+    if heatmap_shading_key == 'FractionOfCluster':
+        cbar_label = 'proportion of cells (row-normalized)'
+    elif heatmap_shading_key == 'FractionOfGroup':
+        cbar_label = 'proportion of cells (column-normalized)'
     fig.colorbar(ax.get_children()[0],
                  cax=cax,
                  orientation="horizontal",
@@ -1791,6 +1782,7 @@ def plot_dot_plot(loom,
                   x_column_attribute=None,
                   y_genes=None,
                   y_column_attributes=None,
+                  x_column_blacklist=[],
                   layername='log2(TP10k+1)',
                   gene_ra_name='gene',
                   scale=100,
@@ -1823,7 +1815,7 @@ def plot_dot_plot(loom,
                 raise Exception(
                     "{} not in loom.ca.keys()".format(y_column_attribute))
             df[y_column_attribute] = loom.ca[y_column_attribute]
-
+    df = df[~df[x_column_attribute].isin(x_column_blacklist)]
     df = df.groupby(x_column_attribute).mean()
     fig, (ax, cax) = plt.subplots(
         1,
@@ -1880,5 +1872,4 @@ def plot_dot_plot(loom,
     cbar.ax.set_yticks(cax_ylims)
     cbar.ax.set_yticklabels([0, 1])
     plt.tight_layout()
-    plt.show()
-    return df
+    return fig

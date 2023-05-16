@@ -315,7 +315,9 @@ def generate_antibody_prediction(loom,
                                  antibodies=None,
                                  pseudocount=1,
                                  overwrite=False,
-                                 only_generate_zscore=False):
+                                 only_generate_zscore=False,
+                                 group_ca=None,
+                                 hashtags=None):
     """
     This approach takes some inspiration from the dsb approach: https://doi.org/10.1101/2020.02.24.963603.
     However, there is no use of isotypes.  Therefore, is amounts only to "step 1" of that procedure. This routine can also take into
@@ -393,34 +395,56 @@ def generate_antibody_prediction(loom,
                                     logcounts_cells_mean) / logcounts_cells_std
 
         if not only_generate_zscore:
-            from sklearn import mixture
-
-            model = mixture.GaussianMixture(n_components=2)
             prediction_ca_name = antibody + '_prediction'
-            if prediction_ca_name in loom.ca.keys() and overwrite == False:
-                raise Exception(
-                    "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
-                    .format(prediction_ca_name))
-            if np.isnan(loom.ca[new_ca_name]).sum() > 0:
-                cellmask = ~np.isnan(loom.ca[new_ca_name])
-                model.fit(loom.ca[new_ca_name][cellmask].reshape(-1, 1))
-                predictions = []
-                for val in loom.ca[new_ca_name]:
-                    if np.isnan(val):
-                        predictions.append(np.nan)
-                    else:
-                        predictions.append(
-                            model.predict(np.array(val).reshape(-1, 1))[0])
-                predictions = np.array(predictions)
-
+            if group_ca is None:
+                from panopticon.preprocessing import _two_component_mixture_model
+                loom.ca[prediction_ca_name] = _two_component_mixture_model(
+                    loom.ca[new_ca_name])
             else:
-                predictions = model.fit_predict(loom.ca[new_ca_name].reshape(
-                    -1, 1))
+                from panopticon.preprocessing import _grouped_two_component_mixture_models
+                loom.ca[
+                    prediction_ca_name] = _grouped_two_component_mixture_models(
+                        loom.ca[new_ca_name],
+                        loom.ca[group_ca])
+            if hashtags is not None:
+                if 'nHash' in loom.ca.keys() and not overwrite:
+                    raise Exception("nHash already present in loom.ca.keys(), but overwrite set to False")
+                loom.ca['nHash'] = np.vstack([loom.ca[x+'_prediction'] for x in hashtags]).sum(axis=0)
 
-            if model.means_[0][0] > model.means_[1][0]:
-                predictions = 1 - predictions
 
-            loom.ca[prediction_ca_name] = np.array(predictions)
+
+def _two_component_mixture_model(values):
+    from sklearn import mixture
+    model = mixture.GaussianMixture(n_components=2)
+
+    if np.isnan(values).sum() > 0:
+        cellmask = ~np.isnan(values)
+        model.fit(values[cellmask].reshape(-1, 1))
+        predictions = []
+        for val in loom.ca[new_ca_name]:
+            if np.isnan(val):
+                predictions.append(np.nan)
+            else:
+                predictions.append(
+                    model.predict(np.array(val).reshape(-1, 1))[0])
+        predictions = np.array(predictions)
+
+    else:
+        predictions = model.fit_predict(np.array(values).reshape(-1, 1))
+
+    if model.means_[0][0] > model.means_[1][0]:
+        predictions = 1 - predictions
+    return np.array(predictions)
+
+
+def _grouped_two_component_mixture_models(values, groups):
+    from panopticon.preprocessing import _two_component_mixture_model
+    import pandas as pd
+    df = pd.DataFrame(values, columns=['val'])
+    df['group'] = groups
+    return pd.DataFrame(
+        df.groupby('group').transform(
+            _two_component_mixture_model))['val'].values  #.unstack()
 
 
 def generate_guide_rna_prediction(
