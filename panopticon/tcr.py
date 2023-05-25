@@ -499,9 +499,9 @@ def incorporate_10x_vdj(loomfile,
             "Only {}% of V(D)J barcodes have corresponding gene expression data; GEX and V(D)J files may be mismatched"
             .format(100 * barcode_match_rate))
     filtered_contig_annotations_tcra = filtered_contig_annotations.query(
-        'chain=="TRA"').query('productive=="True"')
+        'chain=="TRA"')#.query('productive=="True"')
     filtered_contig_annotations_tcrb = filtered_contig_annotations.query(
-        'chain=="TRB"').query('productive=="True"')
+        'chain=="TRB"')#.query('productive=="True"')
     barcode_df_dict = {}
     for label, fca in zip(
         ['TRA', 'TRB'],

@@ -825,7 +825,7 @@ def volcano(diffex,
     ):
         genedf = diffex[diffex[gene_column] == gene]
         negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
-        effect_size = genedf.iloc[0].MeanExpr1 - genedf.iloc[0].MeanExpr2
+        effect_size = genedf.iloc[0][effect_size_col]
         ax.scatter(effect_size, negpval, marker='.', color='k')
         if position == 'b':
             ax.annotate(
