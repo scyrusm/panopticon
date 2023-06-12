@@ -1574,11 +1574,13 @@ def get_cluster_differential_expression(loom,
                                               min_cluster_size):
         return np.nan
     if ident1_downsample_size:
+        mask1 = mask1.copy()
         p = np.min([ident1_downsample_size, np.sum(mask1)]) / np.sum(mask1)
         mask1 *= np.random.choice([True, False],
                                   p=[p, 1 - p],
                                   size=mask1.shape[0])
     if ident2_downsample_size:
+        mask2 = mask2.copy()
         p = np.min([ident2_downsample_size, np.sum(mask2)]) / np.sum(mask2)
         mask2 *= np.random.choice([True, False],
                                   p=[p, 1 - p],
