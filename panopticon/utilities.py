@@ -1997,3 +1997,47 @@ def p_to_stars(p, max_stars=4):
     if p < .01:
         summary = int(np.min([max_stars, int(-np.log(p) / np.log(10))])) * '*'
     return summary
+
+
+def _reconstruct_iterative_clustering_tree(loom):
+    import numpy as np
+    from treelib import Tree
+    import pandas as pd
+
+    clustering_iteration_ca = [
+        x for x in loom.ca.keys() if x.startswith('ClusteringIteration')
+    ]
+    n_clustering_iterations = len(clustering_iteration_ca)
+    tree = Tree()
+    tree.create_node("(n={})".format(loom.shape[0]), '')
+
+    for ica in range(n_clustering_iterations):
+        if 'U' in list(loom.ca['ClusteringIteration{}'.format(ica)]):
+            break
+        else:
+            vc = pd.DataFrame(loom.ca['ClusteringIteration{}'.format(
+                ica)])[0].value_counts().sort_index()
+            for cluster, row in vc.items():
+                if ica == 0:
+                    parent = ''
+                else:
+                    parent = '-'.join(cluster.split('-')[0:-1])
+                if len(
+                        np.unique([
+                            x for x in loom.ca['ClusteringIteration{}'.format(
+                                ica)] if str(x).startswith(parent)
+                        ])) > 1:
+                    tree.create_node("{} (n={})".format(cluster, row),
+                                     '{}'.format(cluster),
+                                     parent=parent)
+    return tree
+
+
+def _plot_tree(t, mode='treelib'):
+    if mode == 'treelib':
+        t.show()
+    elif mode == 'graphviz':
+        t.to_graphviz('test.gv')
+        from graphviz import Source
+        s = Source.from_file('test.gv')
+        s.view()

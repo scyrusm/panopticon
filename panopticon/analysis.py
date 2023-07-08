@@ -393,6 +393,7 @@ def generate_incremental_pca(loom,
     from tqdm import tqdm
     from sklearn.decomposition import IncrementalPCA, PCA
     from panopticon.analysis import generate_pca_loadings
+    import numpy as np
     batch_size_altered = False
     while loom.shape[1] % batch_size < n_components:
         batch_size += 1
@@ -409,12 +410,11 @@ def generate_incremental_pca(loom,
         pca.fit(loom[layername][:, :].T)
     else:
         pca = IncrementalPCA(n_components=n_components)
-        for (ix, selection, view) in tqdm(loom.scan(axis=1,
-                                                    batch_size=batch_size),
-                                          total=loom.shape[1] // batch_size):
-            #pca.partial_fit(view[:, :].transpose())
+        n_splits = loom.shape[1] // batch_size
+        selections = np.array_split(np.arange(loom.shape[1]), n_splits)
+        for selection in tqdm(selections):
+            pca.partial_fit(loom[layername][:, selection].T)
 
-            pca.partial_fit(view[layername][:, :].T)
     for i in range(50):
         loom.ra['{} PC {}'.format(layername, i + 1)] = pca.components_[i]
     loom.attrs['NumberPrincipalComponents_{}'.format(layername)] = n_components
@@ -1570,8 +1570,8 @@ def get_cluster_differential_expression(loom,
                 ident2 = [ident2]
             mask2 = np.isin(loom.ca[cluster_level], ident2)
         print("Comparison of", ident1, "against", ident2)
-    if (np.sum(mask1) < min_cluster_size) or (np.sum(mask2) <
-                                              min_cluster_size):
+    if (np.sum(mask1) < min_cluster_size) or (np.sum(mask2)
+                                              < min_cluster_size):
         return np.nan
     if ident1_downsample_size:
         mask1 = mask1.copy()
@@ -1632,7 +1632,8 @@ def get_cluster_differential_expression(loom,
     output['MeanExpr2'] = meanexpr2
     output['MeanExpExpr1'] = meanexpexpr1
     output['MeanExpExpr2'] = meanexpexpr2
-    output['Log2FoldChange'] = np.log(meanexpexpr1)/np.log(2) - np.log(meanexpexpr2)/np.log(2)
+    output['Log2FoldChange'] = np.log(meanexpexpr1) / np.log(2) - np.log(
+        meanexpexpr2) / np.log(2)
     output['FracExpr1'] = fracexpr1
     output['FracExpr2'] = fracexpr2
     if gene_alternate_name is not None:

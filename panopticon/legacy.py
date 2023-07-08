@@ -200,7 +200,7 @@ def create_subsetted_loom_space_efficient(loom,
             "cellmask must be boolean mask with length equal to the number of columns of loom"
         )
 
-    n_splits = mask.sum() // batch_size
+    n_splits = cellmask.sum() // batch_size
     selections = np.array_split(cellmask.nonzero()[0], n_splits)
     from tqdm import tqdm
     with loompy.new(output_loom_filename) as dsout:

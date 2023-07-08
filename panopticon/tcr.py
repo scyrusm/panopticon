@@ -400,7 +400,8 @@ def generate_tcr_multichain_summary(loom,
                                     multichain_separator='---',
                                     alpha_beta_separator='|',
                                     sample_separator='_',
-                                    overwrite=False):
+                                    overwrite=False,
+                                    pickle_summary=True):
     """
 
     Parameters
@@ -439,6 +440,9 @@ def generate_tcr_multichain_summary(loom,
                             alpha_beta_separator=alpha_beta_separator,
                             sample_separator=sample_separator,
                             tcrblacklist=tcrblacklist)
+    if pickle_summary:
+        from panopticon.utilities import we_can_pickle_it
+        we_can_pickle_it(df, loom.filename.replace('.loom','')+'_tcr_multichain_summary.pkl')
     dfdict = df.set_index(['sample', 'TCR']).to_dict()
     for key in dfdict.keys():
         if key + suffix in loom.ca.keys() and overwrite is False:
