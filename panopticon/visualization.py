@@ -1873,3 +1873,66 @@ def plot_dot_plot(loom,
     cbar.ax.set_yticklabels([0, 1])
     plt.tight_layout()
     return fig
+
+
+def _reconstruct_iterative_clustering_tree(loom):
+    import numpy as np
+    from panopticon.utilities import import_check
+    exit_code = import_check(
+        "treelib", 'pip install treelib')
+    if exit_code != 0:
+        return
+    from treelib import Tree
+    import pandas as pd
+
+    clustering_iteration_ca = [
+        x for x in loom.ca.keys() if x.startswith('ClusteringIteration')
+    ]
+    n_clustering_iterations = len(clustering_iteration_ca)
+    tree = Tree()
+    tree.create_node("(n={})".format(loom.shape[0]), '')
+
+    for ica in range(n_clustering_iterations):
+        if 'U' in list(loom.ca['ClusteringIteration{}'.format(ica)]):
+            break
+        else:
+            vc = pd.DataFrame(loom.ca['ClusteringIteration{}'.format(
+                ica)])[0].value_counts().sort_index()
+            for cluster, row in vc.items():
+                if ica == 0:
+                    parent = ''
+                else:
+                    parent = '-'.join(cluster.split('-')[0:-1])
+                if len(
+                        np.unique([
+                            x for x in loom.ca['ClusteringIteration{}'.format(
+                                ica)] if str(x).startswith(parent)
+                        ])) > 1:
+                    tree.create_node("{} (n={})".format(cluster, row),
+                                     '{}'.format(cluster),
+                                     parent=parent)
+    return tree
+
+
+def _plot_tree(t, mode='treelib', gv_filename='test.gv'):
+    if mode == 'treelib':
+        t.show()
+    elif mode == 'graphviz':
+        t.to_graphviz(gv_filename)
+        from panopticon.utilities import import_check
+        exit_code = import_check(
+            "graphviz", 'pip install graphviz')
+        if exit_code != 0:
+            return
+        from graphviz import Source
+        s = Source.from_file(gv_filename)
+        s.view()
+    else:
+        raise Exception("mode must be one of ('treelib','graphviz')")
+
+def plot_iterative_clustering_tree(loom, mode='treelib'):
+    from panopticon.visualization import _reconstruct_iterative_clustering_tree, _plot_tree
+    t = _reconstruct_iterative_clustering_tree(loom)
+    _plot_tree(t, mode=mode, gv_filename=loom.filename+'.gv')
+
+
