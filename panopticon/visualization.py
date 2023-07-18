@@ -1875,11 +1875,18 @@ def plot_dot_plot(loom,
     return fig
 
 
-def _reconstruct_iterative_clustering_tree(loom):
+def _reconstruct_iterative_clustering_tree(
+        loom,
+        diffdict=None,
+        anno_n_genes=5,
+        marker_anno_delimiter='\n',
+        marker_detail_level=1,
+        markers_to_highlight=[],
+        marker_gene_gene_ra='gene_common_name',
+        marker_gene_highlight_layer='log2(TP10k+1)'):
     import numpy as np
     from panopticon.utilities import import_check
-    exit_code = import_check(
-        "treelib", 'pip install treelib')
+    exit_code = import_check("treelib", 'pip install treelib')
     if exit_code != 0:
         return
     from treelib import Tree
@@ -1908,20 +1915,80 @@ def _reconstruct_iterative_clustering_tree(loom):
                             x for x in loom.ca['ClusteringIteration{}'.format(
                                 ica)] if str(x).startswith(parent)
                         ])) > 1:
-                    tree.create_node("{} (n={})".format(cluster, row),
-                                     '{}'.format(cluster),
-                                     parent=parent)
+                    anno = "{} (n={})".format(cluster, row)
+                    if diffdict is not None:
+                        if type(diffdict[cluster]) != float:
+                            if marker_detail_level == 1:
+                                anno += '\n' + marker_anno_delimiter.join(
+                                    diffdict[cluster]['GeneAlternateName'].
+                                    head(anno_n_genes).values)
+                            if marker_detail_level == 2:
+                                #      anno +='\n'
+                                for ianno, rowanno in diffdict[cluster].head(
+                                        anno_n_genes).iterrows():
+                                    anno += marker_anno_delimiter + '{0} (ME: {1:.2f}, FE: {2:.2f})'.format(
+                                        rowanno['GeneAlternateName'],
+                                        rowanno['MeanExpr1'],
+                                        rowanno['FracExpr1']
+                                    ) + marker_anno_delimiter
+                            if marker_detail_level == 3:
+                                #     anno +='\n'
+                                for ianno, rowanno in diffdict[cluster].head(
+                                        anno_n_genes).iterrows():
+                                    anno += marker_anno_delimiter + '{0} (ME: {1:.2f}, FE: {2:.2f} vs.ME: {3:.2f}, FE: {4:.2f}'.format(
+                                        rowanno['GeneAlternateName'],
+                                        rowanno['MeanExpr1'],
+                                        rowanno['FracExpr1'],
+                                        rowanno['MeanExpr2'],
+                                        rowanno['FracExpr2'])
+                        for marker in markers_to_highlight:
+                            cluster_level = len(str(cluster).split('-')) - 1
+                            mask1 = loom.ca['ClusteringIteration{}'.format(
+                                cluster_level)] == cluster
+                            if marker in loom.ra[marker_gene_gene_ra]:
+                                igene = np.where(loom.ra[marker_gene_gene_ra]
+                                                 == marker)[0][0]
+                                anno += '\n' + 'mean {0}: {1:.2f}'.format(
+                                    marker, loom[marker_gene_highlight_layer][
+                                        igene, :][mask1].mean())
+                            #print(loom[marker_gene_highlight_layer][igene,:][mask1].mean(), loom[marker_gene_highlight_layer][igene,:][mask2].mean())
+                            elif marker in loom.ca.keys():
+                                if myeloid.ca[marker].dtype == float:
+                                    anno += '\n' + 'mean {0}: {1:.2f}'.format(
+                                        marker, loom.ca[marker][mask1].mean())
+                                else:
+                                    proportions = '{}'.format(
+                                        100 *
+                                        pd.DataFrame(loom.ca[marker][mask1],
+                                                     columns=[marker])
+                                        [marker].value_counts(normalize=True))
+                                    if len(proportions.split('\n')[1:-1]) > 1:
+                                        proportions = '%\n'.join(
+                                            proportions.split('\n')
+                                            [1:-1]) + '%'
+                                        anno += '\n\n' + '{} proportions:\n{}'.format(
+                                            marker, proportions)
+                                    else:
+                                        proportions = '%\n'.join(
+                                            proportions.split('\n')
+                                            [1:-1]) + '%'
+                                        anno += '\n\n' + '{} :\n{}'.format(
+                                            marker, proportions)
+
+                            else:
+                                raise Exception(
+                                    "{} not a valid gene or ca".format(marker))
+                    tree.create_node(anno, '{}'.format(cluster), parent=parent)
     return tree
 
 
-def _plot_tree(t, mode='treelib', gv_filename='test.gv'):
+def _plot_tree(t, mode='treelib', gv_filename='test.gv', shape='box'):
     if mode == 'treelib':
         t.show()
     elif mode == 'graphviz':
-        t.to_graphviz(gv_filename)
+        t.to_graphviz(gv_filename, shape=shape)
         from panopticon.utilities import import_check
-        exit_code = import_check(
-            "graphviz", 'pip install graphviz')
+        exit_code = import_check("graphviz", 'pip install graphviz')
         if exit_code != 0:
             return
         from graphviz import Source
@@ -1930,9 +1997,20 @@ def _plot_tree(t, mode='treelib', gv_filename='test.gv'):
     else:
         raise Exception("mode must be one of ('treelib','graphviz')")
 
-def plot_iterative_clustering_tree(loom, mode='treelib'):
-    from panopticon.visualization import _reconstruct_iterative_clustering_tree, _plot_tree
-    t = _reconstruct_iterative_clustering_tree(loom)
-    _plot_tree(t, mode=mode, gv_filename=loom.filename+'.gv')
 
-
+def plot_iterative_clustering_tree(loom,
+                                   mode='treelib',
+                                   diffdict=None,
+                                   graphviz_node_shape='box',
+                                   marker_detail_level=1,
+                                   markers_to_highlight=[]):
+    #from panopticon.visualization import _reconstruct_iterative_clustering_tree, _plot_tree
+    t = _reconstruct_iterative_clustering_tree(
+        loom,
+        diffdict=diffdict,
+        marker_detail_level=marker_detail_level,
+        markers_to_highlight=markers_to_highlight)
+    _plot_tree(t,
+               mode=mode,
+               gv_filename=loom.filename + '.gv',
+               shape=graphviz_node_shape)
