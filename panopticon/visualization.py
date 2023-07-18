@@ -1953,7 +1953,7 @@ def _reconstruct_iterative_clustering_tree(
                                         igene, :][mask1].mean())
                             #print(loom[marker_gene_highlight_layer][igene,:][mask1].mean(), loom[marker_gene_highlight_layer][igene,:][mask2].mean())
                             elif marker in loom.ca.keys():
-                                if myeloid.ca[marker].dtype == float:
+                                if loom.ca[marker].dtype == float:
                                     anno += '\n' + 'mean {0}: {1:.2f}'.format(
                                         marker, loom.ca[marker][mask1].mean())
                                 else:
