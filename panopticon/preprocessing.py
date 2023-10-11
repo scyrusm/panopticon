@@ -310,14 +310,19 @@ def generate_standardized_layer(loom,
                                                view[layername][:, :])
 
 
-def generate_antibody_prediction(loom,
-                                 raw_antibody_counts_df=None,
-                                 antibodies=None,
-                                 pseudocount=1,
-                                 overwrite=False,
-                                 only_generate_zscore=False,
-                                 group_ca=None,
-                                 hashtags=None):
+def generate_antibody_prediction(
+        loom,
+        raw_antibody_counts_df=None,
+        antibodies=None,
+        pseudocount=1,
+        overwrite=False,
+        only_generate_zscore=False,
+        group_ca=None,
+        hashtags=None,
+        enforce_unimodality_of_positive_component=False,
+        maximum_recursion_to_enforce_unimodality=4,
+        enforce_positive_minimum_greater_than_negative_maximum=False,
+        verbose=False):
     """
     This approach takes some inspiration from the dsb approach: https://doi.org/10.1101/2020.02.24.963603.
     However, there is no use of isotypes.  Therefore, is amounts only to "step 1" of that procedure. This routine can also take into
@@ -359,6 +364,8 @@ def generate_antibody_prediction(loom,
         antibodies = raw_antibody_counts_df.columns
 
     for antibody in antibodies:
+        if verbose:
+            print("Antibody: ", antibody)
         if antibody not in loom.ca.keys():
             raise Exception(
                 "raw_antibody_count_df must be prepared such that columns match column attributes in loom corresponding to raw antibody conjugate counts"
@@ -399,29 +406,58 @@ def generate_antibody_prediction(loom,
             if group_ca is None:
                 from panopticon.preprocessing import _two_component_mixture_model
                 loom.ca[prediction_ca_name] = _two_component_mixture_model(
-                    loom.ca[new_ca_name])
+                    loom.ca[new_ca_name],
+                    enforce_unimodality_of_positive_component=
+                    enforce_unimodality_of_positive_component,
+                    maximum_recursion_to_enforce_unimodality=
+                    maximum_recursion_to_enforce_unimodality,
+                    enforce_positive_minimum_greater_than_negative_maximum=
+                    enforce_positive_minimum_greater_than_negative_maximum)
             else:
                 from panopticon.preprocessing import _grouped_two_component_mixture_models
                 loom.ca[
                     prediction_ca_name] = _grouped_two_component_mixture_models(
                         loom.ca[new_ca_name],
-                        loom.ca[group_ca])
-            if hashtags is not None:
-                if 'nHash' in loom.ca.keys() and not overwrite:
-                    raise Exception("nHash already present in loom.ca.keys(), but overwrite set to False")
-                loom.ca['nHash'] = np.vstack([loom.ca[x+'_prediction'] for x in hashtags]).sum(axis=0)
+                        loom.ca[group_ca],
+                        enforce_unimodality_of_positive_component=
+                        enforce_unimodality_of_positive_component,
+                        maximum_recursion_to_enforce_unimodality=
+                        maximum_recursion_to_enforce_unimodality,
+                        enforce_positive_minimum_greater_than_negative_maximum=
+                        enforce_positive_minimum_greater_than_negative_maximum,
+                        verbose=verbose)
+    if hashtags is not None:
+        if 'nHash' in loom.ca.keys() and not overwrite:
+            raise Exception(
+                "nHash already present in loom.ca.keys(), but overwrite set to False"
+            )
 
 
+#        loom.ca['nHash'] = np.vstack(  [loom.ca[x + '_prediction'] for x in hashtags]).sum(axis=0)
+        loom.ca['nHash'] = np.nansum(np.vstack(
+            [loom.ca[x + '_prediction'] for x in hashtags]).astype(float),
+                                     axis=0)  # nan-tolerant
 
-def _two_component_mixture_model(values):
+
+def _two_component_mixture_model(
+        values,
+        droplowest=False,
+        enforce_unimodality_of_positive_component=False,
+        verbose=True,
+        maximum_recursion_to_enforce_unimodality=4,
+        enforce_positive_minimum_greater_than_negative_maximum=False):
     from sklearn import mixture
     model = mixture.GaussianMixture(n_components=2)
-
-    if np.isnan(values).sum() > 0:
+    if droplowest:
+        minval = np.min(values)
+        values = np.array([x if x > minval else np.nan for x in values])
+    if np.isnan(values).sum() == len(values):
+        return np.array([np.nan] * len(values))
+    elif np.isnan(values).sum() > 0:
         cellmask = ~np.isnan(values)
-        model.fit(values[cellmask].reshape(-1, 1))
+        model.fit(np.array(values[cellmask]).reshape(-1, 1))
         predictions = []
-        for val in loom.ca[new_ca_name]:
+        for val in values:
             if np.isnan(val):
                 predictions.append(np.nan)
             else:
@@ -434,17 +470,86 @@ def _two_component_mixture_model(values):
 
     if model.means_[0][0] > model.means_[1][0]:
         predictions = 1 - predictions
-    return np.array(predictions)
+    if np.sum(predictions) == len(predictions):
+        predictions = np.array([0] * len(predictions))
+    if enforce_unimodality_of_positive_component and maximum_recursion_to_enforce_unimodality > 0:
+        from panopticon.utilities import import_check
+        exit_code = import_check("diptest", 'pip install diptest')
+        import diptest
+        positive_mask = predictions == 1
+        dip, pval = diptest.diptest(values[positive_mask])
+        if pval < .05:
+            if verbose:
+                print(
+                    "Positive component shows evidence of multimodality (Hartigan's dip p={0:.3f}); running second 2-component model on positive component"
+                    .format(pval))
+            new_predictions = _two_component_mixture_model(
+                values[positive_mask],
+                enforce_unimodality_of_positive_component=
+                enforce_unimodality_of_positive_component,
+                maximum_recursion_to_enforce_unimodality=
+                maximum_recursion_to_enforce_unimodality - 1)
+            predictions[positive_mask] = new_predictions
+    if enforce_positive_minimum_greater_than_negative_maximum and np.nanmean(
+            predictions) > 0:
+        positive_minimum = np.nanmin(values[predictions == 1])
+        negative_maximum = np.nanmax(values[predictions == 0])
+        original_positives = np.sum(predictions)
+        # Use whichever of these if between the means of the groups to choose as a hard threshold
+        if (positive_minimum < np.
+                nanmean(  # Case 1: Positive minimum is below the positive mean and above the negative mean 
+                    values[predictions == 1])) and (positive_minimum > np.mean(
+                        values[predictions == 0])):
+            predictions = values >= positive_minimum
+        elif (negative_maximum < np.
+              nanmean(  # Case 2: Negative maximum is below the positive mean and above the negative mean
+                  values[predictions == 1])) and (negative_maximum > np.mean(
+                      values[predictions == 0])):
+            predictions = values > negative_maximum
+#        elif (positive_minimum < np.
+#              nanmean(  # Case 3: Positive minimum is below the negative mean
+#                  values[predictions == 0])):
+#            positive_minimum_above_negative_mean = np.nanmean(
+#                values[(predictions == 1)
+#                       & (values > np.nanmean(values[predictions == 0]))])
+#            predictions = values > positive_minimum_above_negative_mean
+        else:
+            if verbose:
+                print("Could not identify hardh threshold between components")
+            predictions = np.array([np.nan] * len(predictions))
+            return predictions
 
 
-def _grouped_two_component_mixture_models(values, groups):
+#            raise Exception(
+#                "Could not identify hard threshold between components")
+        if verbose:
+            print(
+                "Change in number of positive cells due to enforced hard threshold: {}"
+                .format(np.sum(predictions) - original_positives))
+    return predictions
+
+
+def _grouped_two_component_mixture_models(
+        values,
+        groups,
+        enforce_unimodality_of_positive_component=False,
+        maximum_recursion_to_enforce_unimodality=2,
+        enforce_positive_minimum_greater_than_negative_maximum=False,
+        verbose=False):
     from panopticon.preprocessing import _two_component_mixture_model
     import pandas as pd
     df = pd.DataFrame(values, columns=['val'])
     df['group'] = groups
     return pd.DataFrame(
         df.groupby('group').transform(
-            _two_component_mixture_model))['val'].values  #.unstack()
+            _two_component_mixture_model,
+            enforce_unimodality_of_positive_component=
+            enforce_unimodality_of_positive_component,
+            maximum_recursion_to_enforce_unimodality=
+            maximum_recursion_to_enforce_unimodality,
+            enforce_positive_minimum_greater_than_negative_maximum=
+            enforce_positive_minimum_greater_than_negative_maximum,
+            verbose=verbose))['val'].values  #.unstack()
 
 
 def generate_guide_rna_prediction(
@@ -626,8 +731,8 @@ def get_clustering_based_outlier_prediction(
 
         if fractions.values[0] < max_cluster_fraction_break_threshold:
             break
-        outlier_clusters = fractions[
-            fractions < cluster_proportion_minimum].index.values
+        outlier_clusters = fractions[fractions <
+                                     cluster_proportion_minimum].index.values
         mask *= ~np.isin(loom.ca['ClusteringIteration{}'.format(level)],
                          outlier_clusters)
     return mask

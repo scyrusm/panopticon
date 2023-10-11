@@ -1380,7 +1380,7 @@ def repertoire_plot(x=None,
                 ylabel = 'cell count'
         subax.set_ylabel(ylabel)
     if stack_order == 'matched':
-        plt.legend(bbox_to_anchor=(1, 1))
+        plt.legend(bbox_to_anchor=(1, 1), reverse=True)
     elif colorkey_col is not None:
         from matplotlib.patches import Patch
 
@@ -1391,7 +1391,8 @@ def repertoire_plot(x=None,
         ]
         plt.legend(handles=legend_elements,
                    bbox_to_anchor=(1, 1),
-                   title=colorkey_col)
+                   title=colorkey_col,
+                   reverse=True)
 
     plt.tight_layout()
     if output is not None:
@@ -1857,7 +1858,8 @@ def plot_dot_plot(loom,
     ax.set_xticks(np.array(range(len(df.index.values))))
     ax.set_xticklabels(list(df.index.values))
     ax.set_xlabel('Cluster')
-    ax.set_ylim([-0.5, len(df.columns)])
+    ax.set_ylim([-0.5, len(df.columns) - 0.5])
+    ax.set_xlim([-0.5, len(df.index) - 0.5])
     #for i in np.arange(-0.5,len(markers)-0.5,topn)[1::]:
     #    plt.axhline(ls='--',y=i,color='k')
     #if flag:
@@ -2003,11 +2005,13 @@ def plot_iterative_clustering_tree(loom,
                                    diffdict=None,
                                    graphviz_node_shape='box',
                                    marker_detail_level=1,
+                                   anno_n_genes=5,
                                    markers_to_highlight=[]):
     #from panopticon.visualization import _reconstruct_iterative_clustering_tree, _plot_tree
     t = _reconstruct_iterative_clustering_tree(
         loom,
         diffdict=diffdict,
+        anno_n_genes=anno_n_genes,
         marker_detail_level=marker_detail_level,
         markers_to_highlight=markers_to_highlight)
     _plot_tree(t,

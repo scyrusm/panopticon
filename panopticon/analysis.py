@@ -1547,7 +1547,7 @@ def get_cluster_differential_expression(loom,
                 clusterset = np.unique(loom.ca[cluster_level])
                 ident2 = list(np.setdiff1d(clusterset, ident1))
             else:
-                cluster_level_number = int(cluster_level[-1])
+                cluster_level_number = int(cluster_level.replace('ClusteringIteration',''))
                 prefices = [
                     '-'.join(x.split('-')[0:(cluster_level_number)]) +
                     '-'  # 13 Apr 2020--check that this works
