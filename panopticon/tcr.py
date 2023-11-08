@@ -13,6 +13,7 @@ def gravy_index(cdr3):
     Returns
     -------
 
+    
     """
     from Bio.SeqUtils.ProtParam import ProteinAnalysis
     return [ProteinAnalysis(x.replace('-', '')).gravy() for x in cdr3]
@@ -37,6 +38,7 @@ def multinomial_test(x1, x2, x12, n, doublet_rate):
     Returns
     -------
 
+    
     """
     c = doublet_rate / (1 - doublet_rate) / (1 - doublet_rate)
     from scipy.special import comb
@@ -60,6 +62,7 @@ def multinomial_test(x1, x2, x12, n, doublet_rate):
         Returns
         -------
 
+        
         """
         return c**x12 * comb(x1 + x12, x12, exact=False) * comb(
             n - x2 - x12, x1, exact=False)
@@ -89,21 +92,22 @@ def get_tcr_summary_df(tcrs,
     tcrs :
         
     samples :
-         (Default value = None)
+        (Default value = None)
     multichain_separator :
-         (Default value = '---')
+        (Default value = '---')
     alpha_beta_separator :
-         (Default value = '|')
+        (Default value = '|')
     sample_separator :
-         (Default value = '_')
+        (Default value = '_')
     tcrblacklist :
-         (Default value = [])
+        (Default value = [])
     multinomial_test :
-         (Default value = True)
+        (Default value = True)
 
     Returns
     -------
 
+    
     """
 
     from panopticon.tcr import get_tcr_doublet_likelihood
@@ -189,27 +193,28 @@ def get_tcr_doublet_likelihood(tcrs,
     tcrs :
         
     samples :
-         (Default value = None)
+        (Default value = None)
     tcrblacklist :
-         (Default value = [])
+        (Default value = [])
     n_tra :
-         (Default value = 2)
+        (Default value = 2)
     n_trb :
-         (Default value = 2)
+        (Default value = 2)
     verbose :
-         (Default value = False)
+        (Default value = False)
     multichain_separator :
-         (Default value = '---')
+        (Default value = '---')
     alpha_beta_separator :
-         (Default value = '|')
+        (Default value = '|')
     sample_separator :
-         (Default value = '_')
+        (Default value = '_')
     doublet_rate :
-         (Default value = 0.05)
+        (Default value = 0.05)
 
     Returns
     -------
 
+    
     """
     from panopticon.tcr import multinomial_test
     from panopticon.tcr import get_tcr_summary_df
@@ -409,25 +414,28 @@ def generate_tcr_multichain_summary(loom,
     loom :
         
     tcr_ca :
-         (Default value = 'TCR')
+        (Default value = 'TCR')
     sample_ca :
-         (Default value = None)
+        (Default value = None)
     tcrblacklist :
-         (Default value = [])
+        (Default value = [])
     suffix :
-         (Default value = '_multichain_summary')
+        (Default value = '_multichain_summary')
     multichain_separator :
-         (Default value = '---')
+        (Default value = '---')
     alpha_beta_separator :
-         (Default value = '|')
+        (Default value = '|')
     sample_separator :
-         (Default value = '_')
+        (Default value = '_')
     overwrite :
-         (Default value = False)
+        (Default value = False)
+    pickle_summary :
+         (Default value = True)
 
     Returns
     -------
 
+    
     """
     from panopticon.tcr import get_tcr_summary_df
     if sample_ca is None:
@@ -442,7 +450,9 @@ def generate_tcr_multichain_summary(loom,
                             tcrblacklist=tcrblacklist)
     if pickle_summary:
         from panopticon.utilities import we_can_pickle_it
-        we_can_pickle_it(df, loom.filename.replace('.loom','')+'_tcr_multichain_summary.pkl')
+        we_can_pickle_it(
+            df,
+            loom.filename.replace('.loom', '') + '_tcr_multichain_summary.pkl')
     dfdict = df.set_index(['sample', 'TCR']).to_dict()
     for key in dfdict.keys():
         if key + suffix in loom.ca.keys() and overwrite is False:
@@ -480,9 +490,9 @@ def incorporate_10x_vdj(loomfile,
     loomfile :
         
     overwrite :
-         (Default value = False)
+        (Default value = False)
     barcode_match_exception_threshold :
-         (Default value = 0.5)
+        (Default value = 0.5)
 
     Returns
     -------
@@ -502,10 +512,41 @@ def incorporate_10x_vdj(loomfile,
         raise Exception(
             "Only {}% of V(D)J barcodes have corresponding gene expression data; GEX and V(D)J files may be mismatched"
             .format(100 * barcode_match_rate))
+    from panopticon.tcr import get_vdj_dict_from_10x_csv
+    barcode_df_dict = get_vdj_dict_from_10x_csv(
+        filtered_contig_annotations_csv)
+    for superkey in barcode_df_dict:
+        for subkey in barcode_df_dict[superkey]:
+            if '_'.join([superkey, subkey
+                         ]) in loom.ca.keys() and overwrite == False:
+                raise Exception(
+                    '{} is already a column attribute in {}; cannot re-assign while `overwrite` is False'
+                    .format('_'.join([superkey, subkey]), loom.filename))
+            else:
+                loom.ca['_'.join([superkey, subkey])] = [
+                    barcode_df_dict[superkey][subkey][x] if x
+                    in barcode_df_dict[superkey][subkey].keys() else np.nan
+                    for x in loom.ca[barcode_ca]
+                ]
+
+
+def get_vdj_dict_from_10x_csv(filtered_contig_annotations_csv):
+    """
+
+    Parameters
+    ----------
+    filtered_contig_annotations_csv :
+        
+
+    Returns
+    -------
+
+    """
+    filtered_contig_annotations = pd.read_csv(filtered_contig_annotations_csv)
     filtered_contig_annotations_tcra = filtered_contig_annotations.query(
-        'chain=="TRA"')#.query('productive=="True"')
+        'chain=="TRA"')  #.query('productive=="True"')
     filtered_contig_annotations_tcrb = filtered_contig_annotations.query(
-        'chain=="TRB"')#.query('productive=="True"')
+        'chain=="TRB"')  #.query('productive=="True"')
     barcode_df_dict = {}
     for label, fca in zip(
         ['TRA', 'TRB'],
@@ -529,20 +570,7 @@ def incorporate_10x_vdj(loomfile,
                                           }).reset_index(),
                                           on='barcode')
         barcode_df_dict[label] = barcode_df.set_index('barcode').to_dict()
-        #break
-    for superkey in barcode_df_dict:
-        for subkey in barcode_df_dict[superkey]:
-            if '_'.join([superkey, subkey
-                         ]) in loom.ca.keys() and overwrite == False:
-                raise Exception(
-                    '{} is already a column attribute in {}; cannot re-assign while `overwrite` is False'
-                    .format('_'.join([superkey, subkey]), loom.filename))
-            else:
-                loom.ca['_'.join([superkey, subkey])] = [
-                    barcode_df_dict[superkey][subkey][x] if x
-                    in barcode_df_dict[superkey][subkey].keys() else np.nan
-                    for x in loom.ca[barcode_ca]
-                ]
+    return barcode_df_dict
 
 
 def join_tra_trb_ca(loom, prefix1='TRA', prefix2='TRB', ca='cdr3'):
@@ -553,11 +581,16 @@ def join_tra_trb_ca(loom, prefix1='TRA', prefix2='TRB', ca='cdr3'):
     loom :
         
     ca :
-         (Default value = 'cdr3')
+        (Default value = 'cdr3')
+    prefix1 :
+         (Default value = 'TRA')
+    prefix2 :
+         (Default value = 'TRB')
 
     Returns
     -------
 
+    
     """
     loom.ca['{}_{}_{}'.format(prefix1, prefix2, ca)] = [
         '|'.join([x, y]) for x, y, in zip(loom.ca['{}_{}'.format(prefix1, ca)],
@@ -581,11 +614,12 @@ def morisita(df, key, samplekey, sample1, sample2, countkey=None):
     sample2 :
         
     countkey :
-         (Default value = None)
+        (Default value = None)
 
     Returns
     -------
 
+    
     """
     from panopticon.analysis import simpson
     if countkey is None:
@@ -631,6 +665,7 @@ def _morisita(counts1, counts2):
     Returns
     -------
 
+    
     """
     from panopticon.analysis import simpson
     simpson1 = simpson(counts1, with_replacement=True)
