@@ -291,7 +291,7 @@ def generate_masked_module_score(loom,
 def generate_nmf_and_loadings(loom,
                               layername,
                               nvargenes=2000,
-                              n_components=200,
+                              n_components=100,
                               verbose=False):
     """
 
@@ -359,7 +359,7 @@ def generate_nmf_and_loadings(loom,
 def generate_incremental_pca(loom,
                              layername,
                              batch_size=512,
-                             n_components=200,
+                             n_components=100,
                              min_size_for_incrementalization=5000):
     """Computes a principal component analysis (PCA) over a layer of interest.  Defaults to incremental PCA (using IncrementalPCA from sklearn.decomposition) but will switch to conventional PCA for LoomConnections with cell
     numbers below a min_size_for_incrementalization.  Will write the n_components principal components as row attributes:
@@ -719,7 +719,7 @@ def generate_clustering(loom,
                         n_clustering_iterations=3,
                         max_clusters='cbrt_rule',
                         mode='pca',
-                        n_components=200,
+                        n_components=100,
                         silhouette_threshold=0.1,
                         clusteringcachedir='clusteringcachedir/',
                         out_of_core_batch_size=1024,
@@ -745,7 +745,7 @@ def generate_clustering(loom,
     starting_clustering_depth : The clustering iteration on which to begin; starting_clustering_depth=0 will assign values to column attribute ClusteringIteration0
         (Default value = 0)
     max_clusters :
-        (Default value = 200)
+        (Default value = "cbrt_rule")
     layername :
         
     mode :
@@ -1038,7 +1038,7 @@ def get_cluster_embedding(loom,
                           verbose=False,
                           mask=None,
                           genemask=None,
-                          n_components_pca=200):
+                          n_components_pca=100):
     """
 
     Parameters
