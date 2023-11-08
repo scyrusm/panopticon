@@ -291,7 +291,7 @@ def generate_masked_module_score(loom,
 def generate_nmf_and_loadings(loom,
                               layername,
                               nvargenes=2000,
-                              n_components=100,
+                              n_components=200,
                               verbose=False):
     """
 
@@ -350,7 +350,7 @@ def generate_nmf_and_loadings(loom,
     factor_sums = np.array(factor_sums)
     # record NMF loadings
     for i in range(H.shape[0]):
-        loom.ca['{} NMF Loading Component {}'.format(
+        loom.ca['{} NMF Score Component {}'.format(
             layername, i + 1)] = H[i, :] * factor_sums[i]
 
     loom.attrs['NumberNMFComponents'] = n_components
@@ -359,7 +359,7 @@ def generate_nmf_and_loadings(loom,
 def generate_incremental_pca(loom,
                              layername,
                              batch_size=512,
-                             n_components=50,
+                             n_components=200,
                              min_size_for_incrementalization=5000):
     """Computes a principal component analysis (PCA) over a layer of interest.  Defaults to incremental PCA (using IncrementalPCA from sklearn.decomposition) but will switch to conventional PCA for LoomConnections with cell
     numbers below a min_size_for_incrementalization.  Will write the n_components principal components as row attributes:
@@ -369,7 +369,7 @@ def generate_incremental_pca(loom,
     - NumberPrincipalComponents_(layername).  This is simply n_components.
     - PCExplainedVariancedRatio_(layername).  This is explained_variance_ratio_ from the PCA model.
     
-    Will also run panopticon.analysis.generate_pca_loadings.
+    Will also run panopticon.analysis.generate_pca_scores.
 
     Parameters
     ----------
@@ -392,7 +392,7 @@ def generate_incremental_pca(loom,
 
     from tqdm import tqdm
     from sklearn.decomposition import IncrementalPCA, PCA
-    from panopticon.analysis import generate_pca_loadings
+    from panopticon.analysis import generate_pca_scores
     import numpy as np
     batch_size_altered = False
     while loom.shape[1] % batch_size < n_components:
@@ -415,15 +415,15 @@ def generate_incremental_pca(loom,
         for selection in tqdm(selections):
             pca.partial_fit(loom[layername][:, selection].T)
 
-    for i in range(50):
+    for i in range(n_components):
         loom.ra['{} PC {}'.format(layername, i + 1)] = pca.components_[i]
     loom.attrs['NumberPrincipalComponents_{}'.format(layername)] = n_components
     loom.attrs['PCAExplainedVarianceRatio_{}'.format(
         layername)] = pca.explained_variance_ratio_
-    generate_pca_loadings(loom, layername, batch_size=batch_size)
+    generate_pca_scores(loom, layername, batch_size=batch_size)
 
 
-def generate_pca_loadings(loom, layername, dosparse=False, batch_size=1024):
+def generate_pca_scores(loom, layername, dosparse=False, batch_size=1024):
     """
 
     Parameters
@@ -474,19 +474,20 @@ def generate_pca_loadings(loom, layername, dosparse=False, batch_size=1024):
                                           total=loom.shape[1] // batch_size):
             compresseddatalist.append(view[layername][:, :].T @ cellpca)
     compresseddata = np.vstack(compresseddatalist)
-    for iloading in range(compresseddata.shape[1]):
-        loom.ca['{} PC {} Loading'.format(layername, iloading +
-                                          1)] = compresseddata[:, iloading]
+    for iscore in range(compresseddata.shape[1]):
+        loom.ca['{} PC {} Score'.format(layername,
+                                        iscore + 1)] = compresseddata[:,
+                                                                      iscore]
 
 
-def get_pca_loadings_matrix(loom, layername, n_components=None):
+def get_pca_scores_matrix(loom, layername, n_components=None):
     """
 
     Parameters
     ----------
     loom : LoomConnection object
         
-    layername : corresponding layer from which to retrieve PCA loadings matrix
+    layername : corresponding layer from which to retrieve PCA scores matrix
         
     components_to_use :
         (Default value = None)
@@ -498,22 +499,22 @@ def get_pca_loadings_matrix(loom, layername, n_components=None):
 
     
     """
-    pca_loadings = []
+    pca_scores = []
     if n_components != None:
         for col in [
-                '{} PC {} Loading'.format(layername, x)
+                '{} PC {} Score'.format(layername, x)
                 for x in range(1, n_components + 1)
         ]:
-            pca_loadings.append(loom.ca[col])
+            pca_scores.append(loom.ca[col])
     else:
         n_components = loom.attrs['NumberPrincipalComponents_{}'.format(
             layername)]
         for col in [
-                '{} PC {} Loading'.format(layername, x)
+                '{} PC {} Score'.format(layername, x)
                 for x in range(1, n_components + 1)
         ]:
-            pca_loadings.append(loom.ca[col])
-    return np.vstack(pca_loadings).T
+            pca_scores.append(loom.ca[col])
+    return np.vstack(pca_scores).T
 
 
 def generate_embedding(loom,
@@ -565,26 +566,26 @@ def generate_embedding(loom,
     if mode not in ['pca', 'nmf']:
         raise Exception("Currently only two modes implemented:  nmf and pca")
     if mode == 'pca':
-        from panopticon.analysis import get_pca_loadings_matrix
-        compressed = get_pca_loadings_matrix(loom,
-                                             layername,
-                                             n_components=n_pca_components)
+        from panopticon.analysis import get_pca_scores_matrix
+        compressed = get_pca_scores_matrix(loom,
+                                           layername,
+                                           n_components=n_pca_components)
     elif mode == 'nmf':
         n_nmf_cols = loom.attrs['NumberNMFComponents']
-        nmf_loadings = []
+        nmf_scores = []
         if components_to_use != None:
             for col in [
-                    '{} NMF Loading Component {}'.format(layername, x)
+                    '{} NMF Score Component {}'.format(layername, x)
                     for x in components_to_use
             ]:
-                nmf_loadings.append(loom.ca[col])
+                nmf_scores.append(loom.ca[col])
         else:
             for col in [
-                    '{} NMF Loading Component {}'.format(layername, x)
+                    '{} NMF Score Component {}'.format(layername, x)
                     for x in range(1, n_nmf_cols + 1)
             ]:
-                nmf_loadings.append(loom.ca[col])
-        compressed = np.vstack(nmf_loadings).T
+                nmf_scores.append(loom.ca[col])
+        compressed = np.vstack(nmf_scores).T
     reducer = umap.UMAP(random_state=random_state,
                         min_dist=min_dist,
                         n_neighbors=n_neighbors,
@@ -600,7 +601,7 @@ def generate_embedding(loom,
 
 def get_subclustering(X,
                       score_threshold,
-                      max_clusters=50,
+                      max_clusters=100,
                       min_input_size=10,
                       silhouette_threshold=0.2,
                       regularization_factor=0.01,
@@ -644,11 +645,11 @@ def get_subclustering(X,
     else:
         if verbose:
             print(
-                'Computing agglomerative clustering with cosine affinity, {} linkage'
+                'Computing agglomerative clustering with cosine metric, {} linkage'
                 .format(linkage))
         clustering = AgglomerativeClustering(n_clusters=2,
                                              memory=clusteringcachedir,
-                                             affinity='cosine',
+                                             metric='cosine',
                                              compute_full_tree=True,
                                              linkage=linkage)
         scores = []
@@ -660,16 +661,18 @@ def get_subclustering(X,
             if silhouette_score_sample_size is not None:
                 silhouette_score_sample_size = np.min(
                     [X.shape[0], silhouette_score_sample_size])
-            score = silhouette_score(X,
-                                     clustering.labels_,
-                                     metric='cosine',
-                                     sample_size=silhouette_score_sample_size)
             cluster_proportions = pd.DataFrame(
                 clustering.labels_)[0].value_counts(normalize=False).values
             second_to_first_cluster_ratio = cluster_proportions[
                 1] / cluster_proportions[0]
             if second_to_first_cluster_ratio < minimum_second_to_first_cluster_ratio:
                 score = np.nan
+            else:
+                score = silhouette_score(
+                    X,
+                    clustering.labels_,
+                    metric='cosine',
+                    sample_size=silhouette_score_sample_size)
             if verbose:
                 print(score)
                 print(
@@ -716,7 +719,7 @@ def generate_clustering(loom,
                         n_clustering_iterations=3,
                         max_clusters='cbrt_rule',
                         mode='pca',
-                        n_components=50,
+                        n_components=200,
                         silhouette_threshold=0.1,
                         clusteringcachedir='clusteringcachedir/',
                         out_of_core_batch_size=1024,
@@ -729,7 +732,8 @@ def generate_clustering(loom,
                         show_dendrogram=False,
                         linkage='average',
                         verbose=False,
-                        minimum_second_to_first_cluster_ratio=0.001):
+                        minimum_second_to_first_cluster_ratio=0.001,
+                        first_round_complete_linkage=False):
     """
 
     Parameters
@@ -801,13 +805,13 @@ def generate_clustering(loom,
     if starting_clustering_depth == 0:
         if first_round_leiden:
             from sklearn.neighbors import kneighbors_graph
-            from panopticon.analysis import get_pca_loadings_matrix
+            from panopticon.analysis import get_pca_scores_matrix
             from panopticon.utilities import get_igraph_from_adjacency
             from panopticon.utilities import import_check
 
-            X = get_pca_loadings_matrix(loom,
-                                        layername,
-                                        n_components=n_components)
+            X = get_pca_scores_matrix(loom,
+                                      layername,
+                                      n_components=n_components)
             if optimized_leiden:
                 from panopticon.clustering import silhouette_optimized_leiden
                 leiden_output = silhouette_optimized_leiden(X)
@@ -820,34 +824,43 @@ def generate_clustering(loom,
         else:
             if mode == 'nmf':
                 n_nmf_cols = loom.attrs['NumberNMFComponents']
-                nmf_loadings = []
+                nmf_scores = []
                 for col in [
-                        '{} NMF Loading Component {}'.format(layername, x)
+                        '{} NMF Score Component {}'.format(layername, x)
                         for x in range(1, n_nmf_cols + 1)
                 ]:
-                    nmf_loadings.append(loom.ca[col])
-                X = np.vstack(nmf_loadings).T
+                    nmf_scores.append(loom.ca[col])
+                X = np.vstack(nmf_scores).T
             elif mode == 'pca':
-                from panopticon.analysis import get_pca_loadings_matrix
-                X = get_pca_loadings_matrix(loom,
-                                            layername,
-                                            n_components=n_components)
+                from panopticon.analysis import get_pca_scores_matrix
+                X = get_pca_scores_matrix(loom,
+                                          layername,
+                                          n_components=n_components)
             if max_clusters == 'sqrt_rule':
                 mc = int(np.floor(np.sqrt(X.shape[0])))
             elif max_clusters == 'cbrt_rule':
                 mc = int(np.floor(np.cbrt(X.shape[0])))
             else:
                 mc = max_clusters
+            if first_round_complete_linkage:
+                fr_linkage = 'complete'
+            else:
+                fr_linkage = linkage
+
             clustering = get_subclustering(
                 X,
                 silhouette_threshold,
                 max_clusters=mc,
                 clusteringcachedir=clusteringcachedir,
                 show_dendrogram=show_dendrogram,
-                linkage=linkage,
+                linkage=fr_linkage,
                 verbose=verbose,
                 minimum_second_to_first_cluster_ratio=
                 minimum_second_to_first_cluster_ratio)
+            if verbose:
+                print('Total explained variance ratio: {}%'.format(
+                    100 * loom.attrs['PCAExplainedVarianceRatio_{}'.format(
+                        layername)][0:n_components].sum()))
 
         loom.ca['ClusteringIteration0'] = clustering
         starting_clustering_depth = 1
@@ -886,10 +899,10 @@ def generate_clustering(loom,
                     #                        "Warning: running incremental PCA with loom.scan with masked items; this can lead to batches smaller than the number of principal components.  If computation fails, try adjusting out_of_core_batch_size, or raising incremental_pca_threshold."
                     #                    )
                     pca = IncrementalPCA(n_components=n_components)
-                    print("Running new routine")
+                    #print("Running new routine")
                     n_splits = mask.sum() // out_of_core_batch_size
                     selections = np.array_split(mask.nonzero()[0], n_splits)
-                    print('sizes', len(selections[0]), len(selections[-1]))
+                    #print('sizes', len(selections[0]), len(selections[-1]))
                     for selection in tqdm(selections):
                         pca.partial_fit(loom[layername][:, selection].T)
 
@@ -935,8 +948,7 @@ def generate_clustering(loom,
                                       items=mask.nonzero()[0],
                                       layers=[layername]),
                             total=loom.shape[1] // out_of_core_batch_size,
-                            desc='calculating masked incremental pca loadings'
-                    ):
+                            desc='calculating masked incremental pca scores'):
                         compresseddatalist.append(
                             view[layername][:, :].T @ pca.components_.T)
                     X = np.vstack(compresseddatalist)
@@ -951,6 +963,10 @@ def generate_clustering(loom,
                                 random_state=0)
 
                     X = model.fit_transform(data_c)
+                if verbose:
+                    print('Total explained variance ratio: {}%'.format(
+                        100 * model.
+                        explained_variance_ratio_[0:n_components].sum()))
             print(X.shape)
             if max_clusters == 'sqrt_rule':
                 mc = int(np.floor(np.sqrt(X.shape[0])))
@@ -1022,7 +1038,7 @@ def get_cluster_embedding(loom,
                           verbose=False,
                           mask=None,
                           genemask=None,
-                          n_components_pca=50):
+                          n_components_pca=200):
     """
 
     Parameters
@@ -1547,7 +1563,8 @@ def get_cluster_differential_expression(loom,
                 clusterset = np.unique(loom.ca[cluster_level])
                 ident2 = list(np.setdiff1d(clusterset, ident1))
             else:
-                cluster_level_number = int(cluster_level.replace('ClusteringIteration',''))
+                cluster_level_number = int(
+                    cluster_level.replace('ClusteringIteration', ''))
                 prefices = [
                     '-'.join(x.split('-')[0:(cluster_level_number)]) +
                     '-'  # 13 Apr 2020--check that this works
