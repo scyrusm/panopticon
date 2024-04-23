@@ -2,11 +2,11 @@
 
 import click
 import panopticon
-import pkg_resources
+#import pkg_resources
 
 
 @click.group()
-@click.version_option(version=pkg_resources.require("panopticon")[0].version)
+#@click.version_option(version=pkg_resources.require("panopticon")[0].version)
 def cli():
     """Panopticon is a set of tools named after Jeremy Bentham's model for a prison, whereby multiple cells (!) could be observed with ease by a single individual.  
     """
