@@ -672,3 +672,36 @@ def _morisita(counts1, counts2):
     simpson2 = simpson(counts2, with_replacement=True)
     cross = (counts1 * counts2).sum() / counts1.sum() / counts2.sum()
     return 2 * cross / (simpson1 + simpson2)
+
+
+def cluster_clonotypes(peptides, vgenes=None, max_dist=6):
+    import pandas as pd
+    from sklearn.cluster import DBSCAN
+    import pwseqdist as pw
+    import multiprocessing
+
+    if vgenes is None:
+        #print(len(peptides.values))
+        dvec = pw.apply_pairwise_rect(seqs1=peptides.values,
+                                      metric=pw.metrics.nw_hamming_metric,
+                                      ncpus=multiprocessing.cpu_count())
+
+        clustering = DBSCAN(
+            eps=1,
+            min_samples=1,
+            metric='precomputed',
+        )
+        clustering.fit(dvec)
+        cluster_blacklist = []
+        for cluster in np.unique(clustering.labels_):
+            if dvec[clustering.labels_ == cluster][:, clustering.labels_ ==
+                                                   cluster].max() > max_dist:
+                cluster_blacklist.append(cluster)
+        clustering_labels = [
+            x if x not in cluster_blacklist else -1 for x in clustering.labels_
+        ]
+        return {x: y for x, y in zip(peptides.values, clustering_labels)}
+    else:
+        df = pd.DataFrame(peptides, columns=['peptides'])
+        df['vgene'] = vgenes
+        return df.groupby('vgene')['peptides'].apply(cluster_clonotypes)

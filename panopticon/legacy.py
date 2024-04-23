@@ -135,85 +135,39 @@ def create_subsetted_loom(loom, output_loom_filename, cellmask):
                               row_attrs=view.ra)
 
 
-def create_subsetted_loom_space_efficient(loom, output_loom_filename,
-                                          cellmask):
-    """Deprecated.
-
-    Will create a new loom file with cells specified according to a Boolean vector mask.
-
-    Parameters
-    ----------
-    loom : LoomConnection object which will be subsetted
-        
-    output_loom_filename : string denoting the path and filename of the output loom file.  
-        
-    cellmask : Boolean numpy vector with length equal to the number of cells in "loom"
-        
-    Returns
-    -------
-
-    
-    """
-    import loompy
-
-    if len(cellmask) != loom.shape[1]:
-        raise Exception(
-            "cellmask must be boolean mask with length equal to the number of columns of loom"
-        )
-    with loompy.new(output_loom_filename) as dsout:
-        cells = np.where(cellmask)[0]
-        for (ix, selection, view) in loom.scan(items=cells, axis=1,
-                                               key="gene"):
-            dsout.add_columns(view.layers,
-                              col_attrs=view.ca,
-                              row_attrs=view.ra)
-
-
-def create_subsetted_loom_space_efficient(loom,
-                                          output_loom_filename,
-                                          cellmask,
-                                          batch_size=1024):
-    """Deprecated.
-
-    Will create a new loom file with cells specified according to a Boolean vector mask.
-    
-    Parameters
-    ----------
-    loom : LoomConnection object which will be subsetted
-           
-    output_loom_filename : string denoting the path and filename of the output loom file.  
-        
-    cellmask : Boolean numpy vector with length equal to the number of cells in "loom"
-    
-    batch_size : Size (number of cells) to add to output file at a time (default: 1024)
-           
-    Returns
-    -------
-
-    
-    """
-    import loompy
-    import numpy as np
-
-    if len(cellmask) != loom.shape[1]:
-        raise Exception(
-            "cellmask must be boolean mask with length equal to the number of columns of loom"
-        )
-
-    n_splits = cellmask.sum() // batch_size
-    selections = np.array_split(cellmask.nonzero()[0], n_splits)
-    from tqdm import tqdm
-    with loompy.new(output_loom_filename) as dsout:
-
-        for selection in tqdm(selections):
-            dsout.add_columns(
-                loom[''][:, selection],
-                col_attrs={
-                    key: loom.ca[key][selection]
-                    for key in loom.ca.keys()
-                },
-                row_attrs={key: loom.ra[key]
-                           for key in loom.ra.keys()})
+#def create_subsetted_loom_space_efficient(loom, output_loom_filename,
+#                                          cellmask):
+#    """Deprecated.
+#
+#    Will create a new loom file with cells specified according to a Boolean vector mask.
+#
+#    Parameters
+#    ----------
+#    loom : LoomConnection object which will be subsetted
+#
+#    output_loom_filename : string denoting the path and filename of the output loom file.
+#
+#    cellmask : Boolean numpy vector with length equal to the number of cells in "loom"
+#
+#    Returns
+#    -------
+#
+#
+#    """
+#    import loompy
+#
+#    if len(cellmask) != loom.shape[1]:
+#        raise Exception(
+#            "cellmask must be boolean mask with length equal to the number of columns of loom"
+#        )
+#    with loompy.new(output_loom_filename) as dsout:
+#        cells = np.where(cellmask)[0]
+#        for (ix, selection, view) in loom.scan(items=cells, axis=1,
+#                                               key="gene"):
+#            dsout.add_columns(view.layers,
+#                              col_attrs=view.ca,
+#                              row_attrs=view.ra)
+#
 
 
 def get_gsea_with_selenium(diffex, email='s'):

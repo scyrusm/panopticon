@@ -84,11 +84,11 @@ def plot_subclusters(loom,
             plt.annotate(
                 subcluster,
                 (np.mean(embedding[mask, 0]), np.mean(embedding[mask, 1])))
-    plt.legend(ncol=len(subclusters) // 14 + 1, bbox_to_anchor=(1.05, 0.95))
-    if plot_output is not None:
-        plt.savefig(plot_output, bbox_inches='tight')
-    else:
-        plt.show()
+#    plt.legend(ncol=len(subclusters) // 14 + 1, bbox_to_anchor=(1.05, 0.95))
+#    if plot_output is not None:
+#        plt.savefig(plot_output, bbox_inches='tight')
+#    else:
+#        plt.show()
     return embedding
 
 
@@ -310,8 +310,11 @@ def cluster_differential_expression_heatmap(
     clusteredmask = np.hstack(clusteredmask)
 
     hmdf = pd.DataFrame(np.vstack(rawX))
-    #return hmdf, allgenes
-    hmdf.index = all_gene_common_names
+    return hmdf, allgenes
+    if len(all_gene_common_names) > 0:
+        hmdf.index = all_gene_common_names
+    else:
+        hmdf.index = allgenes
     hmdf.columns = cluster_cols
     if average_over_clusters:
         hmdf = hmdf.T.reset_index().groupby('index').mean().T
@@ -591,6 +594,9 @@ def swarmviolin(data,
             category = ticklabel.get_text()
             hue1, hue2 = data[hue].unique()
             if pvalue in ['wilcoxon_signed_rank', 'ttest_rel']:
+                if paired_hue_matching_col is None:
+                    raise Exception(
+                        "paired_hue_matching_col must be specified")
                 a = data[(data[hue] == hue1)
                          & (data[category_col]
                             == category)]  #[continuous_col].values
@@ -730,7 +736,8 @@ def volcano(diffex,
             positions=None,
             show=True,
             gene_label_offset_scale=1,
-            no_effect_line=0):
+            no_effect_line=0,
+            counterscale=1):
     """
 
     Parameters
@@ -799,6 +806,10 @@ def volcano(diffex,
     minx = np.nanmin(effect_size)
 
     maxy = np.nanmax(neglogpvalues)
+    left_edge = minx + .4 * (minx - maxx)
+    right_edge = maxx + .4 * (maxx - minx)
+    top_edge = maxy * 1.01
+    bottom_edge = 0
     xoffset = .1
     yoffset = .1
     offsetcounter = 0
@@ -818,46 +829,80 @@ def volcano(diffex,
                 positions.append('l')
             else:
                 positions.append('r')
+    if positions != 'side':
+        for gene, position in zip(
+                genemarklist,
+                positions,
+        ):
+            genedf = diffex[diffex[gene_column] == gene]
+            negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
+            effect_size = genedf.iloc[0][effect_size_col]
+            ax.scatter(effect_size, negpval, marker='.', color='k')
+            if position == 'b':
+                ax.annotate(gene, (effect_size, negpval),
+                            (effect_size,
+                             negpval + .015 * maxy * gene_label_offset_scale),
+                            va='bottom',
+                            ha='center',
+                            path_effects=[
+                                pe.withStroke(linewidth=1, foreground="white")
+                            ])
+            elif position == 't':
+                ax.annotate(gene, (effect_size, negpval),
+                            (effect_size,
+                             negpval - .015 * maxy * gene_label_offset_scale),
+                            va='top',
+                            ha='center',
+                            path_effects=[
+                                pe.withStroke(linewidth=1, foreground="white")
+                            ])
+            elif position == 'l':
+                ax.annotate(gene, (effect_size, negpval),
+                            (effect_size +
+                             .03 * maxx * gene_label_offset_scale, negpval),
+                            va='center',
+                            ha='left',
+                            path_effects=[
+                                pe.withStroke(linewidth=1, foreground="white")
+                            ])
+            elif position == 'r':
+                ax.annotate(gene, (effect_size, negpval),
+                            (effect_size -
+                             .03 * maxx * gene_label_offset_scale, negpval),
+                            va='center',
+                            ha='right',
+                            path_effects=[
+                                pe.withStroke(linewidth=1, foreground="white")
+                            ])
+            else:
+                raise Exception("invalid position character selection")
+    else:
+        lcounter = 0
+        rcounter = 0
+        for gene in genemarklist:
+            genedf = diffex[diffex[gene_column] == gene]
+            negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
+            effect_size = genedf.iloc[0][effect_size_col]
+            ax.scatter(effect_size, negpval, marker='.', color='k')
+            if effect_size < no_effect_line:
+                xytext = (left_edge + .03 * maxx * gene_label_offset_scale,
+                          top_edge - lcounter)
+                ha = 'left'
+                lcounter += counterscale
+            else:
+                xytext = (right_edge - .03 * maxx * gene_label_offset_scale,
+                          top_edge - rcounter)
+                ha = 'right'
+                rcounter += counterscale
+            ax.annotate(
+                gene, (effect_size, negpval),
+                xytext=xytext,
+                va='center',
+                ha=ha,
+                arrowprops=dict(facecolor='black', width=0.2, headwidth=0),
+                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
 
-    for gene, position in zip(
-            genemarklist,
-            positions,
-    ):
-        genedf = diffex[diffex[gene_column] == gene]
-        negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
-        effect_size = genedf.iloc[0][effect_size_col]
-        ax.scatter(effect_size, negpval, marker='.', color='k')
-        if position == 'b':
-            ax.annotate(
-                gene, (effect_size, negpval),
-                (effect_size, negpval + .015 * maxy * gene_label_offset_scale),
-                va='bottom',
-                ha='center',
-                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
-        elif position == 't':
-            ax.annotate(
-                gene, (effect_size, negpval),
-                (effect_size, negpval - .015 * maxy * gene_label_offset_scale),
-                va='top',
-                ha='center',
-                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
-        elif position == 'l':
-            ax.annotate(
-                gene, (effect_size, negpval),
-                (effect_size + .03 * maxx * gene_label_offset_scale, negpval),
-                va='center',
-                ha='left',
-                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
-        elif position == 'r':
-            ax.annotate(
-                gene, (effect_size, negpval),
-                (effect_size - .03 * maxx * gene_label_offset_scale, negpval),
-                va='center',
-                ha='right',
-                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
-        else:
-            raise Exception("invalid position character selection")
-    plt.axvline(no_effect_line, ls='--')
+    ax.axvline(no_effect_line, ls='--')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.tick_params(axis='both', which='major', labelsize=14)
@@ -868,8 +913,8 @@ def volcano(diffex,
 
     ax.set_ylabel('-log' + r'${}_{10}$' + '(p-value)', fontsize=14)
 
-    ax.set_xlim([minx + .4 * (minx - maxx), maxx + .4 * (maxx - minx)])
-    ax.set_ylim([0, maxy * 1.01])
+    ax.set_xlim([left_edge, right_edge])
+    ax.set_ylim([bottom_edge, top_edge])
     plt.tight_layout()
     ax.set_title(title)
     if output is not None:
@@ -1450,7 +1495,13 @@ def data_to_grid_kde(x, y, xmin=None, xmax=None, ymin=None, ymax=None, px=100):
     return zz
 
 
-def plot_differential_density(x, y, mask1, mask2, ax=None, cmap=plt.cm.RdBu_r):
+def plot_differential_density(x,
+                              y,
+                              mask1,
+                              mask2,
+                              ax=None,
+                              cmap=plt.cm.RdBu_r,
+                              buffer_factor=0):
     """
 
     Parameters
@@ -1473,8 +1524,10 @@ def plot_differential_density(x, y, mask1, mask2, ax=None, cmap=plt.cm.RdBu_r):
 
     
     """
-    xmin, xmax = (x.min(), x.max())
-    ymin, ymax = (y.min(), y.max())
+    xbuffer = (x.max() - x.min()) * buffer_factor
+    ybuffer = (y.max() - y.min()) * buffer_factor
+    xmin, xmax = (x.min() - xbuffer, x.max() + xbuffer)
+    ymin, ymax = (y.min() - ybuffer, y.max() + ybuffer)
 
     import numpy as np
     from panopticon.visualization import data_to_grid_kde
@@ -1846,7 +1899,7 @@ def plot_dot_plot(loom,
             expr = df.loc[key][col]
             sc = ax.scatter(key2x[key],
                             marker2y[col],
-                            s=(expr - np.min(exprs)) * scale + 1,
+                            s=(expr - np.min(exprs)) * scale + 1e-9,
                             cmap='coolwarm',
                             c=expr,
                             vmin=np.min(exprs),

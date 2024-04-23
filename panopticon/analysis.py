@@ -647,11 +647,13 @@ def get_subclustering(X,
             print(
                 'Computing agglomerative clustering with cosine metric, {} linkage'
                 .format(linkage))
-        clustering = AgglomerativeClustering(n_clusters=2,
-                                             memory=clusteringcachedir,
-                                             metric='cosine',
-                                             compute_full_tree=True,
-                                             linkage=linkage)
+        clustering = AgglomerativeClustering(
+            n_clusters=2,
+            memory=clusteringcachedir,
+            #metric='cosine',
+            affinity='cosine',
+            compute_full_tree=True,
+            linkage=linkage)
         scores = []
         minnk = 2
         for nk in tqdm(range(minnk, np.min([max_clusters, X.shape[0]]), 1),
@@ -815,6 +817,8 @@ def generate_clustering(loom,
             if optimized_leiden:
                 from panopticon.clustering import silhouette_optimized_leiden
                 leiden_output = silhouette_optimized_leiden(X)
+                loom.attrs[
+                    'OptimizedLeidenClusteringNNeighbors'] = leiden_output.nneighbors
             else:
                 from panopticon.clustering import leiden_with_silhouette_score
                 leiden_output = leiden_with_silhouette_score(
@@ -963,10 +967,10 @@ def generate_clustering(loom,
                                 random_state=0)
 
                     X = model.fit_transform(data_c)
-                if verbose:
-                    print('Total explained variance ratio: {}%'.format(
-                        100 * model.
-                        explained_variance_ratio_[0:n_components].sum()))
+                    if verbose:
+                        print('Total explained variance ratio: {}%'.format(
+                            100 * model.
+                            explained_variance_ratio_[0:n_components].sum()))
             print(X.shape)
             if max_clusters == 'sqrt_rule':
                 mc = int(np.floor(np.sqrt(X.shape[0])))
@@ -1868,9 +1872,12 @@ def get_enrichment_score(genes,
                          presorted=False,
                          return_es_curve=False,
                          return_pvalue=False,
-                         n_pvalue_permutations=1000):
+                         n_pvalue_permutations=1000,
+                         parallelized_permutation_calculation=True,
+                         use_fgsea=False):
     """Returns an enrichment score (ES) in the manner of Subramanian et al. 2005 (https://doi.org/10.1073/pnas.0506580102).
-
+    Note that 
+    
     Parameters
     ----------
     genes :
@@ -1887,10 +1894,10 @@ def get_enrichment_score(genes,
         (Default value = False)
     n_pvalue_permutations :
         (Default value = 1000)
-
+                
     Returns
     -------
-
+                           
     
     """
     from collections import namedtuple
@@ -1899,49 +1906,87 @@ def get_enrichment_score(genes,
     enrichment_score_output = namedtuple(
         "EnrichmentScoreOutput",
         "enrichment_score enrichment_score_curve p_value")
-
     if presorted is False and scores is None:
         raise Exception("Scores must be specified when sorted==False")
     elif presorted is False:
         genes = np.array(genes)[np.argsort(scores)[::-1]]
-    running_es = []
-    phit = 0
-    pmiss = 0
-    n_genes = len(genes)
-    n_genes_in_geneset = len(np.intersect1d(genes, geneset))
-    if n_genes_in_geneset == 0:
-        raise Exception("Overlap of geneset with gene list is zero")
+    if use_fgsea:
+        from rpy2.robjects.packages import importr
+        import rpy2.robjects.numpy2ri  #, vectors, pandas2ri
+        from rpy2.robjects import vectors
+        from rpy2.robjects import pandas2ri
 
-    for gene in genes:
-        if gene in geneset:
-            phit += 1 / n_genes_in_geneset
-        else:
-            pmiss += 1 / (n_genes - n_genes_in_geneset)
+        pandas2ri.activate()
+        fgsea = importr('fgsea')
+        ranking = pd.DataFrame(
+            genes[::-1],
+            columns=['gene']).reset_index().set_index('gene')['index']
+        rpy2.robjects.numpy2ri.activate()
+        out = fgsea.fgsea(pathways=pd.DataFrame(
+            geneset, columns=['geneset']).reset_index(drop=True),
+                          stats=ranking,
+                          gseaParam=0)
+        out = pd.DataFrame(out, index=out.colnames)
+        es = out.T['ES'].values[0]
+        pval = out.T['pval'].values[0]
+        #running_es = None
+        return enrichment_score_output(es,
+                                       'no running ES computed in fgsea mode',
+                                       pval)
 
-        running_es.append(phit - pmiss)
-    es = running_es[np.argmax(np.abs(running_es))]
-
-    if return_pvalue is False:
-        if return_es_curve:
-            return enrichment_score_output(es, running_es, None)
-        else:
-            return enrichment_score_output(es, None, None)
     else:
-        null_enrichments = []
-        for i in tqdm(range(n_pvalue_permutations)):
-            null_enrichments.append(
-                get_enrichment_score(np.random.permutation(genes),
-                                     geneset,
-                                     return_es_curve=False,
-                                     return_pvalue=False,
-                                     presorted=True).enrichment_score)
+        running_es = []
+        phit = 0
+        pmiss = 0
+        n_genes = len(genes)
+        n_genes_in_geneset = len(np.intersect1d(genes, geneset))
+        if n_genes_in_geneset == 0:
+            raise Exception("Overlap of geneset with gene list is zero")
 
-        pval = np.mean(np.abs(es) < np.abs(np.array(null_enrichments)))
+        for gene in genes:
+            if gene in geneset:
+                phit += 1 / n_genes_in_geneset
+            else:
+                pmiss += 1 / (n_genes - n_genes_in_geneset)
 
-        if return_es_curve:
-            return enrichment_score_output(es, running_es, pval)
+            running_es.append(phit - pmiss)
+        es = running_es[np.argmax(np.abs(running_es))]
+
+        if return_pvalue is False:
+            if return_es_curve:
+                return enrichment_score_output(es, running_es, None)
+            else:
+                return enrichment_score_output(es, None, None)
         else:
-            return enrichment_score_output(es, None, pval)
+            if parallelized_permutation_calculation:
+                from joblib import Parallel, delayed
+                f = lambda x: get_enrichment_score(
+                    np.random.permutation(genes),
+                    geneset,
+                    return_es_curve=False,
+                    return_pvalue=False,
+                    presorted=True).enrichment_score
+                null_enrichments = np.array(
+                    Parallel(n_jobs=-1)(
+                        delayed(f)(i)
+                        for i in tqdm(range(n_pvalue_permutations))))
+
+            else:
+                null_enrichments = []
+                for i in tqdm(range(n_pvalue_permutations)):
+                    null_enrichments.append(
+                        get_enrichment_score(np.random.permutation(genes),
+                                             geneset,
+                                             return_es_curve=False,
+                                             return_pvalue=False,
+                                             presorted=True).enrichment_score)
+
+            pval = np.mean(np.abs(es) < np.abs(np.array(null_enrichments)))
+
+            if return_es_curve:
+                return enrichment_score_output(es, running_es, pval)
+            else:
+                return enrichment_score_output(es, None, pval)
 
 
 def hutcheson_t(x, y):

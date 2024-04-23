@@ -127,7 +127,7 @@ def leiden_with_silhouette_score(X,
 def silhouette_optimized_leiden(X,
                                 min_neighbors=2,
                                 initial_intermediate=128,
-                                max_neighbors=1024,
+                                max_neighbors=2048,
                                 verbose=True):
     """
 

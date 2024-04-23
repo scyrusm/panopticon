@@ -1999,3 +1999,79 @@ def p_to_stars(p, max_stars=4):
     return summary
 
 
+def create_subsetted_loom_with_genemask_space_efficient(
+        loom, output_loom_filename, cellmask, genemask, batch_size=1024):
+    import loompy
+    import numpy as np
+
+    if len(cellmask) != loom.shape[1]:
+        raise Exception(
+            "cellmask must be boolean mask with length equal to the number of columns of loom"
+        )
+    if len(genemask) != loom.shape[0]:
+        raise Exception(
+            "cellmask must be boolean mask with length equal to the number of columns of loom"
+        )
+
+    n_splits = cellmask.sum() // batch_size
+    selections = np.array_split(cellmask.nonzero()[0], n_splits)
+    from tqdm import tqdm
+    with loompy.new(output_loom_filename) as dsout:
+
+        for selection in tqdm(selections):
+            dsout.add_columns(loom[''][:, selection][genemask.nonzero()[0], :],
+                              col_attrs={
+                                  key: loom.ca[key][selection]
+                                  for key in loom.ca.keys()
+                              },
+                              row_attrs={
+                                  key: loom.ra[key][genemask.nonzero()[0]]
+                                  for key in loom.ra.keys()
+                              })
+
+
+def create_subsetted_loom_space_efficient(loom,
+                                          output_loom_filename,
+                                          cellmask,
+                                          batch_size=1024):
+    """Deprecated.
+
+    Will create a new loom file with cells specified according to a Boolean vector mask.
+    
+    Parameters
+    ----------
+    loom : LoomConnection object which will be subsetted
+           
+    output_loom_filename : string denoting the path and filename of the output loom file.  
+        
+    cellmask : Boolean numpy vector with length equal to the number of cells in "loom"
+    
+    batch_size : Size (number of cells) to add to output file at a time (default: 1024)
+           
+    Returns
+    -------
+
+    
+    """
+    import loompy
+    import numpy as np
+
+    if len(cellmask) != loom.shape[1]:
+        raise Exception(
+            "cellmask must be boolean mask with length equal to the number of columns of loom"
+        )
+
+    n_splits = cellmask.sum() // batch_size
+    selections = np.array_split(cellmask.nonzero()[0], n_splits)
+    from tqdm import tqdm
+    with loompy.new(output_loom_filename) as dsout:
+
+        for selection in tqdm(selections):
+            dsout.add_columns(
+                loom[''][:, selection],
+                col_attrs={
+                    key: loom.ca[key][selection]
+                    for key in loom.ca.keys()
+                },
+                row_attrs={key: loom.ra[key]
+                           for key in loom.ra.keys()})
