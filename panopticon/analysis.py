@@ -1930,8 +1930,9 @@ def get_enrichment_score(genes,
         es = out.T['ES'].values[0]
         pval = out.T['pval'].values[0]
         #running_es = None
+        running_es = get_enrichment_score(genes, geneset, presorted=True, use_fgsea=False,return_pvalue=False, return_es_curve=True).enrichment_score_curve
         return enrichment_score_output(es,
-                                       'no running ES computed in fgsea mode',
+                                       running_es,
                                        pval)
 
     else:
