@@ -445,7 +445,8 @@ def swarmviolin(data,
                 pvalue='mannwhitney',
                 custom_annotation_dict={},
                 custom_annotation_fontsize=6,
-                pairing_column=None):
+                pairing_column=None,
+                only_plot_hue_pairing=False):
     """
 
     Parameters
@@ -724,10 +725,17 @@ def swarmviolin(data,
     if pairing_column is not None:
         xoffsets = []
         yoffsets = []
-        groups = [x.get_text() for x in ax.get_xticklabels()]
-        #print(len(ax.collections))
-        #return ax.collections
-        for collection in ax.collections[4::]:
+        if hue is None:
+            groups = [x.get_text() for x in ax.get_xticklabels()]
+        else:
+            groups = list(
+                np.hstack([[x.get_text()] * 2 for x in ax.get_xticklabels()]))
+            group_notdoubled = [x.get_text() for x in ax.get_xticklabels()]
+        n_empty_collections = 0
+        for collection in ax.collections:
+            if collection.get_offsets().shape[0] <= 1:
+                n_empty_collections += 1
+        for collection in ax.collections[n_empty_collections::]:
             if type(collection.get_offsets()) == np.ma.core.MaskedArray:
 
                 xoffsets.append(collection.get_offsets().data[:, 0])
@@ -743,24 +751,41 @@ def swarmviolin(data,
         for i in range(xoffsets.shape[1]):
             offset_df['{}_x'.format(i)] = xoffsets[:, i]
             offset_df['{}_y'.format(i)] = yoffsets[:, i]
-            ax.plot(xoffsets[:, i],
-                    yoffsets[:, i],
-                    color='k',
-                    alpha=0.1,
-                    ls='--')
+            if (hue is not None) and only_plot_hue_pairing:
+                for j in range(0,xoffsets.shape[0],2):
+                    ax.plot([xoffsets[j, i],xoffsets[j+1,i]],
+                            [yoffsets[j, i],yoffsets[j+1,i]],
+                            color='k',
+                            alpha=0.1,
+                            ls='--')
+            else:
+                ax.plot(xoffsets[:, i],
+                        yoffsets[:, i],
+                        color='k',
+                        alpha=0.1,
+                        ls='--')
         replicate_matches = []
         for col in [y for y in offset_df.columns if y.endswith('_y')]:
             for replicate in data[pairing_column].unique():
-                if offset_df.set_index('group')[col].equals(
-                        data[data[pairing_column] == replicate].set_index(
-                            x).loc[groups][y]):
-                    replicate_matches.append(replicate)
+                if hue is None:
+                    if offset_df.set_index('group')[col].equals(
+                            data[data[pairing_column] == replicate].set_index(
+                                x).loc[groups][y]):
+                        replicate_matches.append(replicate)
+                else:
+                    if offset_df.set_index('group')[col].reset_index(
+                            drop=True).equals(data[
+                                data[pairing_column] == replicate].set_index(
+                                    x).loc[group_notdoubled][y].reset_index(
+                                        drop=True)):
+
+                        replicate_matches.append(replicate)
+
         if len(np.unique(replicate_matches)) != len(
                 np.unique(data[pairing_column])):
             raise Exception(
                 "Problem with pairing column--it is possible that pairing annotation was done incorrectly"
             )
-
     return ax
 
 
@@ -779,7 +804,9 @@ def volcano(diffex,
             show=True,
             gene_label_offset_scale=1,
             no_effect_line=0,
-            counterscale=1):
+            counterscale=1,
+            lcounter_init=0,
+            rcounter_init=0):
     """
 
     Parameters
@@ -887,7 +914,7 @@ def volcano(diffex,
                             va='bottom',
                             ha='center',
                             path_effects=[
-                                pe.withStroke(linewidth=1, foreground="white")
+                                pe.withStroke(linewidth=2, foreground="white")
                             ])
             elif position == 't':
                 ax.annotate(gene, (effect_size, negpval),
@@ -896,7 +923,7 @@ def volcano(diffex,
                             va='top',
                             ha='center',
                             path_effects=[
-                                pe.withStroke(linewidth=1, foreground="white")
+                                pe.withStroke(linewidth=2, foreground="white")
                             ])
             elif position == 'l':
                 ax.annotate(gene, (effect_size, negpval),
@@ -905,7 +932,7 @@ def volcano(diffex,
                             va='center',
                             ha='left',
                             path_effects=[
-                                pe.withStroke(linewidth=1, foreground="white")
+                                pe.withStroke(linewidth=2, foreground="white")
                             ])
             elif position == 'r':
                 ax.annotate(gene, (effect_size, negpval),
@@ -914,13 +941,13 @@ def volcano(diffex,
                             va='center',
                             ha='right',
                             path_effects=[
-                                pe.withStroke(linewidth=1, foreground="white")
+                                pe.withStroke(linewidth=2, foreground="white")
                             ])
             else:
                 raise Exception("invalid position character selection")
     else:
-        lcounter = 0
-        rcounter = 0
+        lcounter = lcounter_init
+        rcounter = rcounter_init
         for gene in genemarklist:
             genedf = diffex[diffex[gene_column] == gene]
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
@@ -941,8 +968,11 @@ def volcano(diffex,
                 xytext=xytext,
                 va='center',
                 ha=ha,
-                arrowprops=dict(facecolor='black', width=0.2, headwidth=0),
-                path_effects=[pe.withStroke(linewidth=1, foreground="white")])
+                arrowprops=dict(facecolor='black',
+                                width=0.1,
+                                headwidth=0,
+                                alpha=0.25),
+                path_effects=[pe.withStroke(linewidth=2, foreground="white")])
 
     ax.axvline(no_effect_line, ls='--')
     ax.spines['top'].set_visible(False)

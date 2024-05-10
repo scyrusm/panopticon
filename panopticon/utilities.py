@@ -376,7 +376,8 @@ def get_alpha_concave_hull_polygon(xcoords, ycoords, alpha=0.1, buffer=1):
         # loop over triangles:
         # ia, ib, ic = indices of corner points of the
         # triangle
-        for ia, ib, ic in tri.vertices:
+        #for ia, ib, ic in tri.vertices:
+        for ia, ib, ic in tri.simplices:
             pa = coords[ia]
             pb = coords[ib]
             pc = coords[ic]
@@ -718,8 +719,13 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
 
         
         """
-        exon_number = attribute.split('exon_number')[1].split(';')[0].split(
+
+        exon_number = attribute.split('exon_number')[1].split(';')[0]
+        if '\"' in exon_number:
+            exon_number = attribute.split('exon_number')[1].split(';')[0].split(
             '\"')[-2]
+        else:
+            exon_number = exon_number.replace(' ','')
 
         old_gene_id_str = 'gene_id' + attribute.split('gene_id')[1].split(
             ';')[0]

@@ -1484,192 +1484,6 @@ def scrna2tracer_mapping(scrna_cellnames, tracer_cellnames):
     return tracer2scrna_name
 
 
-def get_cluster_differential_expression(loom,
-                                        layername,
-                                        cluster_level=None,
-                                        ident1=None,
-                                        ident2=None,
-                                        mask1=None,
-                                        mask2=None,
-                                        verbose=False,
-                                        ident1_downsample_size=None,
-                                        ident2_downsample_size=None,
-                                        min_cluster_size=0,
-                                        gene_alternate_name=None):
-    """
-
-    Parameters
-    ----------
-    loom : LoomConnection object
-        
-    cluster_level :
-        (Default value = None)
-    layername :
-        
-    ident1 :
-        (Default value = None)
-    ident2 :
-        (Default value = None)
-    verbose :
-        (Default value = False)
-    ident1_downsample_size :
-        (Default value = None)
-    ident2_downsample_size :
-        (Default value = None)
-    mask1 :
-        (Default value = None)
-    mask2 :
-        (Default value = None)
-    min_cluster_size :
-        (Default value = 0)
-    gene_alternate_name :
-        (Default value = None)
-
-    Returns
-    -------
-
-    
-    """
-    from scipy.stats import mannwhitneyu
-    from statsmodels.stats.multitest import fdrcorrection
-
-    from time import time
-    from tqdm import tqdm
-
-    if gene_alternate_name is None and 'gene_common_name' in loom.ra.keys():
-        gene_alternate_name = 'gene_common_name'
-
-    if (mask1 is not None) and (mask2 is not None):
-        if verbose:
-            print("ignoring ident1, ident2")
-
-    elif (mask1 is not None) or (mask2 is not None):
-        raise Exception(
-            "Either both or neither of mask1, mask2 must be specified")
-    else:
-        if cluster_level is None:
-            raise Exception(
-                "cluster_level must be specified when running with cluster identities, i.e. without specifying an explicit mask"
-            )
-        if ident1 is None:
-            raise Exception(
-                "ident1 must be specified when running with cluster identities, i.e. without specifying an explicit mask"
-            )
-        if type(ident1) != list:
-            ident1 = [ident1]
-        mask1 = np.isin(loom.ca[cluster_level], ident1)
-        if ident2 == None:
-            print(
-                "Automatic complement: Cells in same subcluster except lowest subcluster"
-            )
-            if cluster_level == 'ClusteringIteration0':
-                mask2 = ~np.isin(loom.ca[cluster_level], ident1)
-                clusterset = np.unique(loom.ca[cluster_level])
-                ident2 = list(np.setdiff1d(clusterset, ident1))
-            else:
-                cluster_level_number = int(
-                    cluster_level.replace('ClusteringIteration', ''))
-                prefices = [
-                    '-'.join(x.split('-')[0:(cluster_level_number)]) +
-                    '-'  # 13 Apr 2020--check that this works
-                    for x in ident1
-                ]
-                if len(np.unique(prefices)) > 1:
-                    raise Exception(
-                        "Cluster Differential expression with automatic complement must use ident1 only from cells from same n-1th subcluster"
-                    )
-                prefix = prefices[0]
-                clusterset = [
-                    x for x in np.unique(loom.ca[cluster_level])
-                    if x.startswith(prefix)
-                ]
-                ident2 = list(np.setdiff1d(clusterset, ident1))
-                mask2 = np.isin(loom.ca[cluster_level], ident2)
-
-        else:
-            if type(ident2) != list:
-                ident2 = [ident2]
-            mask2 = np.isin(loom.ca[cluster_level], ident2)
-        print("Comparison of", ident1, "against", ident2)
-    if (np.sum(mask1) < min_cluster_size) or (np.sum(mask2)
-                                              < min_cluster_size):
-        return np.nan
-    if ident1_downsample_size:
-        mask1 = mask1.copy()
-        p = np.min([ident1_downsample_size, np.sum(mask1)]) / np.sum(mask1)
-        mask1 *= np.random.choice([True, False],
-                                  p=[p, 1 - p],
-                                  size=mask1.shape[0])
-    if ident2_downsample_size:
-        mask2 = mask2.copy()
-        p = np.min([ident2_downsample_size, np.sum(mask2)]) / np.sum(mask2)
-        mask2 *= np.random.choice([True, False],
-                                  p=[p, 1 - p],
-                                  size=mask2.shape[0])
-    if verbose:
-        print('Group 1 size: ', np.sum(mask1), ', group 2 size: ',
-              np.sum(mask2))
-    pvalues = []
-    uvalues = []
-    genes = []
-    meanexpr1 = []
-    meanexpr2 = []
-    meanexpexpr1 = []
-    meanexpexpr2 = []
-    fracexpr1 = []
-    fracexpr2 = []
-    start = time()
-    data1 = loom[layername][:, mask1.nonzero()[0]]
-    if verbose:
-        print('First matrix extracted in', time() - start, 'seconds')
-    start = time()
-    data2 = loom[layername][:, mask2.nonzero()[0]]
-    if verbose:
-        print('Second matrix extracted', time() - start, 'seconds')
-    for igene, gene in enumerate(
-            tqdm(loom.ra['gene'], desc='Computing Mann-Whitney p-values')):
-        genes.append(gene)
-        if np.std(data1[igene, :]) + np.std(data2[igene, :]) < 1e-14:
-            pvalues.append(1)
-            uvalues.append(np.nan)
-        else:
-            mw = mannwhitneyu(data1[igene, :],
-                              data2[igene, :],
-                              alternative='two-sided')
-            pvalues.append(mw.pvalue)
-            uvalues.append(mw.statistic)
-        meanexpr1.append(data1[igene, :].mean())
-        meanexpr2.append(data2[igene, :].mean())
-        meanexpexpr1.append(np.mean(2**data1[igene, :]))
-        meanexpexpr2.append(np.mean(2**data2[igene, :]))
-        fracexpr1.append((data1[igene, :] > 0).mean())
-        fracexpr2.append((data2[igene, :] > 0).mean())
-    output = pd.DataFrame(genes)
-    output.columns = ['gene']
-    output['pvalue'] = pvalues
-    output['CommonLanguageEffectSize'] = np.array(uvalues) / (data1.shape[1] *
-                                                              data2.shape[1])
-    output['MeanExpr1'] = meanexpr1
-    output['MeanExpr2'] = meanexpr2
-    output['MeanExpExpr1'] = meanexpexpr1
-    output['MeanExpExpr2'] = meanexpexpr2
-    output['Log2FoldChange'] = np.log(meanexpexpr1) / np.log(2) - np.log(
-        meanexpexpr2) / np.log(2)
-    output['FracExpr1'] = fracexpr1
-    output['FracExpr2'] = fracexpr2
-    if gene_alternate_name is not None:
-        gene2altname = {
-            gene: altname
-            for gene, altname in zip(loom.ra['gene'],
-                                     loom.ra[gene_alternate_name])
-        }
-        altnames = [gene2altname[x] for x in genes]
-        output['GeneAlternateName'] = altnames
-
-    output = output.sort_values('CommonLanguageEffectSize', ascending=False)
-    output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'],
-                                                 is_sorted=False)[1]
-    return output
 
 
 def get_differential_expression_over_continuum(loom,
@@ -1915,6 +1729,8 @@ def get_enrichment_score(genes,
         import rpy2.robjects.numpy2ri  #, vectors, pandas2ri
         from rpy2.robjects import vectors
         from rpy2.robjects import pandas2ri
+        import rpy2.rinterface
+#        rpy2.rinterface.set_initoptions(('rpy2', '--verbose', '--no-save'))
 
         pandas2ri.activate()
         fgsea = importr('fgsea')
@@ -1925,12 +1741,15 @@ def get_enrichment_score(genes,
         out = fgsea.fgsea(pathways=pd.DataFrame(
             geneset, columns=['geneset']).reset_index(drop=True),
                           stats=ranking,
-                          gseaParam=0)
+                          gseaParam=0,
+                          nproc=1)
         out = pd.DataFrame(out, index=out.colnames)
         es = out.T['ES'].values[0]
         pval = out.T['pval'].values[0]
         #running_es = None
         running_es = get_enrichment_score(genes, geneset, presorted=True, use_fgsea=False,return_pvalue=False, return_es_curve=True).enrichment_score_curve
+#        import rpy2.robjects as ro # this may help with the freezing problem?? S Markson 8 May 2024
+#        ro.r.q(save="no")
         return enrichment_score_output(es,
                                        running_es,
                                        pval)
@@ -2182,3 +2001,206 @@ def get_cluster_enrichment_dataframes(x, y, data, weights=None):
     return ClusterEnrichment(fishers_exact_p_df, phi_coefficient_df, counts_df,
                              cluster_fraction_incluster_df,
                              cluster_fraction_ingroup_df)
+
+
+def get_cluster_differential_expression(loom,
+                                        layername,
+                                        cluster_level=None,
+                                        ident1=None,
+                                        ident2=None,
+                                        mask1=None,
+                                        mask2=None,
+                                        verbose=False,
+                                        ident1_downsample_size=None,
+                                        ident2_downsample_size=None,
+                                        min_cluster_size=0,
+                                        gene_alternate_name=None,
+                                        gene_subset_mask=None):
+    """
+
+    Parameters
+    ----------
+    loom : LoomConnection object
+        
+    cluster_level :
+        (Default value = None)
+    layername :
+        
+    ident1 :
+        (Default value = None)
+    ident2 :
+        (Default value = None)
+    verbose :
+        (Default value = False)
+    ident1_downsample_size :
+        (Default value = None)
+    ident2_downsample_size :
+        (Default value = None)
+    mask1 :
+        (Default value = None)
+    mask2 :
+        (Default value = None)
+    min_cluster_size :
+        (Default value = 0)
+    gene_alternate_name :
+        (Default value = None)
+
+    Returns
+    -------
+
+    
+    """
+    from scipy.stats import mannwhitneyu
+    from statsmodels.stats.multitest import fdrcorrection
+
+    from time import time
+    from tqdm import tqdm
+
+    if gene_alternate_name is None and 'gene_common_name' in loom.ra.keys():
+        gene_alternate_name = 'gene_common_name'
+
+    if (mask1 is not None) and (mask2 is not None):
+        if verbose:
+            print("ignoring ident1, ident2")
+
+    elif (mask1 is not None) or (mask2 is not None):
+        raise Exception(
+            "Either both or neither of mask1, mask2 must be specified")
+    else:
+        if cluster_level is None:
+            raise Exception(
+                "cluster_level must be specified when running with cluster identities, i.e. without specifying an explicit mask"
+            )
+        if ident1 is None:
+            raise Exception(
+                "ident1 must be specified when running with cluster identities, i.e. without specifying an explicit mask"
+            )
+        if type(ident1) != list:
+            ident1 = [ident1]
+        mask1 = np.isin(loom.ca[cluster_level], ident1)
+        if ident2 == None:
+            print(
+                "Automatic complement: Cells in same subcluster except lowest subcluster"
+            )
+            if cluster_level == 'ClusteringIteration0':
+                mask2 = ~np.isin(loom.ca[cluster_level], ident1)
+                clusterset = np.unique(loom.ca[cluster_level])
+                ident2 = list(np.setdiff1d(clusterset, ident1))
+            else:
+                cluster_level_number = int(
+                    cluster_level.replace('ClusteringIteration', ''))
+                prefices = [
+                    '-'.join(x.split('-')[0:(cluster_level_number)]) +
+                    '-'  # 13 Apr 2020--check that this works
+                    for x in ident1
+                ]
+                if len(np.unique(prefices)) > 1:
+                    raise Exception(
+                        "Cluster Differential expression with automatic complement must use ident1 only from cells from same n-1th subcluster"
+                    )
+                prefix = prefices[0]
+                clusterset = [
+                    x for x in np.unique(loom.ca[cluster_level])
+                    if x.startswith(prefix)
+                ]
+                ident2 = list(np.setdiff1d(clusterset, ident1))
+                mask2 = np.isin(loom.ca[cluster_level], ident2)
+
+        else:
+            if type(ident2) != list:
+                ident2 = [ident2]
+            mask2 = np.isin(loom.ca[cluster_level], ident2)
+        print("Comparison of", ident1, "against", ident2)
+    if (np.sum(mask1) < min_cluster_size) or (np.sum(mask2)
+                                              < min_cluster_size):
+        return np.nan
+    if ident1_downsample_size:
+        mask1 = mask1.copy()
+        p = np.min([ident1_downsample_size, np.sum(mask1)]) / np.sum(mask1)
+        mask1 *= np.random.choice([True, False],
+                                  p=[p, 1 - p],
+                                  size=mask1.shape[0])
+    if ident2_downsample_size:
+        mask2 = mask2.copy()
+        p = np.min([ident2_downsample_size, np.sum(mask2)]) / np.sum(mask2)
+        mask2 *= np.random.choice([True, False],
+                                  p=[p, 1 - p],
+                                  size=mask2.shape[0])
+    if verbose:
+        print('Group 1 size: ', np.sum(mask1), ', group 2 size: ',
+              np.sum(mask2))
+    pvalues = []
+    uvalues = []
+    genes = []
+    meanexpr1 = []
+    meanexpr2 = []
+    meanexpexpr1 = []
+    meanexpexpr2 = []
+    fracexpr1 = []
+    fracexpr2 = []
+    if gene_subset_mask is not None:
+        genelist = loom.ra['gene'][gene_subset_mask]
+        start = time()
+        data1 = loom[layername][:, mask1.nonzero()[0]][gene_subset_mask,:]
+        if verbose:
+            print('First matrix extracted in', time() - start, 'seconds')
+        start = time()
+        data2 = loom[layername][:, mask2.nonzero()[0]][gene_subset_mask,:]
+        if verbose:
+            print('Second matrix extracted', time() - start, 'seconds')
+    else:
+        genelist = loom.ra['gene']
+        start = time()
+        data1 = loom[layername][:, mask1.nonzero()[0]]
+        if verbose:
+            print('First matrix extracted in', time() - start, 'seconds')
+        start = time()
+        data2 = loom[layername][:, mask2.nonzero()[0]]
+        if verbose:
+            print('Second matrix extracted', time() - start, 'seconds')
+
+    for igene, gene in enumerate(
+            tqdm(genelist, desc='Computing Mann-Whitney p-values')):
+        genes.append(gene)
+        if np.std(data1[igene, :]) + np.std(data2[igene, :]) < 1e-14:
+            pvalues.append(1)
+            uvalues.append(np.nan)
+        else:
+            mw = mannwhitneyu(data1[igene, :],
+                              data2[igene, :],
+                              alternative='two-sided')
+            pvalues.append(mw.pvalue)
+            uvalues.append(mw.statistic)
+        meanexpr1.append(data1[igene, :].mean())
+        meanexpr2.append(data2[igene, :].mean())
+        meanexpexpr1.append(np.mean(2**data1[igene, :]))
+        meanexpexpr2.append(np.mean(2**data2[igene, :]))
+        fracexpr1.append((data1[igene, :] > 0).mean())
+        fracexpr2.append((data2[igene, :] > 0).mean())
+    output = pd.DataFrame(genes)
+    output.columns = ['gene']
+    output['pvalue'] = pvalues
+    output['CommonLanguageEffectSize'] = np.array(uvalues) / (data1.shape[1] *
+                                                              data2.shape[1])
+    output['MeanExpr1'] = meanexpr1
+    output['MeanExpr2'] = meanexpr2
+    output['MeanExpExpr1'] = meanexpexpr1
+    output['MeanExpExpr2'] = meanexpexpr2
+    output['Log2FoldChange'] = np.log(meanexpexpr1) / np.log(2) - np.log(
+        meanexpexpr2) / np.log(2)
+    output['FracExpr1'] = fracexpr1
+    output['FracExpr2'] = fracexpr2
+    if gene_alternate_name is not None:
+        gene2altname = {
+            gene: altname
+            for gene, altname in zip(loom.ra['gene'],
+                                     loom.ra[gene_alternate_name])
+        }
+        altnames = [gene2altname[x] for x in genes]
+        output['GeneAlternateName'] = altnames
+
+    output = output.sort_values('CommonLanguageEffectSize', ascending=False)
+    output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'],
+                                                 is_sorted=False)[1]
+    return output
+
