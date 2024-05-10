@@ -650,8 +650,8 @@ def get_subclustering(X,
         clustering = AgglomerativeClustering(
             n_clusters=2,
             memory=clusteringcachedir,
-            #metric='cosine',
-            affinity='cosine',
+            metric='cosine',
+#            affinity='cosine',
             compute_full_tree=True,
             linkage=linkage)
         scores = []

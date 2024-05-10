@@ -1696,7 +1696,7 @@ def get_clumpiness(distances, clusteringcachedir='/tmp', verbose=False):
 
     clustering = AgglomerativeClustering(n_clusters=2,
                                          memory=clusteringcachedir,
-                                         affinity='precomputed',
+                                         metric='precomputed',
                                          compute_full_tree=True,
                                          linkage='average')
     scores = []
