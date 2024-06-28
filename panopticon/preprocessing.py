@@ -627,7 +627,9 @@ def generate_guide_rna_prediction(
 
         loom.ca[new_ca_name] = np.log2(loom.ca[guide_rna])
         if not only_generate_log2:
-            from pomegranate import GeneralMixtureModel, PoissonDistribution
+            #from pomegranate import GeneralMixtureModel, PoissonDistribution
+            from pomegranate.gmm import GeneralMixtureModel
+            from pomegranate.distributions import Poisson
 
             prediction_ca_name = guide_rna + '_prediction'
             prediction_ca_names.append(prediction_ca_name)
@@ -640,11 +642,16 @@ def generate_guide_rna_prediction(
                 if cellmask.sum(
                 ) >= ncell_threshold_for_guide:  # have minimum cells for guide
                     try:
-                        model = GeneralMixtureModel.from_samples(
-                            [PoissonDistribution, PoissonDistribution],
-                            n_components=2,
-                            X=loom.ca[new_ca_name][cellmask.nonzero()
-                                                   [0]].reshape(-1, 1))
+                        model = GeneralMixtureModel(
+                            [Poisson(), Poisson()],
+                            verbose=False,
+                            tol=0.01,
+                            random_state=17,
+                            max_iter=100)
+
+                        X=loom.ca[new_ca_name][cellmask.nonzero()
+                                               [0]].reshape(-1, 1)
+                        model.fit(X)
                         predictions = []
                         for val in loom.ca[new_ca_name]:
                             if not np.isfinite(val):
@@ -667,11 +674,16 @@ def generate_guide_rna_prediction(
             else:
                 #print(guide_rna, loom.ca[guide_rna].sum())
                 # print('Warning:  pomegrante Poisson/Normal mixture model has predicted a Poisson component with greater log(UMI+1) counts than normal component.  This is unusual behavior!')
-                model = GeneralMixtureModel.from_samples(
-                    [PoissonDistribution, PoissonDistribution],
-                    n_components=2,
-                    X=loom.ca[new_ca_name].reshape(-1, 1))
-                #model.fit(loom.ca[new_ca_name].reshape(-1, 1))
+                model = GeneralMixtureModel(
+                    [Poisson(), Poisson()],
+                    verbose=False,
+                    tol=0.01,
+                    random_state=17,
+                    max_iter=100)
+ 
+                X=loom.ca[new_ca_name][cellmask.nonzero()
+                                       [0]].reshape(-1, 1)
+                model.fit(X)
                 predictions = model.predict(loom.ca[new_ca_name].reshape(
                     -1, 1))
 
@@ -683,18 +695,18 @@ def generate_guide_rna_prediction(
             predictions *= threshold_for_cell_mask
             loom.ca[prediction_ca_name] = predictions
 
-    guide_prediction_dfs = []
-    for prediction_ca_name in prediction_ca_names:
-        guide_prediction_dfs.append(
-            pd.DataFrame(loom.ca[prediction_ca_name],
-                         columns=[prediction_ca_name],
-                         copy=True))
-    guide_prediction_dfs = pd.concat(guide_prediction_dfs, axis=1)
-    loom.ca[nguide_ca] = guide_prediction_dfs.sum(axis=1).values
-
-    loom.ca[cell_prediction_summary_ca] = guide_prediction_dfs.apply(
-        lambda x: '+'.join(guide_prediction_dfs.columns[np.where(x == 1)[0]]),
-        axis=1).values
+            guide_prediction_dfs = []
+            for prediction_ca_name in prediction_ca_names:
+                guide_prediction_dfs.append(
+                    pd.DataFrame(loom.ca[prediction_ca_name],
+                                 columns=[prediction_ca_name],
+                                 copy=True))
+            guide_prediction_dfs = pd.concat(guide_prediction_dfs, axis=1)
+            loom.ca[nguide_ca] = guide_prediction_dfs.sum(axis=1).values
+        
+            loom.ca[cell_prediction_summary_ca] = guide_prediction_dfs.apply(
+                lambda x: '+'.join(guide_prediction_dfs.columns[np.where(x == 1)[0]]),
+                axis=1).values
 
 
 def get_clustering_based_outlier_prediction(

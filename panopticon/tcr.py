@@ -505,9 +505,9 @@ def incorporate_10x_vdj(loomfile,
         raise Exception("`barcode_ca` must be unique to each cell")
 
     filtered_contig_annotations = pd.read_csv(filtered_contig_annotations_csv)
-    barcode_match_rate = np.isin(
-        filtered_contig_annotations['barcode'].unique(),
-        loom.ca[barcode_ca]).mean()
+    scbarcodeset = set(loom.ca[barcode_ca])
+    vdjbarcodeset = filtered_contig_annotations['barcode'].unique()
+    barcode_match_rate = np.mean([x in scbarcodeset for x in vdjbarcodeset])
     if barcode_match_rate < barcode_match_exception_threshold:
         raise Exception(
             "Only {}% of V(D)J barcodes have corresponding gene expression data; GEX and V(D)J files may be mismatched"

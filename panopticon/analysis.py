@@ -816,7 +816,9 @@ def generate_clustering(loom,
                                       n_components=n_components)
             if optimized_leiden:
                 from panopticon.clustering import silhouette_optimized_leiden
-                leiden_output = silhouette_optimized_leiden(X)
+                max_neighbors = np.min([2**int(np.log(X.shape[0])/np.log(2)),2048])
+                leiden_output = silhouette_optimized_leiden(X,max_neighbors=max_neighbors)
+
                 loom.attrs[
                     'OptimizedLeidenClusteringNNeighbors'] = leiden_output.nneighbors
             else:
@@ -1391,6 +1393,8 @@ def get_differential_expression_dict(loom,
 
     diffex = {}
     for i in range(starting_iteration, final_iteration + 1):
+        if 'ClusteringIteration{}'.format(i) not in loom.ca.keys():
+            break
         for cluster in np.unique(loom.ca['ClusteringIteration{}'.format(i)]):
             if verbose:
                 print(cluster)

@@ -422,6 +422,25 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
+def legend_without_duplicate_labels(ax, loc=(1.05, .8)):
+    """
+
+    Parameters
+    ----------
+    ax :
+        
+
+    Returns
+    -------
+
+    
+    """
+    handles, labels = ax.get_legend_handles_labels()
+    unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels))
+              if l not in labels[:i]]
+    ax.legend(*zip(*unique), title='', loc=loc)
+
+
 def swarmviolin(data,
                 x,
                 y,
@@ -559,24 +578,7 @@ def swarmviolin(data,
                           ax=ax,
                           **swarmplot_kwargs)
 
-    def legend_without_duplicate_labels(ax):
-        """
-
-        Parameters
-        ----------
-        ax :
-            
-
-        Returns
-        -------
-
-        
-        """
-        handles, labels = ax.get_legend_handles_labels()
-        unique = [(h, l) for i, (h, l) in enumerate(zip(handles, labels))
-                  if l not in labels[:i]]
-        ax.legend(*zip(*unique), title='', loc=(1.05, .8))
-
+    from panopticon.visualization import legend_without_duplicate_labels
     legend_without_duplicate_labels(ax)
     if annotate_hue_pvalues or annotate_hue_effect_size or annotate_hue_n and len(
             custom_annotation_dict.keys()) == 0:
@@ -745,6 +747,9 @@ def swarmviolin(data,
                 yoffsets.append(collection.get_offsets()[:, 1])
             else:
                 raise Exception('Collection offsets unfamiliar type')
+
+
+#        print(xoffsets)
         xoffsets = np.vstack(xoffsets)
         yoffsets = np.vstack(yoffsets)
         offset_df = pd.DataFrame(groups, columns=['group'])
@@ -752,9 +757,9 @@ def swarmviolin(data,
             offset_df['{}_x'.format(i)] = xoffsets[:, i]
             offset_df['{}_y'.format(i)] = yoffsets[:, i]
             if (hue is not None) and only_plot_hue_pairing:
-                for j in range(0,xoffsets.shape[0],2):
-                    ax.plot([xoffsets[j, i],xoffsets[j+1,i]],
-                            [yoffsets[j, i],yoffsets[j+1,i]],
+                for j in range(0, xoffsets.shape[0], 2):
+                    ax.plot([xoffsets[j, i], xoffsets[j + 1, i]],
+                            [yoffsets[j, i], yoffsets[j + 1, i]],
                             color='k',
                             alpha=0.1,
                             ls='--')
@@ -1766,13 +1771,16 @@ def cluster_enrichment_heatmap(x,
     if (heatmap_shading_key not in cluster_enrichment_dataframes._fields):
         raise Exception("heatmap_shading key must be one of {}".format(
             cluster_enrichment_dataframes._fields))
-    if (annotation_key not in cluster_enrichment_dataframes._fields):
+    if (annotation_key not in cluster_enrichment_dataframes._fields) and (annotation_key is not None):
         raise Exception("annotation_key key must be one of {}".format(
             cluster_enrichment_dataframes._fields))
-
+    if annotation_key is not None:
+        annot=cluster_enrichment_dataframes._asdict()[annotation_key]
+    else:
+        annot=None
     sns.heatmap(cluster_enrichment_dataframes._asdict()[heatmap_shading_key],
                 cmap='Blues',
-                annot=cluster_enrichment_dataframes._asdict()[annotation_key],
+                annot=annot,
                 cbar=False,
                 vmin=0,
                 vmax=1,
@@ -1816,6 +1824,7 @@ def cluster_enrichment_heatmap(x,
             plt.savefig(output)
     if show:
         plt.show()
+    return fig
 
 
 def expand_value_counts(df, counts_col, scale=500):
@@ -1913,7 +1922,13 @@ def plot_dot_plot(loom,
                   gene_ra_name='gene',
                   scale=100,
                   figsize=(4, 15),
-                  cbar_label='expression/module score (min-max normalized)'):
+                  dot_size_mode='FractionNonzero',
+                  cbar_label='expression/module score (min-max normalized)',
+                  orientation='horizontal',
+                  cmap='coolwarm',
+                  cbar_range='zero_centered',
+                  x_column_attribute_sortkey=None,
+                  legend_bbox_to_anchor=(-.05,1)):
     if x_column_attribute not in loom.ca.keys():
         raise Exception(
             "x_column_attribute not a column attribute of loomfile")
@@ -1924,6 +1939,10 @@ def plot_dot_plot(loom,
     import numpy as np
     from tqdm import tqdm
     import matplotlib.pyplot as plt
+    if dot_size_mode not in ['FractionNonzero', 'MinMaxNormalization']:
+        raise Exception(
+            'dot_size_mode must be one of "FractionNonzero" or "MinMaxNormalization"'
+        )
 
     df = pd.DataFrame(loom.ca[x_column_attribute],
                       columns=[x_column_attribute])
@@ -1935,70 +1954,245 @@ def plot_dot_plot(loom,
             else:
                 igene = np.where(loom.ra[gene_ra_name] == gene)[0]
             df[gene] = loom[layername][igene, :].sum(axis=0)
+            if dot_size_mode == 'FractionNonzero':
+                if gene + '_fraction' in df.columns:
+                    raise Exception(
+                        '"{}" already one of the designated column attributes'.
+                        format(gene + '_fraction'))
+                df[gene + '_fraction'] = df[gene] > 0
     if y_column_attributes is not None:
         for y_column_attribute in y_column_attributes:
             if y_column_attribute not in loom.ca.keys():
                 raise Exception(
                     "{} not in loom.ca.keys()".format(y_column_attribute))
             df[y_column_attribute] = loom.ca[y_column_attribute]
+            if dot_size_mode == 'FractionNonzero':
+                if y_column_attribute + '_fraction' in df.columns:
+                    raise Exception(
+                        '"{}" already one of the designated column attributes'.
+                        format(y_column_attribute + '_fraction'))
+                df[y_column_attribute +
+                   '_fraction'] = df[y_column_attribute] > 0
     df = df[~df[x_column_attribute].isin(x_column_blacklist)]
     df = df.groupby(x_column_attribute).mean()
+    df = df.sort_index(key=x_column_attribute_sortkey)
     fig, (ax, cax) = plt.subplots(
         1,
         2,
         figsize=figsize,
         gridspec_kw={
-            'width_ratios': [20, 1],
+            'width_ratios': [100, 1],
             'wspace': 0.05
         },
     )
-    #markers = np.hstack([diffex[key][(~diffex[key]['gene'].str.startswith('MT')) & (~diffex[key]['gene'].str.startswith('OLMALINC')) & (~diffex[key]['gene'].str.startswith('MALAT')) & (~diffex[key]['gene'].apply(lambda x: '.' in x)) ].query('MeanExpr1 > MeanExpr2')['gene'].head(topn).values for key in diffex.keys()])
-    key2x = {key: x for key, x in zip(df.index.values, range(df.shape[0]))}
-    marker2y = {
-        marker: x
-        for marker, x in zip(df.columns, range(len(df.columns)))
-    }
-    exprs = []
-    for col in tqdm(df.columns):
-        for key in [key for key in df.index.values]:
-            exprs.append(df.loc[key][col])
+    #if orientation
 
-    for col in df.columns:
-        exprs = []
-        for key in [key for key in df.index.values]:
-            exprs.append(df.loc[key][col])
-        for key in [key for key in df.index.values]:
-            expr = df.loc[key][col]
-            sc = ax.scatter(key2x[key],
-                            marker2y[col],
-                            s=(expr - np.min(exprs)) * scale + 1e-9,
-                            cmap='coolwarm',
-                            c=expr,
-                            vmin=np.min(exprs),
-                            vmax=np.max(exprs))
+    if dot_size_mode == 'FractionNonzero':
 
-    ax.set_yticklabels([x.split('_With')[0] for x in df.columns])
-    ax.set_yticks(range(len(df.columns)))
+        relevant_columns = [
+            x for x in df.columns if not x.endswith('_fraction')
+        ]
+        #if orientation=='vertical':
+        key2x = {key: x for key, x in zip(df.index.values, range(df.shape[0]))}
+        marker2y = {
+            marker: x
+            for marker, x in zip(relevant_columns, range(len(
+                relevant_columns)))
+        }
 
-    ax.set_xticks(np.array(range(len(df.index.values))))
-    ax.set_xticklabels(list(df.index.values))
-    ax.set_xlabel('Cluster')
-    ax.set_ylim([-0.5, len(df.columns) - 0.5])
-    ax.set_xlim([-0.5, len(df.index) - 0.5])
-    #for i in np.arange(-0.5,len(markers)-0.5,topn)[1::]:
-    #    plt.axhline(ls='--',y=i,color='k')
-    #if flag:
-    cbar = plt.colorbar(
-        sc,
-        aspect=30,
-        cax=cax,
-    )
-    cbar.set_label(cbar_label, rotation=90, fontsize=17)
-    yticklabels = cbar.ax.get_yticklabels()
-    cax_ylims = cax.get_ylim()
-    cbar.ax.set_yticks(cax_ylims)
-    cbar.ax.set_yticklabels([0, 1])
+        exprs = [
+        ]  # this loops over all expression values in order to create a consistent color
+        for col in tqdm(relevant_columns):
+            for key in [key for key in df.index.values]:
+                exprs.append(df.loc[key][col])
+        if cbar_range == 'zero_centered':
+            vmin = np.min([np.min(exprs), -np.max(exprs)])
+            vmax = np.max([-np.min(exprs), np.max(exprs)])
+        elif cbar_range == 'zero_based':
+            vmin = 0
+            vmax = np.max(exprs)
+        elif cbar_range == 'data_range':
+            vmin = np.min(exprs)
+            vmax = np.max(exprs)
+        else:
+            raise Exception(
+                'cbar_range must be in ["zero_centered","zero_based","data_range"]'
+            )
+        for col in relevant_columns:
+            for key in [key for key in df.index.values]:
+                expr = df.loc[key][col]
+                frac = df.loc[key][col + '_fraction']
+                if orientation == 'vertical':
+                    x = key2x[key]
+                    y = marker2y[col]
+                elif orientation == 'horizontal':
+                    y = key2x[key]
+                    x = marker2y[col]
+                #print(frac*scale)
+                sc = ax.scatter(x,
+                                y,
+                                s=frac * scale + 1e-9,
+                                cmap=cmap,
+                                c=expr,
+                                vmin=vmin,
+                                vmax=vmax,
+                                edgecolors='black',
+                                linewidth=0.1)
+    elif dot_size_mode == 'MinMaxNormalization':
+        relevant_columns = df.columns
+        key2x = {key: x for key, x in zip(df.index.values, range(df.shape[0]))}
+        marker2y = {
+            marker: x
+            for marker, x in zip(relevant_columns, range(len(
+                relevant_columns)))
+        }
+
+        exprs = [
+        ]  # this loops over all expression values in order to create a consistent color
+        for col in tqdm(relevant_columns):
+            for key in [key for key in df.index.values]:
+                exprs.append(df.loc[key][col])
+        if cbar_range == 'zero_centered':
+            vmin = np.min([np.min(exprs), -np.max(exprs)])
+            vmax = np.max([-np.min(exprs), np.max(exprs)])
+        elif cbar_range == 'zero_based':
+            vmin = 0
+            vmax = np.max(exprs)
+        elif cbar_range == 'data_range':
+            vmin = np.min(exprs)
+            vmax = np.max(exprs)
+        else:
+            raise Exception(
+                'cbar_range must be in ["zero_centered","zero_based","data_range"]'
+            )
+        for col in relevant_columns:
+            for key in [key for key in df.index.values]:
+
+                expr = df.loc[key][col]
+                if orientation == 'vertical':
+                    x = key2x[key]
+                    y = marker2y[col]
+                elif orientation == 'horizontal':
+                    y = key2x[key]
+                    x = marker2y[col]
+                sc = ax.scatter(x,
+                                y,
+                                s=(expr - np.min(exprs)) * scale + 1e-9,
+                                cmap=cmap,
+                                c=expr,
+                                vmin=vmin,
+                                vmax=vmax,
+                                edgecolors='black',
+                                linewidth=0.1)
+    if orientation == 'vertical':
+        ax.set_yticklabels([x.split('_With')[0] for x in relevant_columns])
+        ax.set_yticks(range(len(relevant_columns)))
+
+        ax.set_xticks(np.array(range(len(df.index.values))))
+        ax.set_xticklabels(list(df.index.values))
+        ax.set_xlabel('Cluster')
+        ax.set_ylim([-0.5, len(relevant_columns) - 0.5])
+        ax.set_xlim([-0.5, len(df.index) - 0.5])
+        #for i in np.arange(-0.5,len(markers)-0.5,topn)[1::]:
+        #    plt.axhline(ls='--',y=i,color='k')
+        #if flag:
+        cbar = plt.colorbar(
+            sc,
+            aspect=30,
+            cax=cax,
+        )
+        cbar.set_label(cbar_label, rotation=90, fontsize=17)
+        yticklabels = cbar.ax.get_yticklabels()
+        cax_ylims = cax.get_ylim()
+        cbar.ax.set_yticks(cax_ylims)
+        cbar.ax.set_yticklabels([0, 1])
+    elif orientation == 'horizontal':
+        ax.set_xticks(range(len(relevant_columns)))
+
+        ax.set_xticklabels([x.split('_With')[0] for x in relevant_columns])
+
+        ax.set_yticks(np.array(range(len(df.index.values))))
+        ax.set_yticklabels(list(df.index.values))
+        ax.set_ylabel('Cluster')
+
+        #for i in np.arange(-0.5,len(markers)-0.5,topn)[1::]:
+        #    plt.axhline(ls='--',y=i,color='k')
+        #if flag:
+        cbar = plt.colorbar(
+            sc,
+            aspect=30,
+            cax=cax,
+        )
+        cbar.set_label(cbar_label, rotation=0, fontsize=14, va='center')
+        yticklabels = cbar.ax.get_xticklabels()
+        cax_ylims = cax.get_xlim()
+        cbar.ax.set_xticks(cax_ylims)
+        cbar.ax.set_xticklabels([])
+        from matplotlib import ticker
+
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(2))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
+        print(ax.get_xminorticklabels())
+        ax.xaxis.set_minor_formatter(
+            ticker.FixedFormatter([''] +
+                                  relevant_columns[1:(len(relevant_columns) +
+                                                      1):2]))
+
+        ax.tick_params(axis='x', which='minor', length=15)
+        ax.tick_params(axis='x', which='both', color='lightgrey')
+        ax.autoscale(enable=True, axis='x', tight=True)
+        ax.set_xlim([-0.5, len(relevant_columns) - 0.5])
+        ax.set_ylim([-0.5, len(df.index) - 0.5])
+        ax.set_ylabel('')
+        #plt.ylabel('y_description', loc='right')
+
+    import matplotlib.patches as mpatches
+    from matplotlib.lines import Line2D
+    handles, labels = ax.get_legend_handles_labels()
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    if dot_size_mode == 'FractionNonzero':
+        import seaborn as sns
+        points = []
+        for sizereference in [0.05, 0.5, 0.9]:
+            points.append(
+                Line2D(
+                    [0],
+                    [0],
+                    label='{:.0%}'.format(sizereference),
+                    marker='o',
+                    markersize=np.sqrt(sizereference * scale + 1e-9),
+                    markeredgewidth=0.1,
+                    markeredgecolor='k',
+                    markerfacecolor=sns.color_palette('coolwarm')[-2],
+                    linestyle='',
+                ))
+        # add manual symbols to auto legend
+        handles.extend(points)
+
+        ax.legend(
+            handles=handles,
+            bbox_to_anchor=legend_bbox_to_anchor,
+            title='Fraction of cells with\npositive expression',
+            borderpad=1,
+            labelspacing=1.5,
+        )
+    elif dot_size_mode == 'MinMaxNormalization':
+        point1 = Line2D([0], [0],
+                        label='manual point',
+                        marker='o',
+                        markersize=10,
+                        markeredgecolor='r',
+                        markerfacecolor='k',
+                        linestyle='')
+
+        # add manual symbols to auto legend
+        handles.extend([point1])
+
+        ax.legend(handles=handles, bbox_to_anchor=legend_bbox_to_anchor, title='')
     plt.tight_layout()
+
     return fig
 
 
