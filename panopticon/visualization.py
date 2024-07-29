@@ -459,6 +459,12 @@ def swarmviolin(data,
                 annotate_hue_pvalue_fmt_str='p: {0:.2f}',
                 annotate_hue_effect_size_fmt_str='es: {0:.2f}',
                 annotate_hue_n_fmt_str='n: {}, {}',
+                annotate_pvalue_vs_all=False,
+                annotate_effect_size_vs_all=False,
+                annotate_n=False,
+                annotate_pvalue_vs_all_fmt_str='p: {0:.2f}',
+                annotate_effect_size_vs_all_fmt_str='es: {0:.2f}',
+                annotate_n_fmt_str='n: {}',
                 paired_hue_matching_col=None,
                 effect_size='cohensd',
                 pvalue='mannwhitney',
@@ -685,6 +691,77 @@ def swarmviolin(data,
                 ),
                             ha='left',
                             va='center')
+    if annotate_pvalue_vs_all or annotate_effect_size_vs_all or annotate_n and len(
+            custom_annotation_dict.keys()) == 0:
+        from scipy.stats import mannwhitneyu, ttest_ind
+        if np.issubdtype(data[y].dtype, np.number):
+            category_col = x
+            continuous_col = y
+            vertical_violins = True
+            ticklabels = ax.get_xmajorticklabels()
+        else:
+            category_col = y
+            continuous_col = x
+            vertical_violins = False
+            ticklabels = ax.get_ymajorticklabels()
+        for ticklabel in ticklabels:
+            category = ticklabel.get_text()
+            if pvalue in ['mannwhitney', 'ttest']:
+                a = data[data[category_col] == category][continuous_col].values
+                b = data[data[category_col] != category][continuous_col].values
+                a = np.array([x for x in a if not np.isnan(x)])
+                b = np.array([x for x in b if not np.isnan(x)])
+                mw = mannwhitneyu(a, b, alternative='two-sided')
+                tt = ttest_ind(a, b)
+                if pvalue == 'mannwhitney':
+                    pval = mw.pvalue
+                elif pvalue == 'ttest':
+                    pval = tt[1]
+            else:
+                raise Exception(
+                    "`pvalue` must be either \'mannwhitney\' or \'ttest\' ")
+
+            if effect_size == 'cohensd':
+                from panopticon.utilities import cohensd
+                es = cohensd(a, b)
+            elif effect_size == 'cles':
+                es = mw.statistic / len(a) / len(b)
+            else:
+                raise Exception(
+                    "effect_size must be either \'cohensd\' or \'cles\'")
+            annotation_string = ''
+            if vertical_violins:
+                if annotate_pvalue_vs_all:
+                    annotation_string += annotate_pvalue_vs_all_fmt_str.format(
+                        pval) + '\n'
+                if annotate_effect_size_vs_all:
+                    annotation_string += annotate_effect_size_vs_all_fmt_str.format(
+                        es) + '\n'
+                if annotate_n:
+                    annotation_string += annotate_n_fmt_str.format(
+                        len(a)) + '\n'
+                ax.annotate(
+                    annotation_string,
+                    (ticklabel.get_position()[0], np.max(a)),
+                    ha='center',
+                    va='bottom')
+            else:
+                if annotate_pvalue_vs_all:
+                    annotation_string += ' ' + annotate_pvalue_vs_all_fmt_str.format(
+                        pval)
+                if annotate_effect_size_vs_all:
+                    annotation_string += '\n ' + annotate_effect_size_vs_all_fmt_str.format(
+                        es)
+                if annotate_n:
+                    annotation_string += '\n' + annotate_n_fmt_str.format(
+                        len(a))
+
+                ax.annotate(annotation_string, (
+                    np.max(a),
+                    ticklabel.get_position()[1],
+                ),
+                            ha='left',
+                            va='center',annotation_clip=False)
     if len(custom_annotation_dict.keys()) > 0:
         if np.issubdtype(data[y].dtype, np.number):
             category_col = x
@@ -1771,13 +1848,15 @@ def cluster_enrichment_heatmap(x,
     if (heatmap_shading_key not in cluster_enrichment_dataframes._fields):
         raise Exception("heatmap_shading key must be one of {}".format(
             cluster_enrichment_dataframes._fields))
-    if (annotation_key not in cluster_enrichment_dataframes._fields) and (annotation_key is not None):
+    if (annotation_key
+            not in cluster_enrichment_dataframes._fields) and (annotation_key
+                                                               is not None):
         raise Exception("annotation_key key must be one of {}".format(
             cluster_enrichment_dataframes._fields))
     if annotation_key is not None:
-        annot=cluster_enrichment_dataframes._asdict()[annotation_key]
+        annot = cluster_enrichment_dataframes._asdict()[annotation_key]
     else:
-        annot=None
+        annot = None
     sns.heatmap(cluster_enrichment_dataframes._asdict()[heatmap_shading_key],
                 cmap='Blues',
                 annot=annot,
@@ -1928,7 +2007,7 @@ def plot_dot_plot(loom,
                   cmap='coolwarm',
                   cbar_range='zero_centered',
                   x_column_attribute_sortkey=None,
-                  legend_bbox_to_anchor=(-.05,1)):
+                  legend_bbox_to_anchor=(-.05, 1)):
     if x_column_attribute not in loom.ca.keys():
         raise Exception(
             "x_column_attribute not a column attribute of loomfile")
@@ -2190,7 +2269,9 @@ def plot_dot_plot(loom,
         # add manual symbols to auto legend
         handles.extend([point1])
 
-        ax.legend(handles=handles, bbox_to_anchor=legend_bbox_to_anchor, title='')
+        ax.legend(handles=handles,
+                  bbox_to_anchor=legend_bbox_to_anchor,
+                  title='')
     plt.tight_layout()
 
     return fig
