@@ -651,7 +651,7 @@ def get_subclustering(X,
             n_clusters=2,
             memory=clusteringcachedir,
             metric='cosine',
-#            affinity='cosine',
+            #            affinity='cosine',
             compute_full_tree=True,
             linkage=linkage)
         scores = []
@@ -816,8 +816,10 @@ def generate_clustering(loom,
                                       n_components=n_components)
             if optimized_leiden:
                 from panopticon.clustering import silhouette_optimized_leiden
-                max_neighbors = np.min([2**int(np.log(X.shape[0])/np.log(2)),2048])
-                leiden_output = silhouette_optimized_leiden(X,max_neighbors=max_neighbors)
+                max_neighbors = np.min(
+                    [2**int(np.log(X.shape[0]) / np.log(2)), 2048])
+                leiden_output = silhouette_optimized_leiden(
+                    X, max_neighbors=max_neighbors)
 
                 loom.attrs[
                     'OptimizedLeidenClusteringNNeighbors'] = leiden_output.nneighbors
@@ -1488,8 +1490,6 @@ def scrna2tracer_mapping(scrna_cellnames, tracer_cellnames):
     return tracer2scrna_name
 
 
-
-
 def get_differential_expression_over_continuum(loom,
                                                layer,
                                                mask,
@@ -1734,7 +1734,7 @@ def get_enrichment_score(genes,
         from rpy2.robjects import vectors
         from rpy2.robjects import pandas2ri
         import rpy2.rinterface
-#        rpy2.rinterface.set_initoptions(('rpy2', '--verbose', '--no-save'))
+        #        rpy2.rinterface.set_initoptions(('rpy2', '--verbose', '--no-save'))
 
         pandas2ri.activate()
         fgsea = importr('fgsea')
@@ -1751,12 +1751,16 @@ def get_enrichment_score(genes,
         es = out.T['ES'].values[0]
         pval = out.T['pval'].values[0]
         #running_es = None
-        running_es = get_enrichment_score(genes, geneset, presorted=True, use_fgsea=False,return_pvalue=False, return_es_curve=True).enrichment_score_curve
-#        import rpy2.robjects as ro # this may help with the freezing problem?? S Markson 8 May 2024
-#        ro.r.q(save="no")
-        return enrichment_score_output(es,
-                                       running_es,
-                                       pval)
+        running_es = get_enrichment_score(
+            genes,
+            geneset,
+            presorted=True,
+            use_fgsea=False,
+            return_pvalue=False,
+            return_es_curve=True).enrichment_score_curve
+        #        import rpy2.robjects as ro # this may help with the freezing problem?? S Markson 8 May 2024
+        #        ro.r.q(save="no")
+        return enrichment_score_output(es, running_es, pval)
 
     else:
         running_es = []
@@ -2145,11 +2149,11 @@ def get_cluster_differential_expression(loom,
     if gene_subset_mask is not None:
         genelist = loom.ra['gene'][gene_subset_mask]
         start = time()
-        data1 = loom[layername][:, mask1.nonzero()[0]][gene_subset_mask,:]
+        data1 = loom[layername][:, mask1.nonzero()[0]][gene_subset_mask, :]
         if verbose:
             print('First matrix extracted in', time() - start, 'seconds')
         start = time()
-        data2 = loom[layername][:, mask2.nonzero()[0]][gene_subset_mask,:]
+        data2 = loom[layername][:, mask2.nonzero()[0]][gene_subset_mask, :]
         if verbose:
             print('Second matrix extracted', time() - start, 'seconds')
     else:
@@ -2207,4 +2211,3 @@ def get_cluster_differential_expression(loom,
     output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'],
                                                  is_sorted=False)[1]
     return output
-
