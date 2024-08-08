@@ -740,11 +740,10 @@ def swarmviolin(data,
                 if annotate_n:
                     annotation_string += annotate_n_fmt_str.format(
                         len(a)) + '\n'
-                ax.annotate(
-                    annotation_string,
-                    (ticklabel.get_position()[0], np.max(a)),
-                    ha='center',
-                    va='bottom')
+                ax.annotate(annotation_string,
+                            (ticklabel.get_position()[0], np.max(a)),
+                            ha='center',
+                            va='bottom')
             else:
                 if annotate_pvalue_vs_all:
                     annotation_string += ' ' + annotate_pvalue_vs_all_fmt_str.format(
@@ -761,7 +760,8 @@ def swarmviolin(data,
                     ticklabel.get_position()[1],
                 ),
                             ha='left',
-                            va='center',annotation_clip=False)
+                            va='center',
+                            annotation_clip=False)
     if len(custom_annotation_dict.keys()) > 0:
         if np.issubdtype(data[y].dtype, np.number):
             category_col = x

@@ -73,146 +73,45 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
     "Merges a panopticon-compatible loom file containing gene expressing with 10x V(D)J information"
 )
 @click.argument('gex_loom', type=click.Path(exists=True))
-@click.argument('vdj_dir',type=click.Path(exists=True))
+@click.argument('vdj_dir', type=click.Path(exists=True))
 @click.option(
     '--barcode_ca',
-    help='Specifies the columna attribute in `gex_loom` corresponding to the cell barcode; this will be used to merge gex with V(D)J data. Default is "cellname"',
+    help=
+    'Specifies the columna attribute in `gex_loom` corresponding to the cell barcode; this will be used to merge gex with V(D)J data. Default is "cellname"',
     default='cellname')
 @click.option(
     '--overwrite',
-    help='If unset, will raise Exception is column attribute associated with V(D)J already exist in loom; if set, these will be overwritten. ',
+    help=
+    'If unset, will raise Exception is column attribute associated with V(D)J already exist in loom; if set, these will be overwritten. ',
     is_flag=True)
-def incorporate_vdj(gex_loom, vdj_dir,barcode_ca,overwrite):
+def incorporate_vdj(gex_loom, vdj_dir, barcode_ca, overwrite):
     from panopticon.utilities import incorporate_10x_vdj
     import os
     filtered_contig_annotations_csv = None
-    for root, dirs, files in os.walk(vdj_dir,topdown=False):
+    for root, dirs, files in os.walk(vdj_dir, topdown=False):
         if 'filtered_contig_annotations.csv' in files:
-            filtered_contig_annotations_csv = os.path.join(root, 'filtered_contig_annotations.csv')
+            filtered_contig_annotations_csv = os.path.join(
+                root, 'filtered_contig_annotations.csv')
             break
-#    if os.path.exists(vdj_dir+"/outs/filtered_contig_annotations.csv"):
     if filtered_contig_annotations_csv is None:
-#        filtered_contig_annotations_csv = vdj_dir+"/outs/filtered_contig_annotations.csv"
-#    else:
-        raise Exception("{0} does not appear to be a valid 10x VDJ output directory; {0}/outs/filtered_contig_annotations.csv is missing".format(vdj_dir))
+        raise Exception(
+            "{0} does not appear to be a valid 10x VDJ output directory; {0}/outs/filtered_contig_annotations.csv is missing"
+            .format(vdj_dir))
     incorporate_10x_vdj(gex_loom,
-                   filtered_contig_annotations_csv,
-                   barcode_ca=barcode_ca,
-                   overwrite=overwrite)
+                        filtered_contig_annotations_csv,
+                        barcode_ca=barcode_ca,
+                        overwrite=overwrite)
 
 
+@cli.command(
+    help="Runs the ReapTEC workflow (https://doi.org/10.1126/science.add8394)")
+@click.argument('fastq_dir', type=click.Path(exists=True))
+@click.argument('cellranger_output_dir', type=click.Path(exists=True))
+@click.argument('star_reference_dir', type=click.Path(exists=True))
+def reaptec(fastq_dir, cellranger_output_dir, star_reference_dir):
+    from panopticon.commands.reaptec import reaptec_main
+    reaptec_main(fastq_dir, cellranger_output_dir, star_reference_dir)
 
-#@cli.command(help="Plots the UMI curve from a 10x hdf5 file (e.g. raw_feature_bc_matrix)")
-#@click.argument('h5file', type=click.Path(exists=True))
-#@click.option(
-#    '--save_to_file',
-#    default=None,
-#    help='save output to file using matplotlib.pyplot.savefig' )
-#def plot_UMI_curve_from_10x_h5(h5file, save_to_file):
-#    from panopticon.utilities import get_UMI_curve_from_10x_h5
-#    get_UMI_curve_from_10x_h5(h5file, save_to_file)
-#@cli.command(short_help="Computes the Windowed Mean Expression (WME) and performs a umap clustering thereof")
-#@click.option(
-#    '--patient', help='selected patient number', required=True, multiple=True)
-#@click.option(
-#    '--cell_type',
-#    help='name of cell type of interest in the metadata')
-#@click.option(
-#    '--complexity_cutoff', help='Cutoff on cell complexity (i.e., include only cells with complexity equal to or above this value)', type=int, default=0)
-#@click.option(
-#        '--n_clusters', help='Number of clusters to look for', default=1, type=int)
-#@click.option(
-#        '--figure_output', help='Output file for umap, should end in e.g. .pdf, .jpg, .png, .svg', default=None)
-#@click.option(
-#        '--raw_data_output', help='Output file for raw data from umap, defaults to csv unless argument ends in tsv, in which case output will be tab-delimited', default=None)
-#@click.argument('loomfile')
-#def wmec(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output):
-#    from panopticon.commands import windowed_mean_expression_clustering as wmec
-#    wmec.windowed_mean_expression_clustering_main(loomfile, patient, cell_type, complexity_cutoff, n_clusters, figure_output, raw_data_output)
-#
-#@cli.command(short_help="For checking the malignancy status of cells with a paired DNA-derived"
-#                        "segmentation file (returns a Mann-Whitney Z score and the p-value for"
-#                        "the null hypothesis that there is no positive trend")
-#@click.option(
-#        '--seg_file',
-#        help='path and filename of the segmentation file',
-#        required=True)
-#@click.option(
-#        '--patient', help='selected patient number', required=True)
-#@click.option(
-#        '--time_point', help='selected time point', type=int)
-#@click.option(
-#        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
-#@click.argument('loomfile')
-#def rna_dna_correspondence(loomfile, seg_file, patient, time_point, output):
-#    if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
-#        raise Exception("File output must be in matplotlib-compatible format")
-#    from panopticon.commands import rna_dna_correspondence as rdc
-#    rdc.rna_dna_correspondence_main(loomfile, seg_file, 'patient_ID', patient, time_point, output=output)
-#
-#@cli.group(short_help="A well-functioning surveillance state requires some bureaucracy.")
-#def book():
-#    pass
-#
-#@book.command()
-#def scrna_wizard():
-#    """
-#    A prompt-guided approach to generating a panopticon-compatible .loom file
-#    """
-#    from panopticon.commands import bookem
-#    bookem.scrna_wizard_main()
-#
-#@book.command()
-#def cnv_wizard():
-#    """
-#    A prompt-guided approach to generating a panopticon-compatible .loom file
-#    """
-#    from panopticon.commands import bookem
-#    bookem.cnv_wizard_main()
-#
-#@book.command()
-#@click.argument('loomfile')
-#def gene_position_augmentation(loomfile):
-#    from panopticon.commands import bookem
-#    bookem.gene_position_augmentation_main(loomfile)
-#
-#
-#@book.command()
-#@click.option(
-#        '--signaturefile',
-#        help='gene signature file (headerless, single column)')
-#@click.option(
-#        '--loomfile',
-#        help='gene signature file (headerless, single column)')
-#def gene_signature_wizard(loomfile, signaturefile):
-#    """
-#    A prompt-guide approach to augmenting your loom file with gene signatures of interest.
-#    """
-#    bookem.gene_signature_wizard_main(loomfile=loomfile, signaturefile=signaturefile)
-#
-#
-#
-#@cli.command()
-#@click.option(
-#        '--seg',
-#        help='name of the segmentation',multiple=True, required=True)
-#@click.option(
-#        '--query', help='query on loom file', multiple=True)
-#@click.option(
-#        '--output', help='output file name (must be matplotlib-compatible e.g. pdf, png, jpg)', type=str)
-#@click.option(
-#        '--stratifyby', help='stratify results by some metadata column (e.g. time_point)', type=str)
-#@click.option(
-#        '--signature', help='Examine with gene signature (a la AddModuleScore)', type=str)
-#@click.argument('loomfile')
-#def multireference_dna_correspondence(loomfile, query, seg, output, stratifyby, signature):
-#    if output is not None:
-#        if output.split('.')[-1] not in ['ps', 'pdf', 'eps', 'pgf', 'png', 'raw', 'rgba', 'svg', 'svgz', 'jpeg', 'jpg', 'tif', 'tiff']:
-#            raise Exception("File output must be in matplotlib-compatible format")
-#    from panopticon.commands import multireference_dna_correspondence as mdc
-#    mdc.multireference_dna_correspondence_main(loomfile, query, seg, output=output, stratifyby=stratifyby, modulescore_signature=signature)
-#
-#
-#
+
 if __name__ == '__main__':
     cli()
