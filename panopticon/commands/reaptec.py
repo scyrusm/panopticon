@@ -9,7 +9,7 @@ def reaptec_main(fastq_dir, cellranger_output_dir, star_reference_dir):
     os.system(command)
 
     # perform whitelisted star mapping
-    for fastq in [x for x in os.listdir(fastq_dir) if 'R1' in fastq]:
+    for fastq in [x for x in os.listdir(fastq_dir) if 'R1' in x]:
         command = "STAR --runThreadN 32 --genomeDIR {} --readFilesIn {} {} --solocCBwhitelist {} --soloBarcodeMate 1 --clip5bNbases 39 0 ".format(
             star_reference_dir, fastq, fastq.replace('R1', 'R2'),
             cellranger_output_dir +
