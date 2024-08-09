@@ -3,8 +3,8 @@ import os
 
 
 def reaptec_main(fastq_dir, cellranger_output_dir, star_reference_dir,
-                 genome_url="http://ftp.ensembl.org/pub/release-111/gtf/mus_musculus/Mus_musculus.GRCm39.111.chr.gtf.gz",
-                 reference_url="http://ftp.ensembl.org/pub/release-111/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz"):
+                 reference_url="http://ftp.ensembl.org/pub/release-111/gtf/mus_musculus/Mus_musculus.GRCm39.111.chr.gtf.gz",
+                 genome_url="http://ftp.ensembl.org/pub/release-111/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz"):
     # create whitelist
     command = "zcat {0}/outs/filtered_feature_bc_matrix/barcodes.tsv.gz | sed -e 's/-1//g' > {0}/outs/filtered_feature_bc_matrix/barcode_whitelist.txt".format(
         cellranger_output_dir)
