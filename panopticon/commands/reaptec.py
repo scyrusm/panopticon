@@ -3,21 +3,36 @@ import os
 
 
 def reaptec_main(fastq_dir, cellranger_output_dir, star_reference_dir,
-                 genome_url, reference_url):
+                 genome_url="http://ftp.ensembl.org/pub/release-111/gtf/mus_musculus/Mus_musculus.GRCm39.111.chr.gtf.gz",
+                 reference_url="http://ftp.ensembl.org/pub/release-111/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz"):
     # create whitelist
     command = "zcat {0}/outs/filtered_feature_bc_matrix/barcodes.tsv.gz | sed -e 's/-1//g' > {0}/outs/filtered_feature_bc_matrix/barcode_whitelist.txt".format(
         cellranger_output_dir)
     os.system(command)
 
     # create reference
-    command = "wget http://ftp.ensembl.org/pub/release-111/gtf/mus_musculus/Mus_musculus.GRCm39.111.chr.gtf.gz"
+    command = "wget {}".format(reference_url)
     print(command)
     os.system(command)
-    command = "wget http://ftp.ensembl.org/pub/release-111/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz"
+
+    command = "wget {}".format(genome_url)
     print(command)
     os.system(command)
-    command = "STAR --runThreadN 20 --runMode genomeGenerate --genomeDir ./GRCm39_index --genomeFastaFiles Mus_musculus.GRCm39.dna.primary_assembly.fa --sjdbGTFfile _musculus.GRCm39.111.chr.gtf --sjdbOverhang 149"
+
+    reference_file = reference_url.split('/')[-1]
+    command = "gunzip {}".format(reference_file)
+    print(command)
     os.system(command)
+
+    genome_file = genome_url.split('/')[-1]
+    command = "gunzip {}".format(genome_file)
+    print(command)
+    os.system(command)
+
+    command = "STAR --runThreadN 20 --runMode genomeGenerate --genomeDir ./GRCm39_index --genomeFastaFiles {} --sjdbGTFfile {} --sjdbOverhang 149".format(genome_file, reference_file)
+    print(command)
+    os.system(command)
+
     # perform whitelisted star mapping
     for fastq in [x for x in os.listdir(fastq_dir) if 'R1' in x]:
         command = "STAR --runThreadN 32 --genomeDir {0} --readFilesIn {1}/{2} {1}/{3} --soloCBwhitelist {4} --soloBarcodeMate 1 --clip5pNbases 39 0 ".format(
