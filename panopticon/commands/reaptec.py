@@ -55,7 +55,7 @@ def reaptec_main(
 
     for fastq in [x for x in os.listdir(fastq_dir) if 'R1' in x]:
         outfile_name_prefix = fastq.replace('.fastq.gz', '')
-        command = "STAR --runThreadN 32 --genomeDir {0} --readFilesIn {1}/{2} {1}/{3} --soloCBwhitelist {4} --soloBarcodeMate 1 --clip5pNbases 39 0 ".format(
+        command = "STAR --runThreadN 12 --genomeDir {0} --readFilesIn {1}/{2} {1}/{3} --soloCBwhitelist {4} --soloBarcodeMate 1 --clip5pNbases 39 0 ".format(
             star_reference_dir, fastq_dir, fastq, fastq.replace('R1', 'R2'),
             cellranger_output_dir +
             '/outs/filtered_feature_bc_matrix/barcode_whitelist.txt')
