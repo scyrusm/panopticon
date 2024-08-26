@@ -49,6 +49,10 @@ def reaptec_main(
         os.system(command)
 
     # perform whitelisted star mapping
+    command = "ulimit -n 3000"
+    print(command)
+    os.system(command)
+
     for fastq in [x for x in os.listdir(fastq_dir) if 'R1' in x]:
         outfile_name_prefix = fastq.replace('.fastq.gz', '')
         command = "STAR --runThreadN 32 --genomeDir {0} --readFilesIn {1}/{2} {1}/{3} --soloCBwhitelist {4} --soloBarcodeMate 1 --clip5pNbases 39 0 ".format(
@@ -58,7 +62,7 @@ def reaptec_main(
         command += "--readFilesCommand zcat --soloType CB_UMI_Simple --soloCBstart 1 --soloCBlen 16 --soloUMIstart 17 --soloUMIlen 10 --soloStrand Reverse --outFileNamePrefix {}".format(
             outfile_name_prefix)
         command += " --outSAMtype BAM SortedByCoordinate --soloCBmatchWLtype 1MM_multi_Nbase_pseudocounts --soloUMIdedup 1MM_Directional_UMItools --outSAMattributes NH HI nM AS CR UR CB UB GX GN sS sQ sM "
-        command += "--limitBAMsortRAM 60000000000"
+#        command += "--limitBAMsortRAM 60000000000" 
         print(command)
         os.system(command)
 
