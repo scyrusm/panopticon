@@ -43,7 +43,7 @@ def reaptec_main(
     genome_file = genome_file.replace('.gz','')
     
     if (not os.path.isdir(star_reference_dir)) or (not os.path.isfile('{}/{}'.format(star_reference_dir, 'genomeParameters.txt'))):
-        command = "STAR --runThreadN 20 --runMode genomeGenerate --genomeDir ./{} --genomeFastaFiles {} --sjdbGTFfile {} --sjdbOverhang 149 --limitGenomeGenerateRAM 16000000000".format(
+        command = "STAR --runThreadN 20 --runMode genomeGenerate --genomeDir ./{} --genomeFastaFiles {} --sjdbGTFfile {} --sjdbOverhang 149".format(
             star_reference_dir, genome_file, reference_file)
         print(command)
         os.system(command)
