@@ -90,7 +90,7 @@ def reaptec_main(
         # header
         outfile = '{0}_header.sam'.format(outfile_name_prefix)
         command = "samtools view -@ 12 -H {0}_unique_R1.bam > {0}_header.sam".format(
-                    outfile_name_prefix)
+            outfile_name_prefix)
         run_if_nullfile(command, outfile)
 
         # forward direction
@@ -112,7 +112,7 @@ def reaptec_main(
         outfile = "SoftclipG_{0}.bam".format(outfile_name_prefix)
         command = "cat {0}_header.sam {0}_SoftclipG_F.sam {0}_SoftclipG_R.sam ".format(
             outfile_name_prefix
-        ) + "| samtools sort -A 12 -O bam -o SoftclipG_{0}.bam".format(
+        ) + "| samtools sort -@ 12 -O bam -o SoftclipG_{0}.bam".format(
             outfile_name_prefix)
         run_if_nullfile(command, outfile)
 
@@ -122,19 +122,19 @@ def reaptec_main(
             outfile_name_prefix)
         run_if_nullfile(command, outfile)
 
-    # reads with cell barcodes corresponding to the list in step 2 are extracted
+        # reads with cell barcodes corresponding to the list in step 2 are extracted
         outfile = "{0}_cell_barcode.txt".format(outfile_name_prefix)
         command = "awk \'{print\"CB:Z:\"$1}\' " + "{0}_whitelist.txt > {0}_cell_barcode.txt".format(
             outfile_name_prefix)
         print(command)
         os.system(command)
-        command = "samtools view -A 12 -H SoftclipG_{0}_deduplicated.bam > SAM_header".format(
+        command = "samtools view -@ 12 -H SoftclipG_{0}_deduplicated.bam > SAM_header".format(
             outfile_name_prefix)
         print(command)
         os.system(command)
 
         # a count file was generated for each TSS using the bamToBed function in BEDTools
-        command = "samtools view -A 12 SoftClipG_{}_filtered.bam | ".format(
+        command = "samtools view -@ 12 SoftClipG_{}_filtered.bam | ".format(
             outfile_name_prefix
         ) + "awk \'BEGIN{OFS=\"\\t\"}{print $23}\' > " + "{}_cell_barcode_tmp.txt".format(
             outfile_name_prefix)
