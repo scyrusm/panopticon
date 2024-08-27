@@ -49,7 +49,7 @@ def reaptec_main(
         os.system(command)
 
     # perform whitelisted star mapping
-    command = "ulimit -n 8192"
+    command = "ulimit -n 16384" # adjusting ulimit is likely necessary, but can be done outside the panopticon reaptec run
     print(command)
     os.system(command)
 
@@ -63,34 +63,59 @@ def reaptec_main(
             outfile_name_prefix)
         command += " --outSAMtype BAM SortedByCoordinate --soloCBmatchWLtype 1MM_multi_Nbase_pseudocounts --soloUMIdedup 1MM_Directional_UMItools --outSAMattributes NH HI nM AS CR UR CB UB GX GN sS sQ sM "
 #        command += "--limitBAMsortRAM 60000000000" 
-        print(command)
-        os.system(command)
+        outfile = '{0}Aligned.sortedByCoord.out.bam'.format(outfile_name_prefix)
+        if not os.path.isfile(outfile)
+            if os.stat(outfile).st_size == 0:
+                print(command)
+                os.system(command)
 
         # extract only read 1 reads 
-        command = "samtools view -@ 12 -hbf 64 -q 255 {0}_Aligned.sortedByCoord.out.bam > {0}_unique_R1.bam".format(outfile_name_prefix)
-        print(command)
-        os.system(command)
+        outfile = '{0}_unique_R1.bam'.format(outfile_name_prefix)
+        if not os.path.isfile(outfile)
+            if os.stat(outfile).st_size == 0:
+                command = "samtools view -@ 12 -hbf 64 -q 255 {0}Aligned.sortedByCoord.out.bam > {0}_unique_R1.bam".format(outfile_name_prefix)
+                print(command)
+                os.system(command)
 
         # read 1 5' scRNA-seq reads with an unencoded G extracted from BAM files
-        command = "samtools view -@ 12 -H {0}_unique_R1.bam > {0}_header.sam".format(outfile_name_prefix)
-        print(command)
-        os.system(command)
-        command = "samtools view -@ 12 -F 16 {0}_unique_R1.bam".format(outfile_name_prefix)+" | awk -F \'\\t\' 'BEGIN {OFS=\"\\t\"} {BASE = substr($10, 40,1); if ($6 ~ /^40S[0-9]/ && BASE == \"G\") {print $0}}' > "+"{0}_SoftclipG_F.sam".format(outfile_name_prefix)
-        print(command)
-        os.system(command)
+        # header
+        outfile = '{0}_header.sam'.format(outfile_name_prefix)
+        if not os.path.isfile(outfile)
+            if os.stat(outfile).st_size == 0:
+                command = "samtools view -@ 12 -H {0}_unique_R1.bam > {0}_header.sam".format(outfile_name_prefix)
+                print(command)
+                os.system(command)
 
-        command = "samtools view -@ 12 -f 16 {0}_unique_R1.bam".format(outfile_name_prefix)+" | awk -F \'\\t\' 'BEGIN {OFS=\"\\t\"} {ALT = substr($10, length($10)-39,1); if ($6 ~ /[0-9]M40S$/ && ALT == \"C\") {print $0}}' > "+"{0}_SoftclipG_R.sam".format(outfile_name_prefix)
-        print(command)
-        os.system(command)
+        # forward direction
+        outfile = '{0}_SoftclipG_F.sam'.format(outfile_name_prefix)
+        if not os.path.isfile(outfile)
+            if os.stat(outfile).st_size == 0:
+                command = "samtools view -@ 12 -F 16 {0}_unique_R1.bam".format(outfile_name_prefix)+" | awk -F \'\\t\' 'BEGIN {OFS=\"\\t\"} {BASE = substr($10, 40,1); if ($6 ~ /^40S[0-9]/ && BASE == \"G\") {print $0}}' > "+"{0}_SoftclipG_F.sam".format(outfile_name_prefix)
+                print(command)
+                os.system(command)
 
-        command = "cat {0}_header.sam {0}_SoftclipG_F.sam {0}_SoftclipG_R.sam ".format(outfile_name_prefix)+"| samtools sort -A 12 -O bam -o SoftclipG_{0}.bam".format(outfile_name_prefix)
-        print(command)
-        os.system(command)
+        # reverse direction
+        outfile = '{0}_SoftclipG_R.sam'.format(outfile_name_prefix)
+        if not os.path.isfile(outfile)
+            if os.stat(outfile).st_size == 0:
+                command = "samtools view -@ 12 -f 16 {0}_unique_R1.bam".format(outfile_name_prefix)+" | awk -F \'\\t\' 'BEGIN {OFS=\"\\t\"} {ALT = substr($10, length($10)-39,1); if ($6 ~ /[0-9]M40S$/ && ALT == \"C\") {print $0}}' > "+"{0}_SoftclipG_R.sam".format(outfile_name_prefix)
+                print(command)
+                os.system(command)
+
+        outfile = "SoftclipG_{0}.bam".format(outfile_name_prefix)
+        if not os.path.isfile(outfile)
+            if os.stat(outfile).st_size == 0:
+                command = "cat {0}_header.sam {0}_SoftclipG_F.sam {0}_SoftclipG_R.sam ".format(outfile_name_prefix)+"| samtools sort -A 12 -O bam -o SoftclipG_{0}.bam".format(outfile_name_prefix)
+                print(command)
+                os.system(command)
 
         # Duplicated reads remove using umi-tools
-        command = "umi_tools dedup --per-cell -I softclipG_{0}.bam --extract-umi-method=tag --umi-tag=UR --cell-tag=CR -S SoftclipG_{0}_deduplicated.bam".format(outfile_name_prefix)
-        print(command)
-        os.system(command)
+        outfile = "SoftclipG_{0}_deduplicated.bam".format(outfile_name_prefix)
+        if not os.path.isfile(outfile)
+            if os.stat(outfile).st_size == 0:
+                command = "umi_tools dedup --per-cell -I softclipG_{0}.bam --extract-umi-method=tag --umi-tag=UR --cell-tag=CR -S SoftclipG_{0}_deduplicated.bam".format(outfile_name_prefix)
+                print(command)
+                os.system(command)
 
        # reads with cell barcodes corresponding to the list in step 2 are extracted
         command = "awk \'{print\"CB:Z:\"$1}\' "+"{0}_whitelist.txt > {0}_cell_barcode.txt".format(outfile_name_prefix)
