@@ -722,10 +722,10 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
 
         exon_number = attribute.split('exon_number')[1].split(';')[0]
         if '\"' in exon_number:
-            exon_number = attribute.split('exon_number')[1].split(';')[0].split(
-            '\"')[-2]
+            exon_number = attribute.split('exon_number')[1].split(
+                ';')[0].split('\"')[-2]
         else:
-            exon_number = exon_number.replace(' ','')
+            exon_number = exon_number.replace(' ', '')
 
         old_gene_id_str = 'gene_id' + attribute.split('gene_id')[1].split(
             ';')[0]
@@ -885,7 +885,6 @@ def convert_h5ad(h5ad,
                     )
                 else:
                     ra[ra_key] = h5ad.varm[varm_key][:, i]
-
     if write_chunked:
         from tqdm import tqdm
         with loompy.new(
@@ -901,11 +900,11 @@ def convert_h5ad(h5ad,
                     key: np.array(vals)[batch]
                     for key, vals in ca.items()
                 }
-                dsout.add_columns(h5ad.X.T[:, batch].todense(),
+                dsout.add_columns(h5ad.raw.X.T[:, batch].todense(),
                                   col_attrs=chunk_ca,
                                   row_attrs=ra)
     else:
-        loompy.create(output_loom, h5ad.X.T, ra, ca)
+        loompy.create(output_loom, h5ad.raw.X.T, ra, ca)
 
     if convert_uns:
         loom = loompy.connect(output_loom)
@@ -2081,3 +2080,21 @@ def create_subsetted_loom_space_efficient(loom,
                 },
                 row_attrs={key: loom.ra[key]
                            for key in loom.ra.keys()})
+
+
+def get_pseudobulk_expression(loom,
+                              layername,
+                              replicate_ca,
+                              gene_ra='gene'):
+    import numpy as np
+    import pandas as pd
+    from tqdm import tqdm
+    replicate_names = loom.ca[replicate_ca]
+    dfs = []
+    for replicate in tqdm(np.unique(replicate_names)):
+        mask = replicate_names == replicate
+        df = pd.DataFrame(pd.DataFrame(loom[layername][:, mask.nonzero()[0]].T,
+                                       columns=loom.ra[gene_ra]).mean(axis=0),
+                          columns=[replicate])
+        dfs.append(df)
+    return pd.concat(dfs, axis=1)

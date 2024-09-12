@@ -445,7 +445,8 @@ def _two_component_mixture_model(
         enforce_unimodality_of_positive_component=False,
         verbose=True,
         maximum_recursion_to_enforce_unimodality=4,
-        enforce_positive_minimum_greater_than_negative_maximum=False):
+        enforce_positive_minimum_greater_than_negative_maximum=False,
+        return_model=False):
     from sklearn import mixture
     model = mixture.GaussianMixture(n_components=2)
     if droplowest:
@@ -517,7 +518,10 @@ def _two_component_mixture_model(
             if verbose:
                 print("Could not identify hardh threshold between components")
             predictions = np.array([np.nan] * len(predictions))
-            return predictions
+            if return_model:
+                return predictions, model
+            else:
+                return predictions
 
 
 #            raise Exception(
@@ -526,7 +530,10 @@ def _two_component_mixture_model(
             print(
                 "Change in number of positive cells due to enforced hard threshold: {}"
                 .format(np.sum(predictions) - original_positives))
-    return predictions
+    if return_model:
+        return predictions, model
+    else:
+        return predictions
 
 
 def _grouped_two_component_mixture_models(

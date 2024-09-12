@@ -57,7 +57,10 @@ def reaptec_main(
     print(command)
     os.system(command)
 
-    def run_if_nullfile(command, outfile):
+    def run_if_nullfile(command, outfile, overwrite=False):
+        if overwrite:
+            print(command)
+            os.system(command)
         if os.path.isfile(outfile):
             if os.stat(outfile).st_size == 0:
                 print(command)
@@ -78,20 +81,21 @@ def reaptec_main(
         #        command += "--limitBAMsortRAM 60000000000"
         outfile = '{0}Aligned.sortedByCoord.out.bam'.format(
             outfile_name_prefix)
+        # this takes ~hours to run
         run_if_nullfile(command, outfile)
 
         # extract only read 1 reads
         outfile = '{0}_unique_R1.bam'.format(outfile_name_prefix)
         command = "samtools view -@ 12 -hbf 64 -q 255 {0}Aligned.sortedByCoord.out.bam > {0}_unique_R1.bam".format(
             outfile_name_prefix)
-        run_if_nullfile(command, outfile)
+        run_if_nullfile(command, outfile, overwrite=True)
 
         # read 1 5' scRNA-seq reads with an unencoded G extracted from BAM files
         # header
         outfile = '{0}_header.sam'.format(outfile_name_prefix)
         command = "samtools view -@ 12 -H {0}_unique_R1.bam > {0}_header.sam".format(
             outfile_name_prefix)
-        run_if_nullfile(command, outfile)
+        run_if_nullfile(command, outfile, overwrite=True)
 
         # forward direction
         outfile = '{0}_SoftclipG_F.sam'.format(outfile_name_prefix)

@@ -1358,7 +1358,8 @@ def get_differential_expression_dict(loom,
                                      final_iteration=3,
                                      min_cluster_size=50,
                                      gene_alternate_name=None,
-                                     verbose=True):
+                                     verbose=True,
+                                     custom_ca=None):
     """Runs get_cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.
 
     Parameters
@@ -1394,17 +1395,16 @@ def get_differential_expression_dict(loom,
         gene_alternate_name = 'gene_common_name'
 
     diffex = {}
-    for i in range(starting_iteration, final_iteration + 1):
-        if 'ClusteringIteration{}'.format(i) not in loom.ca.keys():
-            break
-        for cluster in np.unique(loom.ca['ClusteringIteration{}'.format(i)]):
+    if custom_ca is not None:
+        for cluster in np.unique(loom.ca[custom_ca]):
             if verbose:
                 print(cluster)
+            mask = loom.ca[custom_ca] == cluster
             diffex[cluster] = get_cluster_differential_expression(
                 loom,
                 layername,
-                cluster_level='ClusteringIteration{}'.format(i),
-                ident1=cluster,
+                mask1=mask,
+                mask2=~mask,
                 ident1_downsample_size=downsample_size,
                 ident2_downsample_size=downsample_size,
                 min_cluster_size=min_cluster_size,
@@ -1414,8 +1414,30 @@ def get_differential_expression_dict(loom,
                     'MeanExpr1 >MeanExpr2').head(500)
                 if verbose:
                     print(diffex[cluster].head(20))
-            if verbose:
-                print('')
+    else:
+        for i in range(starting_iteration, final_iteration + 1):
+            if 'ClusteringIteration{}'.format(i) not in loom.ca.keys():
+                break
+            for cluster in np.unique(
+                    loom.ca['ClusteringIteration{}'.format(i)]):
+                if verbose:
+                    print(cluster)
+                diffex[cluster] = get_cluster_differential_expression(
+                    loom,
+                    layername,
+                    cluster_level='ClusteringIteration{}'.format(i),
+                    ident1=cluster,
+                    ident1_downsample_size=downsample_size,
+                    ident2_downsample_size=downsample_size,
+                    min_cluster_size=min_cluster_size,
+                    gene_alternate_name=gene_alternate_name)
+                if type(diffex[cluster]) != float:
+                    diffex[cluster] = diffex[cluster].query(
+                        'MeanExpr1 >MeanExpr2').head(500)
+                    if verbose:
+                        print(diffex[cluster].head(20))
+                if verbose:
+                    print('')
     if output is not None:
         if output.endswith('.xlsx'):
             try:
@@ -1861,7 +1883,7 @@ def generate_diffusion_coordinates(loom,
                                    sigma,
                                    n_coordinates=10,
                                    verbose=False,
-                                   metric='euclidean'):
+                                   metric='cosine',):
     """
 
     Parameters
@@ -1896,6 +1918,12 @@ def generate_diffusion_coordinates(loom,
         print("Transition matrix calculation complete. Diagonalizing...")
     vals, vecs = eig(transition_matrix)
     #    loom.attrs['diffusion_sigma'] = sigma # May implement later
+    if not np.isrealobj(vecs):
+        if verbose:
+            print('eigenvectors are complex, converting to reals')
+        vals = np.real(vals)
+        vecs = np.real(vecs)
+
     for i in range(1, n_coordinates + 1):
         loom.ca['{} DC {}'.format(
             layername, i)] = vals[i] * np.matmul(transition_matrix, vecs[:, i])
@@ -2211,3 +2239,56 @@ def get_cluster_differential_expression(loom,
     output['BenjaminiHochbergQ'] = fdrcorrection(output['pvalue'],
                                                  is_sorted=False)[1]
     return output
+
+
+def generate_cell_cycle_angle(
+        loom,
+        layername,
+        cell_cycle_angle_ca_name,
+        gene_ca_name='gene_common_name',
+        g1s_genes=[
+            'Mcm5', 'Pcna', 'Tyms', 'Fen1', 'Mcm2', 'Mcm4', 'Rrm1', 'Ung',
+            'Gins2', 'Mcm6', 'Cdca7', 'Dtl', 'Prim1', 'Uhrf1', 'Mlf1ip',
+            'Hells', 'Rfc2', 'Rpa2', 'Nasp', 'Rad51ap1', 'Gmnn', 'Wdr76',
+            'Slbp', 'Ccne2', 'Ubr7', 'Pold3', 'Msh2', 'Atad2', 'Rad51', 'Rrm2',
+            'Cdc45', 'Cdc6', 'Exo1', 'Tipin', 'Dscc1', 'Blm', 'Casp8ap2',
+            'Usp1', 'Clspn', 'Pola1', 'Chaf1b', 'Brip1', 'E2f8'
+        ],
+        g2m_genes=[
+            'Hmgb2', 'Cdk1', 'Nusap1', 'Ube2c', 'Birc5', 'Tpx2', 'Top2a',
+            'Ndc80', 'Cks2', 'Nuf2', 'Cks1b', 'Mki67', 'Tmpo', 'Cenpf',
+            'Tacc3', 'Fam64a', 'Smc4', 'Ccnb2', 'Ckap2l', 'Ckap2', 'Aurkb',
+            'Bub1', 'Kif11', 'Anp32e', 'Tubb4b', 'Gtse1', 'Kif20b', 'Hjurp',
+            'Cdca3', 'Hn1', 'Cdc20', 'Ttk', 'Cdc25c', 'Kif2c', 'Rangap1',
+            'Ncapd2', 'Dlgap5', 'Cdca2', 'Cdca8', 'Ect2', 'Kif23', 'Hmmr',
+            'Aurka', 'Psrc1', 'Anln', 'Lbr', 'Ckap5', 'Cenpe', 'Ctcf', 'Nek2',
+            'G2e3', 'Gas2l3', 'Cbx5', 'Cenpa'
+        ],
+        set_origin_with_mixture_model=True):
+    import pandas as pd
+    import numpy as np
+    df = pd.DataFrame(loom[layername][
+        np.isin(loom.ra[gene_ca_name], g2m_genes), :].mean(axis=0),
+                      columns=['G2M'])
+    df['G2M'] = (df['G2M'] - df['G2M'].mean()) / df['G2M'].std()
+    df['G1S'] = loom[layername][
+        np.isin(loom.ra[gene_ca_name], g1s_genes), :].mean(axis=0)
+    df['G1S'] = (df['G1S'] - df['G1S'].mean()) / df['G1S'].std()
+    if set_origin_with_mixture_model:
+        from panopticon.preprocessing import _two_component_mixture_model
+        for axis in ['G1S', 'G2M']:
+            components, model = _two_component_mixture_model(
+                df[axis],
+                enforce_positive_minimum_greater_than_negative_maximum=True,
+                verbose=False,
+                return_model=True)
+            assert df[axis][components == 1].min() >= df[axis][components ==
+                                                               0].max()
+            neworigin = np.mean(model.means_)
+            df[axis] = df[axis] - neworigin
+
+    df['angle'] = df.apply(lambda x: np.arctan2(x['G2M'], x['G1S']),
+                           axis=1) - np.arctan2(-1, -1)
+    df['angle'] = df['angle'].apply(lambda x: x + 2 * np.pi if x < 0 else x)
+    df['angle'] = df['angle'] * 180 / np.pi
+    loom.ca[cell_cycle_angle_ca_name] = df['angle'].values
