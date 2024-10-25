@@ -394,14 +394,6 @@ def generate_incremental_pca(loom,
     from sklearn.decomposition import IncrementalPCA, PCA
     from panopticon.analysis import generate_pca_scores
     import numpy as np
-    batch_size_altered = False
-    while loom.shape[1] % batch_size < n_components:
-        batch_size += 1
-        batch_size_altered = True
-    if batch_size_altered:
-        print(
-            "Batch size increased to {} so that smallest batch will be greater than n_components"
-            .format(batch_size))
     if loom.shape[1] < min_size_for_incrementalization:
         print(
             "Loom size below threshold for incremental PCA; running conventional PCA"
@@ -409,6 +401,14 @@ def generate_incremental_pca(loom,
         pca = PCA(n_components=n_components)
         pca.fit(loom[layername][:, :].T)
     else:
+        batch_size_altered = False
+        while loom.shape[1] % batch_size < n_components:
+            batch_size += 1
+            batch_size_altered = True
+        if batch_size_altered:
+            print(
+                "Batch size increased to {} so that smallest batch will be greater than n_components"
+                .format(batch_size))
         pca = IncrementalPCA(n_components=n_components)
         n_splits = loom.shape[1] // batch_size
         selections = np.array_split(np.arange(loom.shape[1]), n_splits)
@@ -1878,12 +1878,14 @@ def hutcheson_t(x, y):
     return out(*[x[0] for x in test])
 
 
-def generate_diffusion_coordinates(loom,
-                                   layername,
-                                   sigma,
-                                   n_coordinates=10,
-                                   verbose=False,
-                                   metric='cosine',):
+def generate_diffusion_coordinates(
+    loom,
+    layername,
+    sigma,
+    n_coordinates=10,
+    verbose=False,
+    metric='cosine',
+):
     """
 
     Parameters
@@ -1961,7 +1963,7 @@ def conditional_simpson(x, x_conditional, x_total, with_replacement=False):
         ])
 
 
-def get_cluster_enrichment_dataframes(x, y, data, weights=None):
+def get_cluster_enrichment_dataframes(x, y, data, weights=None,sort_by_phi_col=None):
     """
 
     Parameters
@@ -2028,6 +2030,14 @@ def get_cluster_enrichment_dataframes(x, y, data, weights=None):
         cluster_fraction_incluster_dict)
     cluster_fraction_ingroup_df = pd.DataFrame.from_dict(
         cluster_fraction_ingroup_dict)
+    if sort_by_phi_col is not None:
+        permutation = np.argsort(phi_coefficient_df[sort_by_phi_col]).values[::-1]
+    
+        fishers_exact_p_df = fishers_exact_p_df.iloc[permutation]
+        phi_coefficient_df = phi_coefficient_df.iloc[permutation]
+        counts_df = counts_df.iloc[permutation]
+        cluster_fraction_incluster_df = cluster_fraction_incluster_df.iloc[permutation]
+        cluster_fraction_ingroup_df = cluster_fraction_ingroup_df.iloc[permutation]
 
     ClusterEnrichment = namedtuple('ClusterEnrichment', [
         'FishersExactP', 'PhiCoefficient', 'Counts', 'FractionOfCluster',
@@ -2267,9 +2277,10 @@ def generate_cell_cycle_angle(
         set_origin_with_mixture_model=True):
     import pandas as pd
     import numpy as np
-    df = pd.DataFrame(loom[layername][
-        np.isin(loom.ra[gene_ca_name], g2m_genes), :].mean(axis=0),
-                      columns=['G2M'])
+    df = pd.DataFrame(
+        loom[layername][np.isin(loom.ra[gene_ca_name], g2m_genes), :].mean(
+            axis=0),
+        columns=['G2M'])
     df['G2M'] = (df['G2M'] - df['G2M'].mean()) / df['G2M'].std()
     df['G1S'] = loom[layername][
         np.isin(loom.ra[gene_ca_name], g1s_genes), :].mean(axis=0)
@@ -2292,3 +2303,86 @@ def generate_cell_cycle_angle(
     df['angle'] = df['angle'].apply(lambda x: x + 2 * np.pi if x < 0 else x)
     df['angle'] = df['angle'] * 180 / np.pi
     loom.ca[cell_cycle_angle_ca_name] = df['angle'].values
+
+
+def get_pseudobulk_differential_expression(loom,
+                                           replicate_ca,
+                                           group1,
+                                           group2,
+                                           layername='',
+                                           ismatched=False,
+                                           gene_ra='gene'):
+    import numpy as np
+    from tqdm import tqdm
+    import pandas as pd
+    if (type(group1) not in [np.ndarray, list]) or (type(group2)
+                                                    not in [np.ndarray, list]):
+        raise Exception('group1 and group2 must be lists or numpy.ndarray')
+    if ismatched:
+        if len(group1) != len(group2):
+            raise Exception(
+                'When using matched samples, group1 and group2 must have the same length'
+            )
+        from scipy.stats import wilcoxon
+        from scipy.stats import ttest_rel
+    else:
+        from scipy.stats import mannwhitneyu
+        from scipy.stats import ttest_ind
+    from scipy.stats import mannwhitneyu
+    from panopticon.utilities import cohensd
+    from statsmodels.stats.multitest import fdrcorrection
+    mask1 = []
+    mask2 = []
+    for replicate in group1:
+        mask1.append(np.where(loom.ca[replicate_ca] == replicate)[0][0])
+    for replicate in group2:
+        mask2.append(np.where(loom.ca[replicate_ca] == replicate)[0][0])
+    mask1 = np.array(mask1)
+    mask2 = np.array(mask2)
+    ttest_ps = []
+    cohensds = []
+    wilcoxon_ps = []
+    cless = []
+    for igene, gene in enumerate(tqdm(loom.ra[gene_ra])):
+        data1, data2 = loom[layername][igene, :][mask1], loom[layername][
+            igene, :][mask2]
+        if np.std(data1) + np.std(data2) < 1e-14:
+            ttest_ps.append(1)
+            wilcoxon_ps.append(1)
+            cohensds.append(np.nan)
+            cless.append(np.nan)
+        else:
+            if ismatched:
+                w = wilcoxon(data1, data2)
+                wilcoxon_ps.append(w.pvalue)
+                tt = ttest_rel(data1, data2)
+                ttest_ps.append(tt.pvalue)
+                mw = mannwhitneyu(data1, data2)
+                cless.append(mw.statistic / len(data1) / len(data2))
+                cohensds.append(cohensd(data1, data2))
+            else:
+                mw = mannwhitneyu(data1, data2)
+                wilcoxon_ps.append(mw.pvalue)
+                cless.append(mw.statistic / len(data1) / len(data2))
+                tt = ttest_ind(data1, data2)
+                ttest_ps.append(tt.pvalue)
+                cohensds.append(cohensd(data1, data2))
+    df = pd.DataFrame(loom.ra[gene_ra], columns=['gene'])
+    if 'gene_common_name' in loom.ra.keys():
+        df['gene_common_name'] = loom.ra['gene_common_name']
+    if ismatched:
+        df['wilcoxon_p'] = wilcoxon_ps
+        df['ttest_rel_p'] = ttest_ps
+        df['wilcoxon_q'] = fdrcorrection(df['wilcoxon_p'], is_sorted=False)[1]
+        df['ttest_rel_q'] = fdrcorrection(df['ttest_rel_p'],
+                                          is_sorted=False)[1]
+    else:
+        df['mannwhitney_p'] = wilcoxon_ps
+        df['ttest_ind_p'] = ttest_ps
+        df['mannwhitney_q'] = fdrcorrection(df['mannwhitney_p'],
+                                            is_sorted=False)[1]
+        df['ttest_ind_q'] = fdrcorrection(df['ttest_ind_p'],
+                                          is_sorted=False)[1]
+    df['Cohens_d'] = cohensds
+    df['CommonLanguageEffectSize'] = cless
+    return df

@@ -672,7 +672,7 @@ def convert_10x_h5(path_10x_h5,
         df.to_pickle(output_file)
 
 
-def create_split_exon_gtf(input_gtf, output_gtf, gene):
+def create_split_exon_gtf(input_gtf, output_gtf, gene=None):
     """
 
     Parameters
@@ -695,7 +695,10 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
         'frame', 'attribute'
     ]
     gtf = gtf[gtf['feature'] == 'exon']
-    if type(gene) == str:
+    if gene==():
+        mask = np.array([True]*len(gtf))
+
+    elif type(gene) == str:
         mask = gtf['attribute'].apply(
             lambda x: 'gene_name "{}"'.format(gene) in x)
     elif type(gene) in [list, tuple, np.array]:
@@ -733,11 +736,12 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
             old_gene_id_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
         attribute = attribute.replace(old_gene_id_str, new_gene_id_str)
 
-        old_gene_name_str = 'gene_name' + attribute.split(
-            'gene_name')[1].split(';')[0]
-        new_gene_name_str = '\"'.join(
-            old_gene_name_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
-        attribute = attribute.replace(old_gene_name_str, new_gene_name_str)
+        if 'gene_name' in attribute:
+            old_gene_name_str = 'gene_name' + attribute.split(
+                'gene_name')[1].split(';')[0]
+            new_gene_name_str = '\"'.join(
+                old_gene_name_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
+            attribute = attribute.replace(old_gene_name_str, new_gene_name_str)
 
         old_transcript_id_str = 'transcript_id' + attribute.split(
             'transcript_id')[1].split(';')[0]
@@ -746,14 +750,14 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene):
             [0:-1]) + '-exon' + exon_number + '\"'
         attribute = attribute.replace(old_transcript_id_str,
                                       new_transcript_id_str)
-
-        old_transcript_name_str = 'transcript_name' + attribute.split(
-            'transcript_name')[1].split(';')[0]
-        new_transcript_name_str = '\"'.join(
-            old_transcript_name_str.split('\"')
-            [0:-1]) + '-exon' + exon_number + '\"'
-        attribute = attribute.replace(old_transcript_name_str,
-                                      new_transcript_name_str)
+        if 'transcript_name' in attribute:
+            old_transcript_name_str = 'transcript_name' + attribute.split(
+                'transcript_name')[1].split(';')[0]
+            new_transcript_name_str = '\"'.join(
+                old_transcript_name_str.split('\"')
+                [0:-1]) + '-exon' + exon_number + '\"'
+            attribute = attribute.replace(old_transcript_name_str,
+                                          new_transcript_name_str)
 
         if 'ccds_id' in attribute:
             old_ccds_id_str = 'ccds_id' + attribute.split('ccds_id')[1].split(
@@ -2085,16 +2089,30 @@ def create_subsetted_loom_space_efficient(loom,
 def get_pseudobulk_expression(loom,
                               layername,
                               replicate_ca,
-                              gene_ra='gene'):
+                              gene_ra='gene',
+                              gene_common_name_ra=None,
+                              new_loom_name=None):
     import numpy as np
     import pandas as pd
     from tqdm import tqdm
     replicate_names = loom.ca[replicate_ca]
-    dfs = []
+    pseudobulk = []
     for replicate in tqdm(np.unique(replicate_names)):
         mask = replicate_names == replicate
         df = pd.DataFrame(pd.DataFrame(loom[layername][:, mask.nonzero()[0]].T,
                                        columns=loom.ra[gene_ra]).mean(axis=0),
                           columns=[replicate])
-        dfs.append(df)
-    return pd.concat(dfs, axis=1)
+        pseudobulk.append(df)
+    pseudobulk = pd.concat(pseudobulk, axis=1)
+    if new_loom_name is not None:
+        if type(new_loom_name) != str:
+            raise Exception("new_loom_name must be None or of type str")
+        if not new_loom_name.endswith('.loom'):
+            raise Exception("new_loom_name must have suffix loom")
+        import loompy
+        radict = {'gene': pseudobulk.index.values}
+        if gene_common_name_ra is not None:
+            radict['gene_common_name'] = np.array(loom.ra[gene_common_name_ra])
+        loompy.create(new_loom_name, pseudobulk.values, radict,
+                      {'replicate': pseudobulk.columns.values})
+    return pseudobulk

@@ -888,7 +888,8 @@ def volcano(diffex,
             no_effect_line=0,
             counterscale=1,
             lcounter_init=0,
-            rcounter_init=0):
+            rcounter_init=0,
+            verbose=False):
     """
 
     Parameters
@@ -932,7 +933,7 @@ def volcano(diffex,
     import matplotlib
     import matplotlib.patheffects as pe
 
-    matplotlib.rcParams['axes.linewidth'] = 3
+#    matplotlib.rcParams['axes.linewidth'] = 3
     if ax is None:
         fig, ax = plt.subplots(figsize=(
             5,
@@ -985,6 +986,8 @@ def volcano(diffex,
                 genemarklist,
                 positions,
         ):
+            if verbose:
+                print(gene, position)
             genedf = diffex[diffex[gene_column] == gene]
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
@@ -1045,6 +1048,7 @@ def volcano(diffex,
                           top_edge - rcounter)
                 ha = 'right'
                 rcounter += counterscale
+#            print(xytext)
             ax.annotate(
                 gene, (effect_size, negpval),
                 xytext=xytext,
@@ -1404,8 +1408,7 @@ def repertoire_plot(x=None,
             elif len(np.shape(ax)) == 2:
                 maxrows, maxcols = np.shape(ax)
                 if smear:
-                    if 2 * all_heights.shape[0] // maxrows > maxcols:
-                        raise Exception(
+                    if 2 * all_heights.shape[0] // maxrows > maxcols: raise Exception(
                             "Insufficient number of subplots for number of grouping (pies)"
                         )
                     subax = ax[2 * i // maxcols, 2 * i % maxcols]
@@ -1753,7 +1756,8 @@ def cluster_enrichment_heatmap(x,
                                annotation_key='Counts',
                                annotation_fmt='.5g',
                                figsize=(5, 5),
-                               weights=None):
+                               weights=None,
+                               sort_by_phi_col=None):
     """
     Produces a heatmap indicating the fraction of cell clusters across groups.  For example, if there are `m` experimental groups and `n` clusters of cells, will produce a heatmap with
     `n` rows and `m` columns. 
@@ -1828,7 +1832,7 @@ def cluster_enrichment_heatmap(x,
     import seaborn as sns
 
     cluster_enrichment_dataframes = get_cluster_enrichment_dataframes(
-        x, y, data, weights=weights)
+        x, y, data, weights=weights, sort_by_phi_col=sort_by_phi_col)
     if fig is None and cax is None and ax is None:
         fig, (cax,
               ax) = plt.subplots(nrows=2,
@@ -2007,7 +2011,9 @@ def plot_dot_plot(loom,
                   cmap='coolwarm',
                   cbar_range='zero_centered',
                   x_column_attribute_sortkey=None,
-                  legend_bbox_to_anchor=(-.05, 1)):
+                  legend_bbox_to_anchor=(-.05, 1),
+                  z_score=False,
+                  minmax_normalize=False):
     if x_column_attribute not in loom.ca.keys():
         raise Exception(
             "x_column_attribute not a column attribute of loomfile")
@@ -2054,7 +2060,18 @@ def plot_dot_plot(loom,
                    '_fraction'] = df[y_column_attribute] > 0
     df = df[~df[x_column_attribute].isin(x_column_blacklist)]
     df = df.groupby(x_column_attribute).mean()
-    df = df.sort_index(key=x_column_attribute_sortkey)
+    df = df.sort_index(ascending=False)
+    if x_column_attribute_sortkey is not None:
+        df = df.sort_index(key=np.vectorize(x_column_attribute_sortkey), ascending=True)
+
+    if z_score and minmax_normalize:
+        raise Exception("Only one of z_score or minmax_normalize may be true")
+    if z_score:
+        for col in df.columns:
+            df[col] = (df[col]-df[col].mean())/df[col].std()
+    elif minmax_normalize:
+        for col in df.columns:
+            df[col] = (df[col]-df[col].min())/df[col].max()
     fig, (ax, cax) = plt.subplots(
         1,
         2,
