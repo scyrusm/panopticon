@@ -45,14 +45,19 @@ def combine_looms(input_looms, output_loom, output_type='loom'):
     'Whitelist a gene to include (will blacklist all other genes).  Intended for getting antibody counts from empty droplets, where other types of counts are not needed.  Usage --whitelist_gene Hash123',
     multiple=True,
     default=None)
-def convert_10x_h5(h5file, output_loom, label, convert_to_ca, whitelist_gene):
+@click.option(
+    '--write_chunked',
+    help='flag to write output loom in chunked fashion (to reduce memory burden)',
+    is_flag=True)
+def convert_10x_h5(h5file, output_loom, label, convert_to_ca, whitelist_gene,write_chunked):
     from panopticon.utilities import convert_10x_h5
     convert_10x_h5(h5file,
                    output_loom,
                    label[0],
                    label[1],
                    genes_as_ca=convert_to_ca,
-                   gene_whitelist=whitelist_gene)
+                   gene_whitelist=whitelist_gene,
+                   write_chunked=write_chunked)
 
 
 @cli.command(

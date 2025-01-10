@@ -672,7 +672,10 @@ def convert_10x_h5(path_10x_h5,
         df.to_pickle(output_file)
 
 
-def create_split_exon_gtf(input_gtf, output_gtf, gene=None):
+def create_split_exon_gtf(input_gtf,
+                          output_gtf,
+                          gene=None,
+                          use_transcript_as_gene=True):
     """
 
     Parameters
@@ -695,8 +698,8 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene=None):
         'frame', 'attribute'
     ]
     gtf = gtf[gtf['feature'] == 'exon']
-    if gene==():
-        mask = np.array([True]*len(gtf))
+    if gene == ():
+        mask = np.array([True] * len(gtf))
 
     elif type(gene) == str:
         mask = gtf['attribute'].apply(
@@ -739,8 +742,8 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene=None):
         if 'gene_name' in attribute:
             old_gene_name_str = 'gene_name' + attribute.split(
                 'gene_name')[1].split(';')[0]
-            new_gene_name_str = '\"'.join(
-                old_gene_name_str.split('\"')[0:-1]) + '-exon' + exon_number + '\"'
+            new_gene_name_str = '\"'.join(old_gene_name_str.split(
+                '\"')[0:-1]) + '-exon' + exon_number + '\"'
             attribute = attribute.replace(old_gene_name_str, new_gene_name_str)
 
         old_transcript_id_str = 'transcript_id' + attribute.split(
@@ -750,6 +753,10 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene=None):
             [0:-1]) + '-exon' + exon_number + '\"'
         attribute = attribute.replace(old_transcript_id_str,
                                       new_transcript_id_str)
+        if use_transcript_as_gene:
+            attribute = attribute.replace(new_gene_id_str,
+                                          new_transcript_id_str)
+
         if 'transcript_name' in attribute:
             old_transcript_name_str = 'transcript_name' + attribute.split(
                 'transcript_name')[1].split(';')[0]
@@ -758,6 +765,9 @@ def create_split_exon_gtf(input_gtf, output_gtf, gene=None):
                 [0:-1]) + '-exon' + exon_number + '\"'
             attribute = attribute.replace(old_transcript_name_str,
                                           new_transcript_name_str)
+            if use_transcript_as_gene:
+                attribute = attribute.replace(new_gene_name_str,
+                                              new_transcript_name_str)
 
         if 'ccds_id' in attribute:
             old_ccds_id_str = 'ccds_id' + attribute.split('ccds_id')[1].split(
