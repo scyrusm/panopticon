@@ -2274,7 +2274,9 @@ def generate_cell_cycle_angle(
             'Aurka', 'Psrc1', 'Anln', 'Lbr', 'Ckap5', 'Cenpe', 'Ctcf', 'Nek2',
             'G2e3', 'Gas2l3', 'Cbx5', 'Cenpa'
         ],
-        set_origin_with_mixture_model=True):
+        set_origin_with_mixture_model=True,
+        write_g1s_score_ca_name=None,
+        write_g2m_score_ca_name=None):
     import pandas as pd
     import numpy as np
     df = pd.DataFrame(
@@ -2297,6 +2299,10 @@ def generate_cell_cycle_angle(
                                                                0].max()
             neworigin = np.mean(model.means_)
             df[axis] = df[axis] - neworigin
+    if write_g1s_score_ca_name is not None:
+        loom.ca[write_g1s_score_ca_name] = df['G1S'].values
+    if write_g2m_score_ca_name is not None:
+        loom.ca[write_g2m_score_ca_name] = df['G2M'].values
 
     df['angle'] = df.apply(lambda x: np.arctan2(x['G2M'], x['G1S']),
                            axis=1) - np.arctan2(-1, -1)

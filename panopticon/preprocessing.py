@@ -656,8 +656,8 @@ def generate_guide_rna_prediction(
                             random_state=17,
                             max_iter=100)
 
-                        X=loom.ca[new_ca_name][cellmask.nonzero()
-                                               [0]].reshape(-1, 1)
+                        X = loom.ca[new_ca_name][cellmask.nonzero()
+                                                 [0]].reshape(-1, 1)
                         model.fit(X)
                         predictions = []
                         for val in loom.ca[new_ca_name]:
@@ -681,15 +681,13 @@ def generate_guide_rna_prediction(
             else:
                 #print(guide_rna, loom.ca[guide_rna].sum())
                 # print('Warning:  pomegrante Poisson/Normal mixture model has predicted a Poisson component with greater log(UMI+1) counts than normal component.  This is unusual behavior!')
-                model = GeneralMixtureModel(
-                    [Poisson(), Poisson()],
-                    verbose=False,
-                    tol=0.01,
-                    random_state=17,
-                    max_iter=100)
- 
-                X=loom.ca[new_ca_name][cellmask.nonzero()
-                                       [0]].reshape(-1, 1)
+                model = GeneralMixtureModel([Poisson(), Poisson()],
+                                            verbose=False,
+                                            tol=0.01,
+                                            random_state=17,
+                                            max_iter=100)
+
+                X = loom.ca[new_ca_name][cellmask.nonzero()[0]].reshape(-1, 1)
                 model.fit(X)
                 predictions = model.predict(loom.ca[new_ca_name].reshape(
                     -1, 1))
@@ -710,9 +708,10 @@ def generate_guide_rna_prediction(
                                  copy=True))
             guide_prediction_dfs = pd.concat(guide_prediction_dfs, axis=1)
             loom.ca[nguide_ca] = guide_prediction_dfs.sum(axis=1).values
-        
+
             loom.ca[cell_prediction_summary_ca] = guide_prediction_dfs.apply(
-                lambda x: '+'.join(guide_prediction_dfs.columns[np.where(x == 1)[0]]),
+                lambda x: '+'.join(guide_prediction_dfs.columns[np.where(
+                    x == 1)[0]]),
                 axis=1).values
 
 
@@ -755,3 +754,24 @@ def get_clustering_based_outlier_prediction(
         mask *= ~np.isin(loom.ca['ClusteringIteration{}'.format(level)],
                          outlier_clusters)
     return mask
+
+
+def generate_replicate_assignment_based_on_hashtags(
+        loom, hashtag_predictions, output_ca='hashtag_assignment'):
+    import pandas as pd
+    df = pd.DataFrame(loom.ca['nHash'], columns=['nHash'])
+    for hashtag_prediction in hashtag_predictions:
+        df[hashtag_prediction] = loom.ca[hashtag_prediction]
+    replicate_assignments = []
+    for i, row in df.iterrows():
+        if row['nHash'] > 1:
+            replicate_assignments.append('doublet')
+        elif row['nHash'] == 0:
+            replicate_assignments.append('no replicate assigned')
+        else:
+            replicate_assignments.append(row[hashtag_predictions].index[
+                row.loc[hashtag_predictions].astype(int) == 1][0])
+    loom.ca[output_ca] = replicate_assignments
+
+
+#    return replicate_assignments
