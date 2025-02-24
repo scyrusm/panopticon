@@ -610,7 +610,8 @@ def get_subclustering(X,
                       linkage='average',
                       silhouette_score_sample_size=None,
                       verbose=False,
-                      minimum_second_to_first_cluster_ratio=0.001):
+                      minimum_second_to_first_cluster_ratio=0.001
+                      ):
     """
 
     Parameters
@@ -727,6 +728,7 @@ def generate_clustering(loom,
                         out_of_core_batch_size=1024,
                         min_subclustering_size=100,
                         first_round_leiden=False,
+                        subsequent_round_leiden=False,
                         optimized_leiden=True,
                         leiden_nneighbors=100,
                         leiden_iterations=10,
@@ -804,6 +806,7 @@ def generate_clustering(loom,
         from sklearn.decomposition import NMF
 
     final_clustering_depth = starting_clustering_depth + n_clustering_iterations - 1
+
     if starting_clustering_depth == 0:
         if first_round_leiden:
             from sklearn.neighbors import kneighbors_graph
@@ -982,17 +985,35 @@ def generate_clustering(loom,
                 mc = int(np.floor(np.cbrt(X.shape[0])))
             else:
                 mc = max_clusters
-            nopath_clustering = get_subclustering(
-                X,
-                silhouette_threshold,
-                max_clusters=mc,
-                clusteringcachedir=clusteringcachedir,
-                min_input_size=min_subclustering_size,
-                show_dendrogram=show_dendrogram,
-                linkage=linkage,
-                verbose=verbose,
-                minimum_second_to_first_cluster_ratio=
-                minimum_second_to_first_cluster_ratio)
+            if subsequent_round_leiden:
+                if verbose:
+                    print("Performing leiden clustering on subsequent round")
+                if optimized_leiden:
+                    from panopticon.clustering import silhouette_optimized_leiden
+                    max_neighbors = np.min(
+                        [2**int(np.log(X.shape[0]) / np.log(2)), 2048])
+                    leiden_output = silhouette_optimized_leiden(
+                        X, max_neighbors=max_neighbors)
+
+                    loom.attrs[
+                        'OptimizedLeidenClusteringNNeighbors_ClusteringIteration{}'.format(subi)] = leiden_output.nneighbors
+                else:
+                    from panopticon.clustering import leiden_with_silhouette_score
+                    leiden_output = leiden_with_silhouette_score(
+                        X, leiden_nneighbors, leiden_iterations=leiden_iterations)
+                nopath_clustering = leiden_output.clustering
+            else:
+                nopath_clustering = get_subclustering(
+                    X,
+                    silhouette_threshold,
+                    max_clusters=mc,
+                    clusteringcachedir=clusteringcachedir,
+                    min_input_size=min_subclustering_size,
+                    show_dendrogram=show_dendrogram,
+                    linkage=linkage,
+                    verbose=verbose,
+                    minimum_second_to_first_cluster_ratio=
+                    minimum_second_to_first_cluster_ratio)
 
             fullpath_clustering = [
                 '{}-{}'.format(cluster, x) for x in nopath_clustering
@@ -1430,7 +1451,8 @@ def get_differential_expression_dict(loom,
                     ident1_downsample_size=downsample_size,
                     ident2_downsample_size=downsample_size,
                     min_cluster_size=min_cluster_size,
-                    gene_alternate_name=gene_alternate_name)
+                    gene_alternate_name=gene_alternate_name,
+                    verbose=verbose)
                 if type(diffex[cluster]) != float:
                     diffex[cluster] = diffex[cluster].query(
                         'MeanExpr1 >MeanExpr2').head(500)
@@ -2101,6 +2123,7 @@ def get_cluster_differential_expression(loom,
 
     from time import time
     from tqdm import tqdm
+    from p_tqdm import p_map
 
     if gene_alternate_name is None and 'gene_common_name' in loom.ra.keys():
         gene_alternate_name = 'gene_common_name'
@@ -2175,15 +2198,8 @@ def get_cluster_differential_expression(loom,
     if verbose:
         print('Group 1 size: ', np.sum(mask1), ', group 2 size: ',
               np.sum(mask2))
-    pvalues = []
-    uvalues = []
-    genes = []
-    meanexpr1 = []
-    meanexpr2 = []
-    meanexpexpr1 = []
-    meanexpexpr2 = []
-    fracexpr1 = []
-    fracexpr2 = []
+
+
     if gene_subset_mask is not None:
         genelist = loom.ra['gene'][gene_subset_mask]
         start = time()
@@ -2204,25 +2220,47 @@ def get_cluster_differential_expression(loom,
         data2 = loom[layername][:, mask2.nonzero()[0]]
         if verbose:
             print('Second matrix extracted', time() - start, 'seconds')
+###
+    if not verbose:
+        mw = mannwhitneyu(data1, data2,alternative='two-sided',axis=1)
+        pvalues = mw.pvalue
+        uvalues=mw.statistic
+        meanexpr1 = np.mean(data1,axis=1)
+        meanexpr2 = np.mean(data2,axis=1)
+        meanexpexpr1=np.mean(2**data1,axis=1)
+        meanexpexpr2=np.mean(2**data2,axis=1)
+        fracexpr1 = np.mean(data1>0,axis=1)
+        fracexpr2 = np.mean(data2>0,axis=1)
 
-    for igene, gene in enumerate(
-            tqdm(genelist, desc='Computing Mann-Whitney p-values')):
-        genes.append(gene)
-        if np.std(data1[igene, :]) + np.std(data2[igene, :]) < 1e-14:
-            pvalues.append(1)
-            uvalues.append(np.nan)
-        else:
-            mw = mannwhitneyu(data1[igene, :],
-                              data2[igene, :],
-                              alternative='two-sided')
-            pvalues.append(mw.pvalue)
-            uvalues.append(mw.statistic)
-        meanexpr1.append(data1[igene, :].mean())
-        meanexpr2.append(data2[igene, :].mean())
-        meanexpexpr1.append(np.mean(2**data1[igene, :]))
-        meanexpexpr2.append(np.mean(2**data2[igene, :]))
-        fracexpr1.append((data1[igene, :] > 0).mean())
-        fracexpr2.append((data2[igene, :] > 0).mean())
+###
+    else:    
+        pvalues = []
+        uvalues = []
+        genes = []
+        meanexpr1 = []
+        meanexpr2 = []
+        meanexpexpr1 = []
+        meanexpexpr2 = []
+        fracexpr1 = []
+        fracexpr2 = []
+        for igene, gene in enumerate(
+                tqdm(genelist, desc='Computing Mann-Whitney p-values')):
+            genes.append(gene)
+            if np.std(data1[igene, :]) + np.std(data2[igene, :]) < 1e-14:
+                pvalues.append(1)
+                uvalues.append(np.nan)
+            else:
+                mw = mannwhitneyu(data1[igene, :],
+                                  data2[igene, :],
+                                  alternative='two-sided')
+                pvalues.append(mw.pvalue)
+                uvalues.append(mw.statistic)
+            meanexpr1.append(data1[igene, :].mean())
+            meanexpr2.append(data2[igene, :].mean())
+            meanexpexpr1.append(np.mean(2**data1[igene, :]))
+            meanexpexpr2.append(np.mean(2**data2[igene, :]))
+            fracexpr1.append((data1[igene, :] > 0).mean())
+            fracexpr2.append((data2[igene, :] > 0).mean())
     output = pd.DataFrame(genes)
     output.columns = ['gene']
     output['pvalue'] = pvalues

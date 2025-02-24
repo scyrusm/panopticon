@@ -982,6 +982,8 @@ def volcano(diffex,
             else:
                 positions.append('r')
     if positions != 'side':
+        if type(positions)==dict:
+            positions = [positions[key] for key in genemarklist]
         for gene, position in zip(
                 genemarklist,
                 positions,
@@ -992,12 +994,20 @@ def volcano(diffex,
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
             ax.scatter(effect_size, negpval, marker='.', color='k')
+            if position in ['br','bl','tr','tl']:
+                if position[1]=='r':
+                    habt='right'
+                elif position[1]=='l':
+                    habt='left'
+                position=position[0]
+            else:
+                habt='center'
             if position == 'b':
                 ax.annotate(gene, (effect_size, negpval),
                             (effect_size,
                              negpval + .015 * maxy * gene_label_offset_scale),
                             va='bottom',
-                            ha='center',
+                            ha=habt,
                             path_effects=[
                                 pe.withStroke(linewidth=2, foreground="white")
                             ])
@@ -1006,7 +1016,7 @@ def volcano(diffex,
                             (effect_size,
                              negpval - .015 * maxy * gene_label_offset_scale),
                             va='top',
-                            ha='center',
+                            ha=habt,
                             path_effects=[
                                 pe.withStroke(linewidth=2, foreground="white")
                             ])
@@ -1028,8 +1038,9 @@ def volcano(diffex,
                             path_effects=[
                                 pe.withStroke(linewidth=2, foreground="white")
                             ])
+
             else:
-                raise Exception("invalid position character selection")
+                raise Exception("\'{}\':  invalid position character selection".format(position))
     else:
         lcounter = lcounter_init
         rcounter = rcounter_init
@@ -1060,7 +1071,7 @@ def volcano(diffex,
                                 alpha=0.25),
                 path_effects=[pe.withStroke(linewidth=2, foreground="white")])
 
-    ax.axvline(no_effect_line, ls='--')
+    ax.axvline(no_effect_line, ls='--',color='k',alpha=0.25)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.tick_params(axis='both', which='major', labelsize=14)
