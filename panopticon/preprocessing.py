@@ -775,3 +775,44 @@ def generate_replicate_assignment_based_on_hashtags(
 
 
 #    return replicate_assignments
+
+
+def annotate_orthologous_genes(
+        loom,
+        mart_txt,
+        index='Gene stable ID',
+        ortholog_out_ca_gene='Human gene stable ID',
+        ortholog_out_ca_gene_common_name='Human gene name',
+        gene_ra='gene',
+        gene_common_name_ra='gene_common_name'):
+    mart_df = pd.read_table(mart_txt)
+    mart_df[ortholog_out_ca_gene] = mouse2humanensembl[
+        ortholog_out_ca_gene].astype(str)
+    ortholog_dict = mart_df.groupby(
+        index)[ortholog_out_ca_gene].unique().apply('|'.join).to_dict()
+    ortholog_out_ca_gene = ortholog_out_ca_gene.title().replace(
+        ' ', '')  # CamelCase
+    if ortholog_out_ca_gene in loom.ra.keys():
+        raise Exception("{} is existing ra".format(ortholog_out_ca_gene))
+    loom.ra[ortholog_out_ca_gene] = [
+        ortholog_dict[x] if x in ortholog_dict.keys() else np.nan
+        for x in loom.ra[gene_ra]
+    ]
+    if ortholog_out_ca_gene_common_name is not None:
+        mart_df[ortholog_out_ca_gene_common_name] = mouse2humanensembl[
+            ortholog_out_ca_gene_common_name].astype(str)
+        ortholog_dict = mart_df.groupby(
+            index)[ortholog_out_ca_gene_common_name].unique().apply(
+                '|'.join).to_dict()
+        ortholog_out_ca_gene_common_name = ortholog_out_ca_gene_common_name.title(
+        ).replace(' ', '')  # CamelCase
+        if ortholog_out_ca_gene_common_name in loom.ra.keys():
+            raise Exception(
+                "{} is existing ra".format(ortholog_out_ca_gene_common_name))
+        loom.ra[ortholog_out_ca_gene_common_name] = [
+            ortholog_dict[x] if x in ortholog_dict.keys() else np.nan
+            for x in loom.ra[gene_ra]
+        ]
+
+
+#= ortholog_out_ca_2.capitalize().replace(' ','') # CamelCase

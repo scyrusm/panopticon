@@ -465,13 +465,15 @@ def swarmviolin(data,
                 annotate_pvalue_vs_all_fmt_str='p: {0:.2f}',
                 annotate_effect_size_vs_all_fmt_str='es: {0:.2f}',
                 annotate_n_fmt_str='n: {}',
+                annotate_hue_single_line=False,
                 paired_hue_matching_col=None,
                 effect_size='cohensd',
                 pvalue='mannwhitney',
                 custom_annotation_dict={},
                 custom_annotation_fontsize=6,
                 pairing_column=None,
-                only_plot_hue_pairing=False):
+                only_plot_hue_pairing=False,
+                pairing_line_alpha=0.1):
     """
 
     Parameters
@@ -669,11 +671,16 @@ def swarmviolin(data,
                 if annotate_hue_n:
                     annotation_string += annotate_hue_n_fmt_str.format(
                         len(a), len(b)) + '\n'
-                ax.annotate(
-                    annotation_string,
-                    (ticklabel.get_position()[0], np.max(np.hstack((a, b)))),
-                    ha='center',
-                    va='bottom')
+                if annotate_hue_single_line:
+                    anno_x, anno_y = ticklabel.get_position(
+                    )[0], data[continuous_col].max()
+                else:
+                    anno_x, anno_y = ticklabel.get_position()[0], np.max(
+                        np.hstack((a, b)))
+
+                ax.annotate(annotation_string, (anno_x, anno_y),
+                            ha='center',
+                            va='bottom')
             else:
                 if annotate_hue_pvalues:
                     annotation_string += ' ' + annotate_hue_pvalue_fmt_str.format(
@@ -684,11 +691,14 @@ def swarmviolin(data,
                 if annotate_hue_n:
                     annotation_string += '\n' + annotate_hue_n_fmt_str.format(
                         len(a), len(b))
+                if annotate_hue_single_line:
+                    anno_x, annoy_y = data[continuous_col].max(
+                    ), ticklabel.get_position()[1]
+                else:
+                    anno_x, anno_y = np.max(np.hstack(
+                        (a, b))), ticklabel.get_position()[1]
 
-                ax.annotate(annotation_string, (
-                    np.max(np.hstack((a, b))),
-                    ticklabel.get_position()[1],
-                ),
+                ax.annotate(annotation_string, (anno_x, anno_y),
                             ha='left',
                             va='center')
     if annotate_pvalue_vs_all or annotate_effect_size_vs_all or annotate_n and len(
@@ -838,13 +848,13 @@ def swarmviolin(data,
                     ax.plot([xoffsets[j, i], xoffsets[j + 1, i]],
                             [yoffsets[j, i], yoffsets[j + 1, i]],
                             color='k',
-                            alpha=0.1,
+                            alpha=pairing_line_alpha,
                             ls='--')
             else:
                 ax.plot(xoffsets[:, i],
                         yoffsets[:, i],
                         color='k',
-                        alpha=0.1,
+                        alpha=pairing_line_alpha,
                         ls='--')
         replicate_matches = []
         for col in [y for y in offset_df.columns if y.endswith('_y')]:
@@ -933,7 +943,7 @@ def volcano(diffex,
     import matplotlib
     import matplotlib.patheffects as pe
 
-#    matplotlib.rcParams['axes.linewidth'] = 3
+    #    matplotlib.rcParams['axes.linewidth'] = 3
     if ax is None:
         fig, ax = plt.subplots(figsize=(
             5,
@@ -982,7 +992,7 @@ def volcano(diffex,
             else:
                 positions.append('r')
     if positions != 'side':
-        if type(positions)==dict:
+        if type(positions) == dict:
             positions = [positions[key] for key in genemarklist]
         for gene, position in zip(
                 genemarklist,
@@ -994,14 +1004,14 @@ def volcano(diffex,
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
             ax.scatter(effect_size, negpval, marker='.', color='k')
-            if position in ['br','bl','tr','tl']:
-                if position[1]=='r':
-                    habt='right'
-                elif position[1]=='l':
-                    habt='left'
-                position=position[0]
+            if position in ['br', 'bl', 'tr', 'tl']:
+                if position[1] == 'r':
+                    habt = 'right'
+                elif position[1] == 'l':
+                    habt = 'left'
+                position = position[0]
             else:
-                habt='center'
+                habt = 'center'
             if position == 'b':
                 ax.annotate(gene, (effect_size, negpval),
                             (effect_size,
@@ -1040,7 +1050,9 @@ def volcano(diffex,
                             ])
 
             else:
-                raise Exception("\'{}\':  invalid position character selection".format(position))
+                raise Exception(
+                    "\'{}\':  invalid position character selection".format(
+                        position))
     else:
         lcounter = lcounter_init
         rcounter = rcounter_init
@@ -1059,6 +1071,8 @@ def volcano(diffex,
                           top_edge - rcounter)
                 ha = 'right'
                 rcounter += counterscale
+
+
 #            print(xytext)
             ax.annotate(
                 gene, (effect_size, negpval),
@@ -1071,7 +1085,7 @@ def volcano(diffex,
                                 alpha=0.25),
                 path_effects=[pe.withStroke(linewidth=2, foreground="white")])
 
-    ax.axvline(no_effect_line, ls='--',color='k',alpha=0.25)
+    ax.axvline(no_effect_line, ls='--', color='k', alpha=0.25)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
     ax.tick_params(axis='both', which='major', labelsize=14)
@@ -1419,7 +1433,8 @@ def repertoire_plot(x=None,
             elif len(np.shape(ax)) == 2:
                 maxrows, maxcols = np.shape(ax)
                 if smear:
-                    if 2 * all_heights.shape[0] // maxrows > maxcols: raise Exception(
+                    if 2 * all_heights.shape[0] // maxrows > maxcols:
+                        raise Exception(
                             "Insufficient number of subplots for number of grouping (pies)"
                         )
                     subax = ax[2 * i // maxcols, 2 * i % maxcols]
@@ -2073,16 +2088,17 @@ def plot_dot_plot(loom,
     df = df.groupby(x_column_attribute).mean()
     df = df.sort_index(ascending=False)
     if x_column_attribute_sortkey is not None:
-        df = df.sort_index(key=np.vectorize(x_column_attribute_sortkey), ascending=True)
+        df = df.sort_index(key=np.vectorize(x_column_attribute_sortkey),
+                           ascending=True)
 
     if z_score and minmax_normalize:
         raise Exception("Only one of z_score or minmax_normalize may be true")
     if z_score:
         for col in df.columns:
-            df[col] = (df[col]-df[col].mean())/df[col].std()
+            df[col] = (df[col] - df[col].mean()) / df[col].std()
     elif minmax_normalize:
         for col in df.columns:
-            df[col] = (df[col]-df[col].min())/df[col].max()
+            df[col] = (df[col] - df[col].min()) / df[col].max()
     fig, (ax, cax) = plt.subplots(
         1,
         2,

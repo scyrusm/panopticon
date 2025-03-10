@@ -2261,7 +2261,7 @@ def get_cluster_differential_expression(loom,
             meanexpexpr2.append(np.mean(2**data2[igene, :]))
             fracexpr1.append((data1[igene, :] > 0).mean())
             fracexpr2.append((data2[igene, :] > 0).mean())
-    output = pd.DataFrame(genes)
+    output = pd.DataFrame(genelist)
     output.columns = ['gene']
     output['pvalue'] = pvalues
     output['CommonLanguageEffectSize'] = np.array(uvalues) / (data1.shape[1] *
@@ -2280,7 +2280,7 @@ def get_cluster_differential_expression(loom,
             for gene, altname in zip(loom.ra['gene'],
                                      loom.ra[gene_alternate_name])
         }
-        altnames = [gene2altname[x] for x in genes]
+        altnames = [gene2altname[x] for x in genelist]
         output['GeneAlternateName'] = altnames
 
     output = output.sort_values('CommonLanguageEffectSize', ascending=False)
