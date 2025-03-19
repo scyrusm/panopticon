@@ -610,8 +610,7 @@ def get_subclustering(X,
                       linkage='average',
                       silhouette_score_sample_size=None,
                       verbose=False,
-                      minimum_second_to_first_cluster_ratio=0.001
-                      ):
+                      minimum_second_to_first_cluster_ratio=0.001):
     """
 
     Parameters
@@ -996,11 +995,14 @@ def generate_clustering(loom,
                         X, max_neighbors=max_neighbors)
 
                     loom.attrs[
-                        'OptimizedLeidenClusteringNNeighbors_ClusteringIteration{}'.format(subi)] = leiden_output.nneighbors
+                        'OptimizedLeidenClusteringNNeighbors_ClusteringIteration{}'
+                        .format(subi)] = leiden_output.nneighbors
                 else:
                     from panopticon.clustering import leiden_with_silhouette_score
                     leiden_output = leiden_with_silhouette_score(
-                        X, leiden_nneighbors, leiden_iterations=leiden_iterations)
+                        X,
+                        leiden_nneighbors,
+                        leiden_iterations=leiden_iterations)
                 nopath_clustering = leiden_output.clustering
             else:
                 nopath_clustering = get_subclustering(
@@ -1380,7 +1382,8 @@ def get_differential_expression_dict(loom,
                                      min_cluster_size=50,
                                      gene_alternate_name=None,
                                      verbose=True,
-                                     custom_ca=None):
+                                     custom_ca=None,
+                                     clusters_to_skip=[]):
     """Runs get_cluster_differential_expression over multiple clustering iterations (From ClusteringIteration(x) to ClusteringIteration(y), inclusive, where x = starting_iteration, and y = final_iteration), where ident1 is a cluster, and ident2 is the set of all other clusters which differ only in the terminal iteration (e.g. if there are clusters 0-0, 0-1, and 0-2, 1-0, and 1-1, differential expression will compare 0-0 with 0-1 and 0-2, 0-1 with 0-0 and 0-2, etc).  Outputs a dictionary with each of these differential expression result, with key equal to ident1.
 
     Parameters
@@ -1439,8 +1442,10 @@ def get_differential_expression_dict(loom,
         for i in range(starting_iteration, final_iteration + 1):
             if 'ClusteringIteration{}'.format(i) not in loom.ca.keys():
                 break
-            for cluster in np.unique(
-                    loom.ca['ClusteringIteration{}'.format(i)]):
+            for cluster in [
+                    x for x in np.unique(loom.ca[
+                        'ClusteringIteration{}'.format(i)])
+                    if x not in clusters_to_skip]:
                 if verbose:
                     print(cluster)
                 diffex[cluster] = get_cluster_differential_expression(
@@ -1985,7 +1990,11 @@ def conditional_simpson(x, x_conditional, x_total, with_replacement=False):
         ])
 
 
-def get_cluster_enrichment_dataframes(x, y, data, weights=None,sort_by_phi_col=None):
+def get_cluster_enrichment_dataframes(x,
+                                      y,
+                                      data,
+                                      weights=None,
+                                      sort_by_phi_col=None):
     """
 
     Parameters
@@ -2053,13 +2062,16 @@ def get_cluster_enrichment_dataframes(x, y, data, weights=None,sort_by_phi_col=N
     cluster_fraction_ingroup_df = pd.DataFrame.from_dict(
         cluster_fraction_ingroup_dict)
     if sort_by_phi_col is not None:
-        permutation = np.argsort(phi_coefficient_df[sort_by_phi_col]).values[::-1]
-    
+        permutation = np.argsort(
+            phi_coefficient_df[sort_by_phi_col]).values[::-1]
+
         fishers_exact_p_df = fishers_exact_p_df.iloc[permutation]
         phi_coefficient_df = phi_coefficient_df.iloc[permutation]
         counts_df = counts_df.iloc[permutation]
-        cluster_fraction_incluster_df = cluster_fraction_incluster_df.iloc[permutation]
-        cluster_fraction_ingroup_df = cluster_fraction_ingroup_df.iloc[permutation]
+        cluster_fraction_incluster_df = cluster_fraction_incluster_df.iloc[
+            permutation]
+        cluster_fraction_ingroup_df = cluster_fraction_ingroup_df.iloc[
+            permutation]
 
     ClusterEnrichment = namedtuple('ClusterEnrichment', [
         'FishersExactP', 'PhiCoefficient', 'Counts', 'FractionOfCluster',
@@ -2199,7 +2211,6 @@ def get_cluster_differential_expression(loom,
         print('Group 1 size: ', np.sum(mask1), ', group 2 size: ',
               np.sum(mask2))
 
-
     if gene_subset_mask is not None:
         genelist = loom.ra['gene'][gene_subset_mask]
         start = time()
@@ -2222,18 +2233,19 @@ def get_cluster_differential_expression(loom,
             print('Second matrix extracted', time() - start, 'seconds')
 ###
     if not verbose:
-        mw = mannwhitneyu(data1, data2,alternative='two-sided',axis=1)
+        mw = mannwhitneyu(data1, data2, alternative='two-sided', axis=1)
         pvalues = mw.pvalue
-        uvalues=mw.statistic
-        meanexpr1 = np.mean(data1,axis=1)
-        meanexpr2 = np.mean(data2,axis=1)
-        meanexpexpr1=np.mean(2**data1,axis=1)
-        meanexpexpr2=np.mean(2**data2,axis=1)
-        fracexpr1 = np.mean(data1>0,axis=1)
-        fracexpr2 = np.mean(data2>0,axis=1)
+        uvalues = mw.statistic
+        meanexpr1 = np.mean(data1, axis=1)
+        meanexpr2 = np.mean(data2, axis=1)
+        meanexpexpr1 = np.mean(2**data1, axis=1)
+        meanexpexpr2 = np.mean(2**data2, axis=1)
+        fracexpr1 = np.mean(data1 > 0, axis=1)
+        fracexpr2 = np.mean(data2 > 0, axis=1)
+
 
 ###
-    else:    
+    else:
         pvalues = []
         uvalues = []
         genes = []

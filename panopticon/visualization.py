@@ -2462,3 +2462,70 @@ def plot_iterative_clustering_tree(loom,
                mode=mode,
                gv_filename=loom.filename + '.gv',
                shape=graphviz_node_shape)
+
+
+def plot_color_coded_embedding(loom,
+                               x_ca,
+                               y_ca,
+                               category_ca=None,
+                               fig=None,
+                               ax=None,
+                               color_palette='colorblind'):
+    import numpy as np
+    import seaborn as sns
+    if fig is not None:
+        if ax is None:
+            raise Exception("Both or neither of fig, ax may be None")
+    if ax is None:
+        if fig is not None:
+            raise Exception("Both or neither of fig, ax may be None")
+        fig, ax = plt.subplots(figsize=(4, 4))
+
+    shuffle = np.arange(loom.shape[1])
+    np.random.shuffle(shuffle)
+    category2color = {
+        category: sns.color_palette(color_palette)[i]
+        for i, category in enumerate(np.unique(loom.ca[category_ca]))
+    }
+    ax.scatter(loom.ca[x_ca][shuffle],
+               loom.ca[y_ca][shuffle],
+               s=2,
+               c=[category2color[x] for x in loom.ca[category_ca]])
+
+    for spine in ['top', 'right']:
+        ax.spines[spine].set_visible(False)
+    left, right = ax.get_xlim()
+    bottom, top = ax.get_ylim()
+    scalefactor = 0.2
+    newright = (right - left) * scalefactor + left
+    newtop = (top - bottom) * scalefactor + bottom
+    ax.spines['bottom'].set_bounds(
+        left,
+        newright,
+    )
+    ax.spines['left'].set_bounds(
+        bottom,
+        newtop,
+    )
+    ax.plot(newright, bottom, ">k", scalex=False, scaley=False, clip_on=False)
+    ax.plot(left, newtop, "^k", scalex=False, scaley=False, clip_on=False)
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_xlabel(x_ca, loc='left', fontsize=14)
+    ax.set_ylabel(y_ca, loc='bottom', fontsize=14)
+
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0],
+               marker='o',
+               color='w',
+               label=category,
+               markerfacecolor=category2color[category],
+               markersize=10) for category in np.unique(loom.ca[category_ca])
+    ]
+
+    # Create the figure
+    ax.legend(handles=legend_elements,
+              bbox_to_anchor=(1, 1),
+              title=category_ca)
+    return fig, ax
