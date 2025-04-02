@@ -461,6 +461,27 @@ def cohensd(g1, g2):
 
     return (np.mean(g1) - np.mean(g2)) / s
 
+def glassdelta(experimental=None, control=None):
+    """Returns Glass' delta for the effect size of group 1 values (g1) over group 2 values (g2). g2 is assumed to be the control group
+
+    Parameters
+    ----------
+    experimental : experimental group values (list or numpy vector)
+        
+    control : control group values (list or numpy vector)
+        
+
+    Returns
+    -------
+
+    
+    """
+    if (experimental is None) or (control is None):
+        raise Exception("experimental and control should be lists or numpy vectors")
+    scontrol = np.std(control, ddof=1)
+
+    return (np.mean(experimental) - np.mean(control)) / scontrol
+
 
 def phi_coefficient(contingency_table):
     """Returns the phi-coefficient for a contingency table.

@@ -895,11 +895,14 @@ def volcano(diffex,
             positions=None,
             show=True,
             gene_label_offset_scale=1,
+            side_annotation_gene_label_offset_scale=1,
             no_effect_line=0,
             counterscale=1,
             lcounter_init=0,
             rcounter_init=0,
-            verbose=False):
+            verbose=False,
+            draggable_annotations=False,
+            gene_position_dict_for_side_annotations={}):
     """
 
     Parameters
@@ -991,6 +994,43 @@ def volcano(diffex,
                 positions.append('l')
             else:
                 positions.append('r')
+
+    def position_to_xytext_habt_va(position, effect_size, negpval, maxx, maxy,
+                                   gene_label_offset_scale):
+        if position in ['br', 'bl', 'tr', 'tl']:
+            if position[1] == 'r':
+                habt = 'right'
+            elif position[1] == 'l':
+                habt = 'left'
+            else:
+                raise Exception(
+                    "\'{}\':  invalid position character selection".format(
+                        position))
+            position = position[0]
+        else:
+            habt = 'center'
+        if position == 'b':
+            xytext = (effect_size,
+                      negpval + .015 * maxy * gene_label_offset_scale)
+            va = 'bottom'
+        elif position == 't':
+            xytext = (effect_size,
+                      negpval - .015 * maxy * gene_label_offset_scale)
+            va = 'top'
+        elif position == 'l':
+            xytext = (effect_size + .03 * maxx * gene_label_offset_scale,
+                      negpval)
+            va = 'center'
+        elif position == 'r':
+            xytext = (effect_size - .03 * maxx * gene_label_offset_scale,
+                      negpval)
+            va = 'center'
+        else:
+            raise Exception(
+                "\'{}\':  invalid position character selection".format(
+                    position))
+        return xytext, habt, va
+
     if positions != 'side':
         if type(positions) == dict:
             positions = [positions[key] for key in genemarklist]
@@ -1004,86 +1044,62 @@ def volcano(diffex,
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
             ax.scatter(effect_size, negpval, marker='.', color='k')
-            if position in ['br', 'bl', 'tr', 'tl']:
-                if position[1] == 'r':
-                    habt = 'right'
-                elif position[1] == 'l':
-                    habt = 'left'
-                position = position[0]
-            else:
-                habt = 'center'
-            if position == 'b':
-                ax.annotate(gene, (effect_size, negpval),
-                            (effect_size,
-                             negpval + .015 * maxy * gene_label_offset_scale),
-                            va='bottom',
-                            ha=habt,
-                            path_effects=[
-                                pe.withStroke(linewidth=2, foreground="white")
-                            ])
-            elif position == 't':
-                ax.annotate(gene, (effect_size, negpval),
-                            (effect_size,
-                             negpval - .015 * maxy * gene_label_offset_scale),
-                            va='top',
-                            ha=habt,
-                            path_effects=[
-                                pe.withStroke(linewidth=2, foreground="white")
-                            ])
-            elif position == 'l':
-                ax.annotate(gene, (effect_size, negpval),
-                            (effect_size +
-                             .03 * maxx * gene_label_offset_scale, negpval),
-                            va='center',
-                            ha='left',
-                            path_effects=[
-                                pe.withStroke(linewidth=2, foreground="white")
-                            ])
-            elif position == 'r':
-                ax.annotate(gene, (effect_size, negpval),
-                            (effect_size -
-                             .03 * maxx * gene_label_offset_scale, negpval),
-                            va='center',
-                            ha='right',
-                            path_effects=[
-                                pe.withStroke(linewidth=2, foreground="white")
-                            ])
-
-            else:
-                raise Exception(
-                    "\'{}\':  invalid position character selection".format(
-                        position))
+            xytext, habt, va = position_to_xytext_habt_va(
+                position, effect_size, negpval, maxx, maxy, gene_label_offset_scale)
+            anno = ax.annotate(
+                gene, (effect_size, negpval),
+                xytext,
+                va=va,
+                ha=habt,
+                path_effects=[pe.withStroke(linewidth=2, foreground="white")])
+            if draggable_annotations:
+                anno.draggable()
     else:
         lcounter = lcounter_init
         rcounter = rcounter_init
+        if type(positions) == dict:
+            positions = [positions[key] for key in genemarklist]
         for gene in genemarklist:
             genedf = diffex[diffex[gene_column] == gene]
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
-            ax.scatter(effect_size, negpval, marker='.', color='k')
-            if effect_size < no_effect_line:
-                xytext = (left_edge + .03 * maxx * gene_label_offset_scale,
-                          top_edge - lcounter)
-                ha = 'left'
-                lcounter += counterscale
+            if gene in gene_position_dict_for_side_annotations.keys():
+                position = gene_position_dict_for_side_annotations[gene]
+                xytext, habt, va = position_to_xytext_habt_va(
+                    position, effect_size, negpval, maxx, maxy, gene_label_offset_scale)
+                anno = ax.annotate(
+                    gene, (effect_size, negpval),
+                    xytext,
+                    va=va,
+                    ha=habt,
+                    path_effects=[pe.withStroke(linewidth=2, foreground="white")])
             else:
-                xytext = (right_edge - .03 * maxx * gene_label_offset_scale,
-                          top_edge - rcounter)
-                ha = 'right'
-                rcounter += counterscale
-
-
-#            print(xytext)
-            ax.annotate(
-                gene, (effect_size, negpval),
-                xytext=xytext,
-                va='center',
-                ha=ha,
-                arrowprops=dict(facecolor='black',
-                                width=0.1,
-                                headwidth=0,
-                                alpha=0.25),
-                path_effects=[pe.withStroke(linewidth=2, foreground="white")])
+    
+                if effect_size < no_effect_line:
+                    xytext = (left_edge + .03 * maxx * side_annotation_gene_label_offset_scale ,
+                              top_edge - lcounter)
+                    habt = 'left'
+                    va='center'
+                    lcounter += counterscale
+                else:
+                    xytext = (right_edge - .03 * maxx * side_annotation_gene_label_offset_scale,
+                              top_edge - rcounter)
+                    habt = 'right'
+                    va='center'
+                    rcounter += counterscale
+                anno = ax.annotate(
+                    gene, (effect_size, negpval),
+                    xytext=xytext,
+                    va=va,
+                    ha=habt,
+                    arrowprops=dict(facecolor='black',
+                                    width=0.1,
+                                    headwidth=0,
+                                    alpha=0.25),
+                    path_effects=[pe.withStroke(linewidth=2, foreground="white")])
+            if draggable_annotations:
+                anno.draggable()
+            ax.scatter(effect_size, negpval, marker='.', color='k')
 
     ax.axvline(no_effect_line, ls='--', color='k', alpha=0.25)
     ax.spines['top'].set_visible(False)
@@ -1095,7 +1111,7 @@ def volcano(diffex,
                   fontsize=14)
 
     ax.set_ylabel('-log' + r'${}_{10}$' + '(p-value)', fontsize=14)
-
+    print(left_edge, right_edge)
     ax.set_xlim([left_edge, right_edge])
     ax.set_ylim([bottom_edge, top_edge])
     plt.tight_layout()
@@ -2468,9 +2484,12 @@ def plot_color_coded_embedding(loom,
                                x_ca,
                                y_ca,
                                category_ca=None,
+                               category_as_continuum=False,
                                fig=None,
                                ax=None,
-                               color_palette='colorblind'):
+                               color_palette='colorblind',
+                               legend=True,
+                               on_figure_annotation=False):
     import numpy as np
     import seaborn as sns
     if fig is not None:
@@ -2480,17 +2499,59 @@ def plot_color_coded_embedding(loom,
         if fig is not None:
             raise Exception("Both or neither of fig, ax may be None")
         fig, ax = plt.subplots(figsize=(4, 4))
+    if category_as_continuum:
+        g = ax.scatter(loom.ca[x_ca],
+                       loom.ca[y_ca],
+                       s=2,
+                       c=loom.ca[category_ca],
+                       cmap=color_palette)
+        plt.colorbar(g, label=category_ca)
+    else:
+        shuffle = np.arange(loom.shape[1])
+        np.random.shuffle(shuffle)
+        if type(color_palette) == str:
+            color_palette = sns.color_palette(color_palette)
+        elif type(
+                sns.color_palette('colorblind')) == sns.palettes._ColorPalette:
+            pass
+        else:
+            raise Exception(
+                "color palette must be str or seaborn color palette")
+        category2color = {
+            category: sns.color_palette(color_palette)[i]
+            for i, category in enumerate(np.unique(loom.ca[category_ca]))
+        }
+        ax.scatter(
+            loom.ca[x_ca][shuffle],
+            loom.ca[y_ca][shuffle],
+            s=2,
+            c=[category2color[x] for x in loom.ca[category_ca][shuffle]])
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0],
+                   marker='o',
+                   color='w',
+                   label=category,
+                   markerfacecolor=category2color[category],
+                   markersize=10)
+            for category in np.unique(loom.ca[category_ca])
+        ]
+        if on_figure_annotation:
+            import matplotlib.patheffects as pe
+            for category in np.unique(loom.ca[category_ca]):
+                mask = loom.ca[category_ca] == category
+                x, y = loom.ca[x_ca][mask].mean(), loom.ca[y_ca][mask].mean()
+                ax.annotate(
+                    str(category), (x, y),
+                    path_effects=[pe.withStroke(foreground='w', linewidth=2)],
+                    ha='center',
+                    va='center')
 
-    shuffle = np.arange(loom.shape[1])
-    np.random.shuffle(shuffle)
-    category2color = {
-        category: sns.color_palette(color_palette)[i]
-        for i, category in enumerate(np.unique(loom.ca[category_ca]))
-    }
-    ax.scatter(loom.ca[x_ca][shuffle],
-               loom.ca[y_ca][shuffle],
-               s=2,
-               c=[category2color[x] for x in loom.ca[category_ca]])
+        # Create the figure
+        if legend:
+            ax.legend(handles=legend_elements,
+                      bbox_to_anchor=(1, 1),
+                      title=category_ca)
 
     for spine in ['top', 'right']:
         ax.spines[spine].set_visible(False)
@@ -2514,18 +2575,4 @@ def plot_color_coded_embedding(loom,
     ax.set_xlabel(x_ca, loc='left', fontsize=14)
     ax.set_ylabel(y_ca, loc='bottom', fontsize=14)
 
-    from matplotlib.lines import Line2D
-    legend_elements = [
-        Line2D([0], [0],
-               marker='o',
-               color='w',
-               label=category,
-               markerfacecolor=category2color[category],
-               markersize=10) for category in np.unique(loom.ca[category_ca])
-    ]
-
-    # Create the figure
-    ax.legend(handles=legend_elements,
-              bbox_to_anchor=(1, 1),
-              title=category_ca)
     return fig, ax
