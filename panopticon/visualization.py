@@ -1011,11 +1011,11 @@ def volcano(diffex,
             habt = 'center'
         if position == 'b':
             xytext = (effect_size,
-                      negpval + .015 * maxy * gene_label_offset_scale)
+                      negpval + .03 * maxy * gene_label_offset_scale)
             va = 'bottom'
         elif position == 't':
             xytext = (effect_size,
-                      negpval - .015 * maxy * gene_label_offset_scale)
+                      negpval - .03 * maxy * gene_label_offset_scale)
             va = 'top'
         elif position == 'l':
             xytext = (effect_size + .03 * maxx * gene_label_offset_scale,
@@ -1030,6 +1030,13 @@ def volcano(diffex,
                 "\'{}\':  invalid position character selection".format(
                     position))
         return xytext, habt, va
+    negpvals = []
+    for gene in genemarklist:
+        genedf = diffex[diffex[gene_column] == gene]
+        negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
+        negpvals.append(negpval)
+    genemarklist = list(np.array(genemarklist)[np.argsort(negpvals)][::-1])
+
 
     if positions != 'side':
         if type(positions) == dict:
