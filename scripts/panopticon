@@ -46,10 +46,16 @@ def combine_looms(input_looms, output_loom, output_type='loom'):
     multiple=True,
     default=None)
 @click.option(
+    '--exclude_feature_type',
+    help=
+    'Exclude a feature type from conversion (e.g. "Gene Expression", "Peaks", etc.).  Usage --exclude_feature_type Peaks',
+    multiple=True,
+    default=None)
+@click.option(
     '--write_chunked',
     help='flag to write output loom in chunked fashion (to reduce memory burden)',
     is_flag=True)
-def convert_10x_h5(h5file, output_loom, label, convert_to_ca, whitelist_gene,write_chunked):
+def convert_10x_h5(h5file, output_loom, label, convert_to_ca, whitelist_gene,write_chunked, exclude_feature_type):
     from panopticon.utilities import convert_10x_h5
     convert_10x_h5(h5file,
                    output_loom,
@@ -57,7 +63,8 @@ def convert_10x_h5(h5file, output_loom, label, convert_to_ca, whitelist_gene,wri
                    label[1],
                    genes_as_ca=convert_to_ca,
                    gene_whitelist=whitelist_gene,
-                   write_chunked=write_chunked)
+                   write_chunked=write_chunked,
+                   exclude_feature_type=exclude_feature_type)
 
 
 @cli.command(
@@ -135,6 +142,25 @@ def reaptec(fastq_dir, cellranger_output_dir, star_reference_dir,
     from panopticon.commands.reaptec import reaptec_main
     reaptec_main(fastq_dir, cellranger_output_dir, star_reference_dir,
                  reference_url, genome_url)
+
+@cli.command(
+        help="Generating a geopandas dataframe with location of called nuclei")
+@click.argument('tif_file', type=click.Path(exists=True),nargs=1)
+@click.argument('output_file_name',nargs=1)
+def generate_segmentation_gdf(tif_file, output_file_name):
+    from panopticon.spatial import get_labels_and_polys, get_gdf
+    if output_file_name.split('.')[-1] not in ['pkl','csv','parquet']:
+        raise Exception("output_file_name should end in one of ['csv','pkl','parquet']")
+    labels, polys = get_labels_and_polys(tif_file)
+    gdf = get_gdf(labels, polys)
+    if output_file_name.endswith('.pkl'):
+        gdf.to_pickle(output_file_name)
+    elif output_file_name.endswith('.csv'):
+        gdf.to_csv(output_file_name)
+    elif output_file_name.endswith('.parquet'):
+        gdf.to_parquet(output_file_name)
+
+
 
 
 if __name__ == '__main__':
