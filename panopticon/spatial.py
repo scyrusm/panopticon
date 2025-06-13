@@ -19,7 +19,6 @@ def get_labels_and_polys(tif_file):
     model = StarDist2D.from_pretrained('2D_versatile_he')
     
     img = img/255
-    labels, polys = 
     labels, polys = model.predict_instances_big(img, axes='YXC', block_size=4096, prob_thresh=0.01,nms_thresh=0.001, min_overlap=128, context=128, normalizer=None, n_tiles=(4,4,1))
 
 def get_gdf(labels, polys):
