@@ -20,6 +20,7 @@ def get_labels_and_polys(tif_file):
     
     img = img/255
     labels, polys = model.predict_instances_big(img, axes='YXC', block_size=4096, prob_thresh=0.01,nms_thresh=0.001, min_overlap=128, context=128, normalizer=None, n_tiles=(4,4,1))
+    return labels, polys
 
 def get_gdf(labels, polys):
     exit_code = import_check(
