@@ -23,6 +23,7 @@ def get_labels_and_polys(tif_file):
     return labels, polys
 
 def get_gdf(labels, polys):
+    from panopticon.utilities import import_check
     exit_code = import_check(
         "geopandas", 'pip install geopandas')
     if exit_code != 0:
