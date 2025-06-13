@@ -28,6 +28,11 @@ def get_gdf(labels, polys):
         "geopandas", 'pip install geopandas')
     if exit_code != 0:
         return
+    exit_code = import_check(
+        "shapely", 'pip install shapely')
+    if exit_code != 0:
+        return
+    from shapely.geometry import Polygon, Point
     import geopandas as gpd
 
     # Creating a list to store Polygon geometries
