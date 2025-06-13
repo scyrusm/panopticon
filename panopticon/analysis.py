@@ -2095,7 +2095,8 @@ def get_cluster_differential_expression(loom,
                                         ident2_downsample_size=None,
                                         min_cluster_size=0,
                                         gene_alternate_name=None,
-                                        gene_subset_mask=None):
+                                        gene_subset_mask=None,
+                                        alternate_test=None):
     """
 
     Parameters
@@ -2242,6 +2243,8 @@ def get_cluster_differential_expression(loom,
         meanexpexpr2 = np.mean(2**data2, axis=1)
         fracexpr1 = np.mean(data1 > 0, axis=1)
         fracexpr2 = np.mean(data2 > 0, axis=1)
+        if alternate_test is not None:
+            alternate_test_pvalues = alternate_test(data1, data2, axis=1).pvalue
 
 
 ###
@@ -2255,6 +2258,8 @@ def get_cluster_differential_expression(loom,
         meanexpexpr2 = []
         fracexpr1 = []
         fracexpr2 = []
+        if alternate_test is not None:
+            alternate_test_pvalues = []
         for igene, gene in enumerate(
                 tqdm(genelist, desc='Computing Mann-Whitney p-values')):
             genes.append(gene)
@@ -2273,6 +2278,8 @@ def get_cluster_differential_expression(loom,
             meanexpexpr2.append(np.mean(2**data2[igene, :]))
             fracexpr1.append((data1[igene, :] > 0).mean())
             fracexpr2.append((data2[igene, :] > 0).mean())
+            if alternate_test is not None:
+                alternate_test_pvalues.append(alternate_test(data1[igene,:], data2[igene,:]).pvalue)
     output = pd.DataFrame(genelist)
     output.columns = ['gene']
     output['pvalue'] = pvalues
@@ -2286,6 +2293,9 @@ def get_cluster_differential_expression(loom,
         meanexpexpr2) / np.log(2)
     output['FracExpr1'] = fracexpr1
     output['FracExpr2'] = fracexpr2
+    if alternate_test is not None:
+        output['AlternateTestPValue'] = [1 if np.isnan(x) else x for x in alternate_test_pvalues]
+        output['AlternateTestQvalue'] = fdrcorrection(output['AlternateTestPValue'],is_sorted=False)[1]
     if gene_alternate_name is not None:
         gene2altname = {
             gene: altname

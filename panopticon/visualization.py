@@ -1030,13 +1030,13 @@ def volcano(diffex,
                 "\'{}\':  invalid position character selection".format(
                     position))
         return xytext, habt, va
+
     negpvals = []
     for gene in genemarklist:
         genedf = diffex[diffex[gene_column] == gene]
         negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
         negpvals.append(negpval)
     genemarklist = list(np.array(genemarklist)[np.argsort(negpvals)][::-1])
-
 
     if positions != 'side':
         if type(positions) == dict:
@@ -1052,7 +1052,8 @@ def volcano(diffex,
             effect_size = genedf.iloc[0][effect_size_col]
             ax.scatter(effect_size, negpval, marker='.', color='k')
             xytext, habt, va = position_to_xytext_habt_va(
-                position, effect_size, negpval, maxx, maxy, gene_label_offset_scale)
+                position, effect_size, negpval, maxx, maxy,
+                gene_label_offset_scale)
             anno = ax.annotate(
                 gene, (effect_size, negpval),
                 xytext,
@@ -1073,37 +1074,46 @@ def volcano(diffex,
             if gene in gene_position_dict_for_side_annotations.keys():
                 position = gene_position_dict_for_side_annotations[gene]
                 xytext, habt, va = position_to_xytext_habt_va(
-                    position, effect_size, negpval, maxx, maxy, gene_label_offset_scale)
-                anno = ax.annotate(
-                    gene, (effect_size, negpval),
-                    xytext,
-                    va=va,
-                    ha=habt,
-                    path_effects=[pe.withStroke(linewidth=2, foreground="white")])
+                    position, effect_size, negpval, maxx, maxy,
+                    gene_label_offset_scale)
+                anno = ax.annotate(gene, (effect_size, negpval),
+                                   xytext,
+                                   va=va,
+                                   ha=habt,
+                                   path_effects=[
+                                       pe.withStroke(linewidth=2,
+                                                     foreground="white")
+                                   ])
             else:
-    
+
                 if effect_size < no_effect_line:
-                    xytext = (left_edge + .03 * maxx * side_annotation_gene_label_offset_scale ,
-                              top_edge - lcounter)
+                    xytext = (
+                        left_edge +
+                        .03 * maxx * side_annotation_gene_label_offset_scale,
+                        top_edge - lcounter)
                     habt = 'left'
-                    va='center'
+                    va = 'center'
                     lcounter += counterscale
                 else:
-                    xytext = (right_edge - .03 * maxx * side_annotation_gene_label_offset_scale,
-                              top_edge - rcounter)
+                    xytext = (
+                        right_edge -
+                        .03 * maxx * side_annotation_gene_label_offset_scale,
+                        top_edge - rcounter)
                     habt = 'right'
-                    va='center'
+                    va = 'center'
                     rcounter += counterscale
-                anno = ax.annotate(
-                    gene, (effect_size, negpval),
-                    xytext=xytext,
-                    va=va,
-                    ha=habt,
-                    arrowprops=dict(facecolor='black',
-                                    width=0.1,
-                                    headwidth=0,
-                                    alpha=0.25),
-                    path_effects=[pe.withStroke(linewidth=2, foreground="white")])
+                anno = ax.annotate(gene, (effect_size, negpval),
+                                   xytext=xytext,
+                                   va=va,
+                                   ha=habt,
+                                   arrowprops=dict(facecolor='black',
+                                                   width=0.1,
+                                                   headwidth=0,
+                                                   alpha=0.25),
+                                   path_effects=[
+                                       pe.withStroke(linewidth=2,
+                                                     foreground="white")
+                                   ])
             if draggable_annotations:
                 anno.draggable()
             ax.scatter(effect_size, negpval, marker='.', color='k')
@@ -2492,11 +2502,15 @@ def plot_color_coded_embedding(loom,
                                y_ca,
                                category_ca=None,
                                category_as_continuum=False,
+                               use_gex_as_ca=False,
+                               gene_ra='gene_common_name',
+                               gex_layer='log2(TP10k+1)',
                                fig=None,
                                ax=None,
                                color_palette='colorblind',
                                legend=True,
-                               on_figure_annotation=False):
+                               on_figure_annotation=False,
+                               s=2):
     import numpy as np
     import seaborn as sns
     if fig is not None:
@@ -2507,10 +2521,15 @@ def plot_color_coded_embedding(loom,
             raise Exception("Both or neither of fig, ax may be None")
         fig, ax = plt.subplots(figsize=(4, 4))
     if category_as_continuum:
+        if use_gex_as_ca:
+            igene = np.where(loom.ra[gene_ra] == category_ca)[0][0]
+            c = loom[gex_layer][igene, :]
+        else:
+            c = loom.ca[category_ca]
         g = ax.scatter(loom.ca[x_ca],
                        loom.ca[y_ca],
-                       s=2,
-                       c=loom.ca[category_ca],
+                       s=s,
+                       c=c,
                        cmap=color_palette)
         plt.colorbar(g, label=category_ca)
     else:
@@ -2531,7 +2550,7 @@ def plot_color_coded_embedding(loom,
         ax.scatter(
             loom.ca[x_ca][shuffle],
             loom.ca[y_ca][shuffle],
-            s=2,
+            s=s,
             c=[category2color[x] for x in loom.ca[category_ca][shuffle]])
         from matplotlib.lines import Line2D
         legend_elements = [
@@ -2583,3 +2602,70 @@ def plot_color_coded_embedding(loom,
     ax.set_ylabel(y_ca, loc='bottom', fontsize=14)
 
     return fig, ax
+
+
+def gsea_plot(ranking,
+              pathway2genelist_dict,
+              left_label='Enriched for genes at beginning of ranking',
+              right_label='Enriched for genes at end of ranking',
+              figsize=(9/2,7/2)
+              ):
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from panopticon.analysis import get_enrichment_score
+    import matplotlib
+
+    palette = sns.color_palette('colorblind', 12)
+    fig, axes = plt.subplots(len(pathway2genelist_dict.keys()) + 1,
+                             1,
+                             figsize=figsize,
+                             height_ratios=[20] +
+                             [1] * len(pathway2genelist_dict.keys()),
+                             sharex=True)
+    mins = []
+    maxs = []
+    for ikey, key in enumerate([y for y in pathway2genelist_dict.keys()]):
+        es = get_enrichment_score(ranking,
+                                  pathway2genelist_dict[key],
+                                  presorted=True,
+                                  return_es_curve=True,
+                                  return_pvalue=True,
+                                  use_fgsea=True)
+        axes[0].plot(es.enrichment_score_curve,
+                     label=key,
+                     lw=3,
+                     color=palette[ikey])
+        maxs.append(np.max(es.enrichment_score_curve))
+        mins.append(np.min(es.enrichment_score_curve))
+
+        for x in np.where(np.isin(ranking, pathway2genelist_dict[key]))[0]:
+            axes[ikey + 1].axvline(x)
+        axes[ikey + 1].set_ylabel(key + '\n' * 5,
+                                  rotation=0,
+                                  ha='left',
+                                  va='bottom')
+        axes[ikey + 1].set_yticks([])
+        axes[ikey + 1].yaxis.set_label_position("right")
+        axes[ikey + 1].yaxis.tick_right()
+        for side in ['top', 'bottom', 'right', 'left']:
+            axes[ikey + 1].spines[side].set_visible(False)
+        axes[ikey + 1].set_xticks([])
+        if es.p_value == 0:
+            key_with_pval = key + ', p<{0:.5g}'.format(1 / 10000)
+        else:
+            key_with_pval = key + ', p={0:.5g}'.format(es.p_value)
+        axes[ikey + 1].set_ylabel(key_with_pval,
+                                  rotation=0,
+                                  ha='left',
+                                  va='center')
+
+    axes[0].legend(bbox_to_anchor=(1, 1))
+    axes[0].set_ylabel('running enrichment score')
+    axes[-1].set_xlabel('rank in gene list\n' + r'$\leftarrow$ ' + left_label +
+                        ' ' * 20 + right_label + r' $\rightarrow$')
+    axes[0].set_ylim([np.min(mins), np.max(maxs)])
+    axes[0].spines['top'].set_position(('data', 0))
+    axes[0].spines['bottom'].set_position(('data', 0))
+    axes[0].spines['right'].set_visible(False)
+    plt.tight_layout()
+    return fig, axes

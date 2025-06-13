@@ -461,6 +461,7 @@ def cohensd(g1, g2):
 
     return (np.mean(g1) - np.mean(g2)) / s
 
+
 def glassdelta(experimental=None, control=None):
     """Returns Glass' delta for the effect size of group 1 values (g1) over group 2 values (g2). g2 is assumed to be the control group
 
@@ -477,7 +478,8 @@ def glassdelta(experimental=None, control=None):
     
     """
     if (experimental is None) or (control is None):
-        raise Exception("experimental and control should be lists or numpy vectors")
+        raise Exception(
+            "experimental and control should be lists or numpy vectors")
     scontrol = np.std(control, ddof=1)
 
     return (np.mean(experimental) - np.mean(control)) / scontrol
@@ -557,7 +559,9 @@ def convert_10x_h5(path_10x_h5,
                    gene_whitelist=None,
                    output_type='loom',
                    write_chunked=False,
-                   chunk_size=512):
+                   chunk_size=512,
+                   exclude_feature_type=None,
+                   verbose=True):
     """
 
     Parameters
@@ -618,6 +622,30 @@ def convert_10x_h5(path_10x_h5,
         ca[labelkey] = [label] * len(barcodes)
 
     m = filtered_feature_bc_matrix.m
+
+    feature_types = np.array(filtered_feature_bc_matrix.feature_ref.get_feature_types_excluding_deprecated_probes() )
+    if exclude_feature_type is not None:
+        if type(exclude_feature_type)==str:
+            exclude_feature_type = [exclude_feature_type]
+        elif type(exclude_feature_type)==tuple:
+            exclude_feature_type = list(exclude_feature_type)
+
+        try:
+            iterator = iter(exclude_feature_type)
+        except TypeError:
+            raise Exception("exclude_feature_type must be iterable or str, is of type {}".format(type(exclude_feature_type)))
+        feature_type_mask = ~np.isin(feature_types, exclude_feature_type)
+        feature_types = np.array(feature_types)[np.array(feature_type_mask)]
+        m = m[feature_type_mask, :]
+        features = list(np.array(features)[feature_type_mask])
+        features_common_names = list(np.array(features_common_names)[feature_type_mask])
+
+        if verbose:
+            print("Removing the following feature types: {}".format(
+                exclude_feature_type))
+    if verbose:
+        print(
+            "Including the following feature types: {}".format(np.unique(feature_types)))
     if gene_whitelist is not None:
         if len(gene_whitelist) > 0:
             mask = np.isin(features, gene_whitelist)
