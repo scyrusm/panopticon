@@ -7,7 +7,8 @@ def get_module_score_matrix(loom,
                             cellmask,
                             signature_mask,
                             nbins=10,
-                            ncontrol=5):
+                            ncontrol=5,
+                            omit_control=False):
     """generates a module score (a la Seurat's AddModuleScore, see Tirosh 2016) on a matrix, with a mask.  I don't call this directly (S Markson 3 June 2020).
 
     Parameters
@@ -33,6 +34,11 @@ def get_module_score_matrix(loom,
     
     """
     assert len(signature_mask) == loom.shape[0]
+    signature = loom[layername].map([np.mean],
+                                    axis=1,
+                                    selection=signature_mask.nonzero()[0])[0]
+    if omit_control:
+        return signature
     #nonsigdata = alldata[~signature_mask, :]
     #sigdata = alldata[signature_mask, :]
     if cellmask is None:
@@ -59,9 +65,6 @@ def get_module_score_matrix(loom,
         raise Exception(
             "signature_mask must be boolean mask with length equal to the number of rows of loom"
         )
-    signature = loom[layername].map([np.mean],
-                                    axis=1,
-                                    selection=signature_mask.nonzero()[0])[0]
     sigdata_quantiles = gene_quantiles[signature_mask]
     control_group = []
     for quantile in np.unique(sigdata_quantiles):
@@ -138,7 +141,8 @@ def generate_masked_module_score(loom,
                                  ca_name,
                                  nbins=10,
                                  ncontrol=5,
-                                 gene_ra='gene'):
+                                 gene_ra='gene',
+                                 omit_control=False):
     """
 
     Parameters
@@ -175,7 +179,8 @@ def generate_masked_module_score(loom,
                                         cellmask,
                                         sigmask,
                                         nbins=nbins,
-                                        ncontrol=ncontrol)
+                                        ncontrol=ncontrol,
+                                        omit_control=omit_control)
     if cellmask is not None:
         maskedscores = []
         counter = 0
@@ -1445,7 +1450,8 @@ def get_differential_expression_dict(loom,
             for cluster in [
                     x for x in np.unique(loom.ca[
                         'ClusteringIteration{}'.format(i)])
-                    if x not in clusters_to_skip]:
+                    if x not in clusters_to_skip
+            ]:
                 if verbose:
                     print(cluster)
                 diffex[cluster] = get_cluster_differential_expression(
@@ -2244,7 +2250,8 @@ def get_cluster_differential_expression(loom,
         fracexpr1 = np.mean(data1 > 0, axis=1)
         fracexpr2 = np.mean(data2 > 0, axis=1)
         if alternate_test is not None:
-            alternate_test_pvalues = alternate_test(data1, data2, axis=1).pvalue
+            alternate_test_pvalues = alternate_test(data1, data2,
+                                                    axis=1).pvalue
 
 
 ###
@@ -2279,7 +2286,8 @@ def get_cluster_differential_expression(loom,
             fracexpr1.append((data1[igene, :] > 0).mean())
             fracexpr2.append((data2[igene, :] > 0).mean())
             if alternate_test is not None:
-                alternate_test_pvalues.append(alternate_test(data1[igene,:], data2[igene,:]).pvalue)
+                alternate_test_pvalues.append(
+                    alternate_test(data1[igene, :], data2[igene, :]).pvalue)
     output = pd.DataFrame(genelist)
     output.columns = ['gene']
     output['pvalue'] = pvalues
@@ -2294,8 +2302,11 @@ def get_cluster_differential_expression(loom,
     output['FracExpr1'] = fracexpr1
     output['FracExpr2'] = fracexpr2
     if alternate_test is not None:
-        output['AlternateTestPValue'] = [1 if np.isnan(x) else x for x in alternate_test_pvalues]
-        output['AlternateTestQvalue'] = fdrcorrection(output['AlternateTestPValue'],is_sorted=False)[1]
+        output['AlternateTestPValue'] = [
+            1 if np.isnan(x) else x for x in alternate_test_pvalues
+        ]
+        output['AlternateTestQvalue'] = fdrcorrection(
+            output['AlternateTestPValue'], is_sorted=False)[1]
     if gene_alternate_name is not None:
         gene2altname = {
             gene: altname

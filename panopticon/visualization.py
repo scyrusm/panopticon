@@ -473,7 +473,8 @@ def swarmviolin(data,
                 custom_annotation_fontsize=6,
                 pairing_column=None,
                 only_plot_hue_pairing=False,
-                pairing_line_alpha=0.1):
+                pairing_line_alpha=0.1,
+                censor_inf_in_statistics=False):
     """
 
     Parameters
@@ -533,7 +534,6 @@ def swarmviolin(data,
                        hue_order=hue_order,
                        y=y,
                        split=split,
-                       inner='quartile',
                        scale='width',
                        cut=0,
                        alpha=alpha,
@@ -545,7 +545,6 @@ def swarmviolin(data,
                        x=x,
                        y=y,
                        split=split,
-                       inner='quartile',
                        scale='width',
                        cut=0,
                        alpha=alpha,
@@ -612,10 +611,10 @@ def swarmviolin(data,
                     raise Exception(
                         "paired_hue_matching_col must be specified")
                 a = data[(data[hue] == hue1)
-                         & (data[category_col]
+                         & (data[category_col].astype(str)
                             == category)]  #[continuous_col].values
                 b = data[(data[hue] == hue2)
-                         & (data[category_col] == category)]  #
+                         & (data[category_col].astype(str) == category)]  #
                 ab = pd.merge(a,
                               b,
                               on=paired_hue_matching_col,
@@ -633,35 +632,46 @@ def swarmviolin(data,
                 pval = f(a, b).pvalue
 
             elif pvalue in ['mannwhitney', 'ttest']:
-                a = data[
-                    (data[hue] == hue1)
-                    & (data[category_col] == category)][continuous_col].values
-                b = data[
-                    (data[hue] == hue2)
-                    & (data[category_col] == category)][continuous_col].values
+                a = data[(data[hue] == hue1)
+                         & (data[category_col].astype(str) == category
+                            )][continuous_col].values
+                b = data[(data[hue] == hue2)
+                         & (data[category_col].astype(str) == category
+                            )][continuous_col].values
                 a = np.array([x for x in a if not np.isnan(x)])
                 b = np.array([x for x in b if not np.isnan(x)])
-                mw = mannwhitneyu(a, b, alternative='two-sided')
-                tt = ttest_ind(a, b)
-                if pvalue == 'mannwhitney':
-                    pval = mw.pvalue
-                elif pvalue == 'ttest':
-                    pval = tt[1]
+                if censor_inf_in_statistics:
+                    a = np.array([x for x in a if not np.isinf(x)])
+                    b = np.array([x for x in b if not np.isinf(x)])
+
+                if len(a) == 0 or len(b) == 0:
+                    pval = np.nan
+                else:
+                    mw = mannwhitneyu(a, b, alternative='two-sided')
+                    tt = ttest_ind(a, b)
+                    if pvalue == 'mannwhitney':
+                        pval = mw.pvalue
+                    elif pvalue == 'ttest':
+                        pval = tt[1]
             else:
                 raise Exception(
                     "`pvalue` must be either \'mannwhitney\' or \'ttest\' or \'wilcoxon_signed_rank\' or \'ttest_rel\'"
                 )
-
-            if effect_size == 'cohensd':
-                from panopticon.utilities import cohensd
-                es = cohensd(a, b)
-            elif effect_size == 'cles':
-                es = mw.statistic / len(a) / len(b)
+            if len(a) == 0 or len(b) == 0:
+                es = np.nan
             else:
-                raise Exception(
-                    "effect_size must be either \'cohensd\' or \'cles\'")
+                if effect_size == 'cohensd':
+                    from panopticon.utilities import cohensd
+                    es = cohensd(a, b)
+                elif effect_size == 'cles':
+                    es = mw.statistic / len(a) / len(b)
+                else:
+                    raise Exception(
+                        "effect_size must be either \'cohensd\' or \'cles\'")
             annotation_string = ''
-            if vertical_violins:
+            if len(a) == 0 or len(b) == 0:
+                pass
+            elif vertical_violins:
                 if annotate_hue_pvalues:
                     annotation_string += annotate_hue_pvalue_fmt_str.format(
                         pval) + '\n'
@@ -721,6 +731,9 @@ def swarmviolin(data,
                 b = data[data[category_col] != category][continuous_col].values
                 a = np.array([x for x in a if not np.isnan(x)])
                 b = np.array([x for x in b if not np.isnan(x)])
+                if censor_inf_in_statistics:
+                    a = np.array([x for x in a if not np.isinf(x)])
+                    b = np.array([x for x in b if not np.isinf(x)])
                 mw = mannwhitneyu(a, b, alternative='two-sided')
                 tt = ttest_ind(a, b)
                 if pvalue == 'mannwhitney':
@@ -902,7 +915,8 @@ def volcano(diffex,
             rcounter_init=0,
             verbose=False,
             draggable_annotations=False,
-            gene_position_dict_for_side_annotations={}):
+            gene_position_dict_for_side_annotations={},
+            boldgenes=[]):
     """
 
     Parameters
@@ -1071,6 +1085,9 @@ def volcano(diffex,
             genedf = diffex[diffex[gene_column] == gene]
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
+            fontweight='normal'
+            if gene in boldgenes:
+                fontweight='bold'
             if gene in gene_position_dict_for_side_annotations.keys():
                 position = gene_position_dict_for_side_annotations[gene]
                 xytext, habt, va = position_to_xytext_habt_va(
@@ -1080,6 +1097,7 @@ def volcano(diffex,
                                    xytext,
                                    va=va,
                                    ha=habt,
+                                   fontweight=fontweight,
                                    path_effects=[
                                        pe.withStroke(linewidth=2,
                                                      foreground="white")
@@ -1091,7 +1109,7 @@ def volcano(diffex,
                         left_edge +
                         .03 * maxx * side_annotation_gene_label_offset_scale,
                         top_edge - lcounter)
-                    habt = 'left'
+                    habt = 'right'
                     va = 'center'
                     lcounter += counterscale
                 else:
@@ -1099,13 +1117,14 @@ def volcano(diffex,
                         right_edge -
                         .03 * maxx * side_annotation_gene_label_offset_scale,
                         top_edge - rcounter)
-                    habt = 'right'
+                    habt = 'left'
                     va = 'center'
                     rcounter += counterscale
                 anno = ax.annotate(gene, (effect_size, negpval),
                                    xytext=xytext,
                                    va=va,
                                    ha=habt,
+                                   fontweight=fontweight,
                                    arrowprops=dict(facecolor='black',
                                                    width=0.1,
                                                    headwidth=0,
@@ -1128,7 +1147,6 @@ def volcano(diffex,
                   fontsize=14)
 
     ax.set_ylabel('-log' + r'${}_{10}$' + '(p-value)', fontsize=14)
-    print(left_edge, right_edge)
     ax.set_xlim([left_edge, right_edge])
     ax.set_ylim([bottom_edge, top_edge])
     plt.tight_layout()
@@ -2076,9 +2094,9 @@ def plot_dot_plot(loom,
     if x_column_attribute not in loom.ca.keys():
         raise Exception(
             "x_column_attribute not a column attribute of loomfile")
-    if y_genes is None and column_attributes is None:
+    if y_genes is None and y_column_attributes is None:
         raise Exception(
-            "One of genes or column_attributes must be an iterable")
+            "One of genes or y_column_attributes must be an iterable")
     import pandas as pd
     import numpy as np
     from tqdm import tqdm
@@ -2131,7 +2149,7 @@ def plot_dot_plot(loom,
             df[col] = (df[col] - df[col].mean()) / df[col].std()
     elif minmax_normalize:
         for col in df.columns:
-            df[col] = (df[col] - df[col].min()) / df[col].max()
+            df[col] = (df[col] - df[col].min()) / (df[col].max()-df[col].min())
     fig, (ax, cax) = plt.subplots(
         1,
         2,
@@ -2184,7 +2202,6 @@ def plot_dot_plot(loom,
                 elif orientation == 'horizontal':
                     y = key2x[key]
                     x = marker2y[col]
-                #print(frac*scale)
                 sc = ax.scatter(x,
                                 y,
                                 s=frac * scale + 1e-9,
@@ -2263,9 +2280,16 @@ def plot_dot_plot(loom,
         cbar.ax.set_yticks(cax_ylims)
         cbar.ax.set_yticklabels([0, 1])
     elif orientation == 'horizontal':
-        ax.set_xticks(range(len(relevant_columns)))
-
-        ax.set_xticklabels([x.split('_With')[0] for x in relevant_columns])
+        major_tick_columns = relevant_columns[0::2]
+        minor_tick_columns = relevant_columns[1::2]
+        major_tick_positions = list(np.arange(0,len(relevant_columns),2))
+        minor_tick_positions = list(np.arange(1,len(relevant_columns),2))
+        ax.set_xlim([-0.5, len(relevant_columns) - 0.5])
+        ax.set_ylim([-0.5, len(df.index) - 0.5])
+        ax.set_xticks(major_tick_positions)
+        ax.set_xticks(minor_tick_positions,minor=True)
+        ax.set_xticklabels([x.split('_With')[0] for x in major_tick_columns])
+        ax.set_xticklabels([x.split('_With')[0] for x in minor_tick_columns],minor=True)
 
         ax.set_yticks(np.array(range(len(df.index.values))))
         ax.set_yticklabels(list(df.index.values))
@@ -2286,14 +2310,13 @@ def plot_dot_plot(loom,
         cbar.ax.set_xticklabels([])
         from matplotlib import ticker
 
-        ax.xaxis.set_major_locator(ticker.MultipleLocator(2))
-        ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
-        print(ax.get_xminorticklabels())
-        ax.xaxis.set_minor_formatter(
-            ticker.FixedFormatter([''] +
-                                  relevant_columns[1:(len(relevant_columns) +
-                                                      1):2]))
-
+#        print(relevant_columns[1:(len(relevant_columns)+1):2])
+#        print(ax
+#        ax.xaxis.set_minor_formatter(
+#            ticker.FixedFormatter(
+#                                  ['']*0+relevant_columns[1:(len(relevant_columns) +
+#                                                      1):2]+['']*0))
+#
         ax.tick_params(axis='x', which='minor', length=15)
         ax.tick_params(axis='x', which='both', color='lightgrey')
         ax.autoscale(enable=True, axis='x', tight=True)
@@ -2608,8 +2631,7 @@ def gsea_plot(ranking,
               pathway2genelist_dict,
               left_label='Enriched for genes at beginning of ranking',
               right_label='Enriched for genes at end of ranking',
-              figsize=(9/2,7/2)
-              ):
+              figsize=(9 / 2, 7 / 2)):
     import matplotlib.pyplot as plt
     import seaborn as sns
     from panopticon.analysis import get_enrichment_score
@@ -2669,3 +2691,265 @@ def gsea_plot(ranking,
     axes[0].spines['right'].set_visible(False)
     plt.tight_layout()
     return fig, axes
+
+
+def boxenplot_with_statistics(
+        data,
+        x,
+        y,
+        hue=None,
+        ax=None,
+        annotate_hue_pvalues=False,
+        annotate_hue_effect_size=False,
+        annotate_hue_n=False,
+        annotate_hue_pvalue_fmt_str='p: {0:.2f}',
+        annotate_hue_effect_size_fmt_str='es: {0:.2f}',
+        annotate_hue_n_fmt_str='n: {}, {}',
+        annotate_pvalue_vs_all=False,
+        annotate_effect_size_vs_all=False,
+        annotate_n=False,
+        annotate_pvalue_vs_all_fmt_str='p: {0:.2f}',
+        annotate_effect_size_vs_all_fmt_str='es: {0:.2f}',
+        annotate_n_fmt_str='n: {}',
+        annotate_hue_single_line=False,
+        effect_size='cohensd',
+        pvalue='mannwhitney',
+        custom_annotation_dict={},
+        custom_annotation_fontsize=6,
+        censor_inf_in_statistics=False):
+    """
+
+    """
+    import seaborn as sns
+    import matplotlib.pyplot as plt
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(5, 5))
+    if hue is None:
+        hue_order = None
+    else:
+        hue_order = data[hue].unique()
+    sns.boxenplot(data=data,
+                  x=x,
+                  y=y,
+                  hue=hue,
+                  width_method='exponential',
+                  ax=ax,
+                  outlier_prop=0.05,
+                  saturation=1)
+
+    from panopticon.visualization import legend_without_duplicate_labels
+    legend_without_duplicate_labels(ax)
+    if annotate_hue_pvalues or annotate_hue_effect_size or annotate_hue_n and len(
+            custom_annotation_dict.keys()) == 0:
+        if len(data[hue].unique()) != 2:
+            raise Exception(
+                "hue must be a categorical variable with 2 unique values")
+        from scipy.stats import mannwhitneyu, ttest_ind, ttest_rel, wilcoxon
+        if np.issubdtype(data[y].dtype, np.number):
+            category_col = x
+            continuous_col = y
+            vertical_boxes = True
+            ticklabels = ax.get_xmajorticklabels()
+        else:
+            category_col = y
+            continuous_col = x
+            vertical_boxes = False
+            ticklabels = ax.get_ymajorticklabels()
+        for ticklabel in ticklabels:
+            category = ticklabel.get_text()
+            hue1, hue2 = data[hue].unique()
+
+            if pvalue in ['mannwhitney', 'ttest']:
+                a = data[(data[hue] == hue1)
+                         & (data[category_col].astype(str) == category
+                            )][continuous_col].values
+                b = data[(data[hue] == hue2)
+                         & (data[category_col].astype(str) == category
+                            )][continuous_col].values
+                a = np.array([x for x in a if not np.isnan(x)])
+                b = np.array([x for x in b if not np.isnan(x)])
+                if censor_inf_in_statistics:
+                    a = np.array([x for x in a if not np.isinf(x)])
+                    b = np.array([x for x in b if not np.isinf(x)])
+
+                if len(a) == 0 or len(b) == 0:
+                    pval = np.nan
+                else:
+                    mw = mannwhitneyu(a, b, alternative='two-sided')
+                    tt = ttest_ind(a, b)
+                    if pvalue == 'mannwhitney':
+                        pval = mw.pvalue
+                    elif pvalue == 'ttest':
+                        pval = tt[1]
+            else:
+                raise Exception(
+                    "`pvalue` must be either \'mannwhitney\' or \'ttest\' ")
+            if len(a) == 0 or len(b) == 0:
+                es = np.nan
+            else:
+                if effect_size == 'cohensd':
+                    from panopticon.utilities import cohensd
+                    es = cohensd(a, b)
+                elif effect_size == 'cles':
+                    es = mw.statistic / len(a) / len(b)
+                else:
+                    raise Exception(
+                        "effect_size must be either \'cohensd\' or \'cles\'")
+            annotation_string = ''
+            if len(a) == 0 or len(b) == 0:
+                pass
+            elif vertical_boxes:
+                if annotate_hue_pvalues:
+                    annotation_string += annotate_hue_pvalue_fmt_str.format(
+                        pval) + '\n'
+                if annotate_hue_effect_size:
+                    annotation_string += annotate_hue_effect_size_fmt_str.format(
+                        es) + '\n'
+                if annotate_hue_n:
+                    annotation_string += annotate_hue_n_fmt_str.format(
+                        len(a), len(b)) + '\n'
+                if annotate_hue_single_line:
+                    anno_x, anno_y = ticklabel.get_position(
+                    )[0], data[continuous_col].max()
+                else:
+                    anno_x, anno_y = ticklabel.get_position()[0], np.max(
+                        np.hstack((a, b)))
+
+                ax.annotate(annotation_string, (anno_x, anno_y),
+                            ha='center',
+                            va='bottom')
+            else:
+                if annotate_hue_pvalues:
+                    annotation_string += ' ' + annotate_hue_pvalue_fmt_str.format(
+                        pval)
+                if annotate_hue_effect_size:
+                    annotation_string += '\n ' + annotate_hue_effect_size_fmt_str.format(
+                        es)
+                if annotate_hue_n:
+                    annotation_string += '\n' + annotate_hue_n_fmt_str.format(
+                        len(a), len(b))
+                if annotate_hue_single_line:
+                    anno_x, annoy_y = data[continuous_col].max(
+                    ), ticklabel.get_position()[1]
+                else:
+                    anno_x, anno_y = np.max(np.hstack(
+                        (a, b))), ticklabel.get_position()[1]
+
+                ax.annotate(annotation_string, (anno_x, anno_y),
+                            ha='left',
+                            va='center')
+    if annotate_pvalue_vs_all or annotate_effect_size_vs_all or annotate_n and len(
+            custom_annotation_dict.keys()) == 0:
+        from scipy.stats import mannwhitneyu, ttest_ind
+        if np.issubdtype(data[y].dtype, np.number):
+            category_col = x
+            continuous_col = y
+            vertical_violins = True
+            ticklabels = ax.get_xmajorticklabels()
+        else:
+            category_col = y
+            continuous_col = x
+            vertical_violins = False
+            ticklabels = ax.get_ymajorticklabels()
+        for ticklabel in ticklabels:
+            category = ticklabel.get_text()
+            if pvalue in ['mannwhitney', 'ttest']:
+                a = data[data[category_col] == category][continuous_col].values
+                b = data[data[category_col] != category][continuous_col].values
+                a = np.array([x for x in a if not np.isnan(x)])
+                b = np.array([x for x in b if not np.isnan(x)])
+                if censor_inf_in_statistics:
+                    a = np.array([x for x in a if not np.isinf(x)])
+                    b = np.array([x for x in b if not np.isinf(x)])
+                mw = mannwhitneyu(a, b, alternative='two-sided')
+                tt = ttest_ind(a, b)
+                if pvalue == 'mannwhitney':
+                    pval = mw.pvalue
+                elif pvalue == 'ttest':
+                    pval = tt[1]
+            else:
+                raise Exception(
+                    "`pvalue` must be either \'mannwhitney\' or \'ttest\' ")
+
+            if effect_size == 'cohensd':
+                from panopticon.utilities import cohensd
+                es = cohensd(a, b)
+            elif effect_size == 'cles':
+                es = mw.statistic / len(a) / len(b)
+            else:
+                raise Exception(
+                    "effect_size must be either \'cohensd\' or \'cles\'")
+            annotation_string = ''
+            if vertical_violins:
+                if annotate_pvalue_vs_all:
+                    annotation_string += annotate_pvalue_vs_all_fmt_str.format(
+                        pval) + '\n'
+                if annotate_effect_size_vs_all:
+                    annotation_string += annotate_effect_size_vs_all_fmt_str.format(
+                        es) + '\n'
+                if annotate_n:
+                    annotation_string += annotate_n_fmt_str.format(
+                        len(a)) + '\n'
+                ax.annotate(annotation_string,
+                            (ticklabel.get_position()[0], np.max(a)),
+                            ha='center',
+                            va='bottom')
+            else:
+                if annotate_pvalue_vs_all:
+                    annotation_string += ' ' + annotate_pvalue_vs_all_fmt_str.format(
+                        pval)
+                if annotate_effect_size_vs_all:
+                    annotation_string += '\n ' + annotate_effect_size_vs_all_fmt_str.format(
+                        es)
+                if annotate_n:
+                    annotation_string += '\n' + annotate_n_fmt_str.format(
+                        len(a))
+
+                ax.annotate(annotation_string, (
+                    np.max(a),
+                    ticklabel.get_position()[1],
+                ),
+                            ha='left',
+                            va='center',
+                            annotation_clip=False)
+    if len(custom_annotation_dict.keys()) > 0:
+        if np.issubdtype(data[y].dtype, np.number):
+            category_col = x
+            continuous_col = y
+            vertical_violins = True
+            ticklabels = ax.get_xmajorticklabels()
+        else:
+            category_col = y
+            continuous_col = x
+            vertical_violins = False
+            ticklabels = ax.get_ymajorticklabels()
+
+        for ticklabel in ticklabels:
+            annotation_string = ''
+            category = ticklabel.get_text()
+            annotation_pos = np.max(
+                data[data[category_col] == category][continuous_col].values)
+
+            if vertical_violins:
+                if ticklabel.get_text() in custom_annotation_dict.keys():
+                    annotation_string += '\n' + custom_annotation_dict[
+                        ticklabel.get_text()]
+                ax.annotate(annotation_string,
+                            (ticklabel.get_position()[0], annotation_pos),
+                            ha='center',
+                            va='bottom',
+                            fontsize=custom_annotation_fontsize)
+            else:
+                if ticklabel in custom_annotation_dict.keys():
+                    annotation_string += '\n' + custom_annotation_dict[
+                        ticklabel]
+
+                ax.annotate(annotation_string, (
+                    annotation_pos,
+                    ticklabel.get_position()[1],
+                ),
+                            ha='left',
+                            va='center',
+                            fontsize=custom_annotation_fontsize)
+
+    return ax
