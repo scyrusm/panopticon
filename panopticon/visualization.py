@@ -916,7 +916,10 @@ def volcano(diffex,
             verbose=False,
             draggable_annotations=False,
             gene_position_dict_for_side_annotations={},
-            boldgenes=[]):
+            boldgenes=[],
+            specialcolorgenelist=[],
+            specialcolor='r',
+            value_for_significance_truncation=0):
     """
 
     Parameters
@@ -966,21 +969,26 @@ def volcano(diffex,
             5,
             5,
         ))
+    diffex[pval_column] = diffex[pval_column].apply(lambda x: x if x>value_for_significance_truncation else value_for_significance_truncation)
     neglogpvalues = -np.log(diffex[pval_column].values) / np.log(10)
     effect_size = diffex[effect_size_col].values
     important_mask = (neglogpvalues > neglogpval_importance_threshold)
+    if len(specialcolorgenelist)>0:
+        color=diffex[gene_column].isin(specialcolorgenelist).apply(lambda x: specialcolor if x else 'b').values
+    else:
+        color='b'
     ax.scatter(effect_size[important_mask],
                neglogpvalues[important_mask],
                alpha=1,
                marker='.',
                s=3,
-               c='b')
+               c=color[important_mask])
     ax.scatter(effect_size[~important_mask],
                neglogpvalues[~important_mask],
                alpha=.1,
                marker='.',
                s=2,
-               c='b')
+               c=color[~important_mask])
     maxx = np.nanmax(effect_size)
     minx = np.nanmin(effect_size)
 
@@ -1051,7 +1059,6 @@ def volcano(diffex,
         negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
         negpvals.append(negpval)
     genemarklist = list(np.array(genemarklist)[np.argsort(negpvals)][::-1])
-
     if positions != 'side':
         if type(positions) == dict:
             positions = [positions[key] for key in genemarklist]
@@ -1064,6 +1071,10 @@ def volcano(diffex,
             genedf = diffex[diffex[gene_column] == gene]
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
+            #if len(specialcolorgenelist)>0:
+            #    color=diffex[gene_column].isin(specialcolorgenelist).apply(lambda x: specialcolor if x else 'k').values
+            #else:
+            #color='k'
             ax.scatter(effect_size, negpval, marker='.', color='k')
             xytext, habt, va = position_to_xytext_habt_va(
                 position, effect_size, negpval, maxx, maxy,

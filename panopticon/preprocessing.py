@@ -322,7 +322,9 @@ def generate_antibody_prediction(
         enforce_unimodality_of_positive_component=False,
         maximum_recursion_to_enforce_unimodality=4,
         enforce_positive_minimum_greater_than_negative_maximum=False,
-        verbose=False):
+        verbose=False,
+        covariance_type='full',
+        kind='gaussian'):
     """
     This approach takes some inspiration from the dsb approach: https://doi.org/10.1101/2020.02.24.963603.
     However, there is no use of isotypes.  Therefore, is amounts only to "step 1" of that procedure. This routine can also take into
@@ -370,8 +372,13 @@ def generate_antibody_prediction(
             raise Exception(
                 "raw_antibody_count_df must be prepared such that columns match column attributes in loom corresponding to raw antibody conjugate counts"
             )
+        if kind == 'gaussian':
+            new_ca_name = antibody + '_zscore_log{}p'.format(pseudocount)
+        elif kind in ['poisson', 'gamma']:
+            new_ca_name = antibody + '_log{}p'.format(pseudocount)
+        else:
+            raise Exception("kind must be either \"gaussian\" or \"poisson\" or \"gamma\"")
 
-        new_ca_name = antibody + '_zscore_log{}p'.format(pseudocount)
         if new_ca_name in loom.ca.keys() and overwrite == False:
             raise Exception(
                 "{} already in loom.ca.keys(); rename antibody column attribute and re-run, or set overwrite argument to True"
@@ -388,18 +395,24 @@ def generate_antibody_prediction(
             logcounts_empty_droplets_mean = np.nanmean(
                 logcounts_empty_droplets)
             logcounts_empty_droplets_std = np.nanstd(logcounts_empty_droplets)
-            loom.ca[new_ca_name] = (
-                logcounts_cells -
-                logcounts_empty_droplets_mean) / logcounts_empty_droplets_std
+            if 'zscore' in new_ca_name:
+                loom.ca[new_ca_name] = (logcounts_cells -
+                                        logcounts_empty_droplets_mean
+                                        ) / logcounts_empty_droplets_std
+            else:
+                loom.ca[new_ca_name] = logcounts_cells
         else:
             if pseudocount == 1:
                 logcounts_cells = np.log1p(loom.ca[antibody])
             else:
                 logcounts_cells = np.log(loom.ca[antibody] + pseudocount)
-            logcounts_cells_mean = np.nanmean(logcounts_cells)
-            logcounts_cells_std = np.nanstd(logcounts_cells)
-            loom.ca[new_ca_name] = (logcounts_cells -
-                                    logcounts_cells_mean) / logcounts_cells_std
+            if 'zscore' in new_ca_name:
+                logcounts_cells_mean = np.nanmean(logcounts_cells)
+                logcounts_cells_std = np.nanstd(logcounts_cells)
+                loom.ca[new_ca_name] = (logcounts_cells - logcounts_cells_mean
+                                        ) / logcounts_cells_std
+            else:
+                loom.ca[new_ca_name] = logcounts_cells
 
         if not only_generate_zscore:
             prediction_ca_name = antibody + '_prediction'
@@ -412,7 +425,9 @@ def generate_antibody_prediction(
                     maximum_recursion_to_enforce_unimodality=
                     maximum_recursion_to_enforce_unimodality,
                     enforce_positive_minimum_greater_than_negative_maximum=
-                    enforce_positive_minimum_greater_than_negative_maximum)
+                    enforce_positive_minimum_greater_than_negative_maximum,
+                    covariance_type=covariance_type,
+                    kind=kind)
             else:
                 from panopticon.preprocessing import _grouped_two_component_mixture_models
                 loom.ca[
@@ -425,7 +440,9 @@ def generate_antibody_prediction(
                         maximum_recursion_to_enforce_unimodality,
                         enforce_positive_minimum_greater_than_negative_maximum=
                         enforce_positive_minimum_greater_than_negative_maximum,
-                        verbose=verbose)
+                        verbose=verbose,
+                        covariance_type=covariance_type,
+                        kind=kind)
     if hashtags is not None:
         if 'nHash' in loom.ca.keys() and not overwrite:
             raise Exception(
@@ -446,9 +463,42 @@ def _two_component_mixture_model(
         verbose=True,
         maximum_recursion_to_enforce_unimodality=4,
         enforce_positive_minimum_greater_than_negative_maximum=False,
-        return_model=False):
+        return_model=False,
+        covariance_type='full',
+        kind='gaussian'):
     from sklearn import mixture
-    model = mixture.GaussianMixture(n_components=2)
+    if kind == 'gaussian':
+        model = mixture.GaussianMixture(n_components=2,
+                                        covariance_type=covariance_type)
+    elif kind == 'poisson':
+        from panopticon.utilities import import_check
+        exit_code = import_check("pomegranate",
+                                 'conda install -c anaconda pomegranate')
+        if exit_code != 0:
+            return
+        from pomegranate.gmm import GeneralMixtureModel
+        from pomegranate.distributions import Poisson
+        model = GeneralMixtureModel([Poisson(), Poisson()],
+                                    verbose=False,
+                                    tol=0.01,
+                                    random_state=17,
+                                    max_iter=100)
+    elif kind == 'gamma':
+        from panopticon.utilities import import_check
+        exit_code = import_check("pomegranate",
+                                 'conda install -c anaconda pomegranate')
+        if exit_code != 0:
+            return
+        from pomegranate.gmm import GeneralMixtureModel
+        from pomegranate.distributions import Gamma
+        model = GeneralMixtureModel([Gamma(), Gamma()],
+                                    verbose=False,
+                                    tol=0.01,
+                                    random_state=17,
+                                    max_iter=100)
+    else:
+        raise Exception(
+            "kind must be either \"gaussian\" or \"poisson\" or \"gamma\"")
     if droplowest:
         minval = np.min(values)
         values = np.array([x if x > minval else np.nan for x in values])
@@ -467,10 +517,16 @@ def _two_component_mixture_model(
         predictions = np.array(predictions)
 
     else:
-        predictions = model.fit_predict(np.array(values).reshape(-1, 1))
-
-    if model.means_[0][0] > model.means_[1][0]:
-        predictions = 1 - predictions
+        model.fit(np.array(values).reshape(-1, 1))
+        predictions = np.array(model.predict(np.array(values).reshape(-1, 1)))
+    if kind == 'gaussian':
+        if model.means_[0][0] > model.means_[1][0]:
+            predictions = 1 - predictions
+    else:
+        means0 = np.mean(values[predictions == 0])
+        means1 = np.mean(values[predictions == 1])
+        if means0 > means1:
+            predictions = 1 - predictions
     if np.sum(predictions) == len(predictions):
         predictions = np.array([0] * len(predictions))
     if enforce_unimodality_of_positive_component and maximum_recursion_to_enforce_unimodality > 0:
@@ -489,7 +545,9 @@ def _two_component_mixture_model(
                 enforce_unimodality_of_positive_component=
                 enforce_unimodality_of_positive_component,
                 maximum_recursion_to_enforce_unimodality=
-                maximum_recursion_to_enforce_unimodality - 1)
+                maximum_recursion_to_enforce_unimodality - 1,
+                covariance_type=covariance_type,
+                kind=kind)
             predictions[positive_mask] = new_predictions
     if enforce_positive_minimum_greater_than_negative_maximum and np.nanmean(
             predictions) > 0:
@@ -542,7 +600,9 @@ def _grouped_two_component_mixture_models(
         enforce_unimodality_of_positive_component=False,
         maximum_recursion_to_enforce_unimodality=2,
         enforce_positive_minimum_greater_than_negative_maximum=False,
-        verbose=False):
+        verbose=False,
+        covariance_type='full',
+        kind='gaussian'):
     from panopticon.preprocessing import _two_component_mixture_model
     import pandas as pd
     df = pd.DataFrame(values, columns=['val'])
@@ -556,7 +616,9 @@ def _grouped_two_component_mixture_models(
             maximum_recursion_to_enforce_unimodality,
             enforce_positive_minimum_greater_than_negative_maximum=
             enforce_positive_minimum_greater_than_negative_maximum,
-            verbose=verbose))['val'].values  #.unstack()
+            verbose=verbose,
+            covariance_type=covariance_type,
+            kind=kind))['val'].values  #.unstack()
 
 
 def generate_guide_rna_prediction(
@@ -655,7 +717,6 @@ def generate_guide_rna_prediction(
                             tol=0.01,
                             random_state=17,
                             max_iter=100)
-
                         X = loom.ca[new_ca_name][cellmask.nonzero()
                                                  [0]].reshape(-1, 1)
                         model.fit(X)
@@ -759,9 +820,12 @@ def get_clustering_based_outlier_prediction(
 def generate_replicate_assignment_based_on_hashtags(
         loom, hashtag_predictions, output_ca='hashtag_assignment'):
     import pandas as pd
-    df = pd.DataFrame(loom.ca['nHash'], columns=['nHash'])
-    for hashtag_prediction in hashtag_predictions:
-        df[hashtag_prediction] = loom.ca[hashtag_prediction]
+    df = pd.concat([
+        pd.DataFrame(loom.ca[hashtag_prediction], columns=[hashtag_prediction])
+        for hashtag_prediction in hashtag_predictions
+    ],
+                   axis=1)
+    df['nHash'] = df.sum(axis=1)
     replicate_assignments = []
     for i, row in df.iterrows():
         if row['nHash'] > 1:

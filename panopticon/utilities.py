@@ -724,7 +724,7 @@ def convert_10x_h5(path_10x_h5,
 def create_split_exon_gtf(input_gtf,
                           output_gtf,
                           gene=None,
-                          use_transcript_as_gene=True):
+                          use_transcript_as_gene=False):
     """
 
     Parameters
