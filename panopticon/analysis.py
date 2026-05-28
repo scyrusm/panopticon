@@ -2329,7 +2329,7 @@ def generate_cell_cycle_angle(
         gene_ca_name='gene_common_name',
         g1s_genes=[
             'Mcm5', 'Pcna', 'Tyms', 'Fen1', 'Mcm2', 'Mcm4', 'Rrm1', 'Ung',
-            'Gins2', 'Mcm6', 'Cdca7', 'Dtl', 'Prim1', 'Uhrf1', 'Mlf1ip',
+            'Gins2', 'Mcm6', 'Cdca7', 'Dtl', 'Prim1', 'Uhrf1', 'Cenpu', #Cenpu is sometimes Mflf1p
             'Hells', 'Rfc2', 'Rpa2', 'Nasp', 'Rad51ap1', 'Gmnn', 'Wdr76',
             'Slbp', 'Ccne2', 'Ubr7', 'Pold3', 'Msh2', 'Atad2', 'Rad51', 'Rrm2',
             'Cdc45', 'Cdc6', 'Exo1', 'Tipin', 'Dscc1', 'Blm', 'Casp8ap2',
@@ -2338,16 +2338,17 @@ def generate_cell_cycle_angle(
         g2m_genes=[
             'Hmgb2', 'Cdk1', 'Nusap1', 'Ube2c', 'Birc5', 'Tpx2', 'Top2a',
             'Ndc80', 'Cks2', 'Nuf2', 'Cks1b', 'Mki67', 'Tmpo', 'Cenpf',
-            'Tacc3', 'Fam64a', 'Smc4', 'Ccnb2', 'Ckap2l', 'Ckap2', 'Aurkb',
+            'Tacc3', 'Pimreg', 'Smc4', 'Ccnb2', 'Ckap2l', 'Ckap2', 'Aurkb', #Pimreg is sometimes Fam64a
             'Bub1', 'Kif11', 'Anp32e', 'Tubb4b', 'Gtse1', 'Kif20b', 'Hjurp',
-            'Cdca3', 'Hn1', 'Cdc20', 'Ttk', 'Cdc25c', 'Kif2c', 'Rangap1',
+            'Cdca3', 'Jpt1', 'Cdc20', 'Ttk', 'Cdc25c', 'Kif2c', 'Rangap1', #Jpt1 is sometimes Hn1
             'Ncapd2', 'Dlgap5', 'Cdca2', 'Cdca8', 'Ect2', 'Kif23', 'Hmmr',
             'Aurka', 'Psrc1', 'Anln', 'Lbr', 'Ckap5', 'Cenpe', 'Ctcf', 'Nek2',
             'G2e3', 'Gas2l3', 'Cbx5', 'Cenpa'
         ],
         set_origin_with_mixture_model=True,
         write_g1s_score_ca_name=None,
-        write_g2m_score_ca_name=None):
+        write_g2m_score_ca_name=None,
+        verbose=False):
     import pandas as pd
     import numpy as np
     df = pd.DataFrame(
@@ -2370,6 +2371,8 @@ def generate_cell_cycle_angle(
                                                                0].max()
             neworigin = np.mean(model.means_)
             df[axis] = df[axis] - neworigin
+            if verbose:
+                print("New {} origin:  {}".format(axis, neworigin))
     if write_g1s_score_ca_name is not None:
         loom.ca[write_g1s_score_ca_name] = df['G1S'].values
     if write_g2m_score_ca_name is not None:

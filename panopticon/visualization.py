@@ -690,7 +690,8 @@ def swarmviolin(data,
 
                 ax.annotate(annotation_string, (anno_x, anno_y),
                             ha='center',
-                            va='bottom')
+                            va='bottom',
+                            fontsize=custom_annotation_fontsize)
             else:
                 if annotate_hue_pvalues:
                     annotation_string += ' ' + annotate_hue_pvalue_fmt_str.format(
@@ -710,7 +711,8 @@ def swarmviolin(data,
 
                 ax.annotate(annotation_string, (anno_x, anno_y),
                             ha='left',
-                            va='center')
+                            va='center',
+                            fontsize=custom_annotation_fontsize)
     if annotate_pvalue_vs_all or annotate_effect_size_vs_all or annotate_n and len(
             custom_annotation_dict.keys()) == 0:
         from scipy.stats import mannwhitneyu, ttest_ind
@@ -766,7 +768,8 @@ def swarmviolin(data,
                 ax.annotate(annotation_string,
                             (ticklabel.get_position()[0], np.max(a)),
                             ha='center',
-                            va='bottom')
+                            va='bottom',
+                            fontsize=custom_annotation_fontsize)
             else:
                 if annotate_pvalue_vs_all:
                     annotation_string += ' ' + annotate_pvalue_vs_all_fmt_str.format(
@@ -784,7 +787,8 @@ def swarmviolin(data,
                 ),
                             ha='left',
                             va='center',
-                            annotation_clip=False)
+                            annotation_clip=False,
+                            fontsize=custom_annotation_fontsize)
     if len(custom_annotation_dict.keys()) > 0:
         if np.issubdtype(data[y].dtype, np.number):
             category_col = x
@@ -969,26 +973,32 @@ def volcano(diffex,
             5,
             5,
         ))
-    diffex[pval_column] = diffex[pval_column].apply(lambda x: x if x>value_for_significance_truncation else value_for_significance_truncation)
+    diffex[pval_column] = diffex[pval_column].apply(
+        lambda x: x if x > value_for_significance_truncation else
+        value_for_significance_truncation)
     neglogpvalues = -np.log(diffex[pval_column].values) / np.log(10)
     effect_size = diffex[effect_size_col].values
     important_mask = (neglogpvalues > neglogpval_importance_threshold)
-    if len(specialcolorgenelist)>0:
-        color=diffex[gene_column].isin(specialcolorgenelist).apply(lambda x: specialcolor if x else 'b').values
+    if len(specialcolorgenelist) > 0:
+        color = diffex[gene_column].isin(specialcolorgenelist).apply(
+            lambda x: specialcolor if x else 'b').values
+        importantcolor = color[important_mask]
+        unimportantcolor = color[~important_mask]
     else:
-        color='b'
+        importantcolor = 'b'
+        unimportantcolor = 'b'
     ax.scatter(effect_size[important_mask],
                neglogpvalues[important_mask],
                alpha=1,
                marker='.',
                s=3,
-               c=color[important_mask])
+               c=importantcolor)
     ax.scatter(effect_size[~important_mask],
                neglogpvalues[~important_mask],
                alpha=.1,
                marker='.',
                s=2,
-               c=color[~important_mask])
+               c=unimportantcolor)
     maxx = np.nanmax(effect_size)
     minx = np.nanmin(effect_size)
 
@@ -1096,9 +1106,9 @@ def volcano(diffex,
             genedf = diffex[diffex[gene_column] == gene]
             negpval = -np.log(genedf.iloc[0][pval_column]) / np.log(10)
             effect_size = genedf.iloc[0][effect_size_col]
-            fontweight='normal'
+            fontweight = 'normal'
             if gene in boldgenes:
-                fontweight='bold'
+                fontweight = 'bold'
             if gene in gene_position_dict_for_side_annotations.keys():
                 position = gene_position_dict_for_side_annotations[gene]
                 xytext, habt, va = position_to_xytext_habt_va(
@@ -1185,7 +1195,11 @@ def repertoire_plot(x=None,
                     smear=False,
                     annotate_simpson=False,
                     weights=None,
-                    colorkey_col=None):
+                    colorkey_col=None,
+                    annotate_n_over_bar=False,
+                    annotate_n_over_bar_fmt_str='{}',
+                    y_sort_key=None,
+                    x_sort_key=None):
     """Repertoire plot, designed for plotting cluster compositions or TCR repertoires as stacked bar plots or pies, with stack height indicating the size of a given TCR clone.  See https://doi.org/10.1101/2021.08.25.456956, Fig. 3e.  In this context, input should consist of a dataframe ('data'), with each row representing a cell.  Argument 'y' should be a column of 'data' representing the cell's clone or other grouping of cells.  Argument 'x' should be a column of 'data' representing the sample whence the cell came.
 
     Parameters
@@ -1218,6 +1232,23 @@ def repertoire_plot(x=None,
         (Default value = None)
     stack_order :
         (Default value = 'agnostic')
+    y_sort_key : callable, optional
+        A callable used to determine the stacking order of y values within each bar
+        (and, for stack_order='matched', the legend order as well).  When
+        stack_order='matched' the key is applied once to all unique y values to
+        produce a single consistent ordering across every bar.  When
+        stack_order='agnostic' it is applied independently within each bar.  Items
+        whose key value is smallest appear at the bottom of the bar.  If None the
+        default ordering is used (frequency-descending for agnostic; original data
+        encounter order for matched).
+        (Default value = None)
+    x_sort_key : callable, optional
+        A callable used to sort the bars along the x axis.  It is applied to the
+        unique x values (or, when hue is provided, to the x component of each
+        (x, hue) grouping key).  Within the same x value the relative order of hue
+        sub-groups is preserved via a stable sort.  If None, bars appear in the
+        order they are first encountered in the data.
+        (Default value = None)
 
     Returns
     -------
@@ -1235,7 +1266,10 @@ def repertoire_plot(x=None,
             raise Exception(
                 "argument \"output\" must be a string, representing a desired filename"
             )
-    #if piechar
+    if y_sort_key is not None and not callable(y_sort_key):
+        raise Exception("y_sort_key must be a callable")
+    if x_sort_key is not None and not callable(x_sort_key):
+        raise Exception("x_sort_key must be a callable")
 
     import matplotlib.pyplot as plt
     from tqdm import tqdm
@@ -1306,6 +1340,9 @@ def repertoire_plot(x=None,
             # this code ensures that all categories are represented (even with 0) in all bars
             newname = "{}_{} count".format(x, y)  # to cover an edge case
             original_order = data[y].unique()
+            # --- y_sort_key: reorder the consistent cross-bar y ordering ---
+            if y_sort_key is not None:
+                original_order = sorted(original_order, key=y_sort_key)
             grouped_data_df = grouped_data.rename(newname).reset_index()
             all_y = grouped_data_df[y].unique()
             grouped_data_df_dict = grouped_data_df.groupby(
@@ -1327,6 +1364,9 @@ def repertoire_plot(x=None,
 
         total = data.groupby(x)[y].unique().apply(lambda x: len(x)).max()
         groupings = data[x].unique()
+        # --- x_sort_key: reorder bars along the x axis ---
+        if x_sort_key is not None:
+            groupings = sorted(groupings, key=x_sort_key)
         ind = np.arange(len(groupings))
 
     else:
@@ -1358,6 +1398,9 @@ def repertoire_plot(x=None,
                 grouped_data = data.groupby([x, hue, y])[weights].sum()
 
             original_order = data[y].unique()
+            # --- y_sort_key: reorder the consistent cross-bar y ordering ---
+            if y_sort_key is not None:
+                original_order = sorted(original_order, key=y_sort_key)
             newname = "{}_{}_{} count".format(x, y,
                                               hue)  # to cover an edge case
             grouped_data_df = grouped_data.rename(newname, ).reset_index()
@@ -1384,6 +1427,9 @@ def repertoire_plot(x=None,
         total = data.groupby([x,
                               hue])[y].unique().apply(lambda x: len(x)).max()
         groupings = list(data.groupby([x, hue]).groups.keys())
+        # --- x_sort_key: sort by the x component; stable sort preserves hue sub-order ---
+        if x_sort_key is not None:
+            groupings = sorted(groupings, key=lambda g: x_sort_key(g[0]))
         ind = []
         counter = -1
         for i, grouping in enumerate(groupings):
@@ -1397,7 +1443,18 @@ def repertoire_plot(x=None,
 #    from IPython.core.debugger import set_trace; set_trace()
     for grouping in groupings:
         heights = []
-        for n in grouped_data[grouping].values:
+        # --- y_sort_key (agnostic): sort stacking order within this bar ---
+        gd = grouped_data[grouping]
+        if y_sort_key is not None and stack_order == 'agnostic':
+            if isinstance(gd.index, pd.MultiIndex):
+                # index levels are (y, colorkey_col); sort on the y level
+                sorted_idx = sorted(range(len(gd)),
+                                    key=lambda i: y_sort_key(gd.index[i][0]))
+            else:
+                sorted_idx = sorted(range(len(gd)),
+                                    key=lambda i: y_sort_key(gd.index[i]))
+            gd = gd.iloc[sorted_idx]
+        for n in gd.values:
             heights.append(n)
         heights = heights + [0] * (total - len(heights))
         heights = np.array(heights)[::-1]
@@ -1405,7 +1462,7 @@ def repertoire_plot(x=None,
 
         if colorkey_col is not None:
             colors = []
-            for index in grouped_data[grouping].index.values:
+            for index in gd.index.values:
                 colors.append(index[-1])
             all_colorkeys.append(colors)
 
@@ -1426,6 +1483,7 @@ def repertoire_plot(x=None,
 
 #        all_colorkeys = all_colorkeys[:,::-1]
 
+    all_heights_n = all_heights.sum(axis=1)
     if pre_normalize_by_cohort:
         all_heights = np.divide(all_heights, all_heights.sum(axis=0))
     if normalize:
@@ -1669,6 +1727,16 @@ def repertoire_plot(x=None,
             else:
                 ylabel = 'cell count'
         subax.set_ylabel(ylabel)
+        if annotate_n_over_bar:
+            for x, n in zip(ind, all_heights_n):
+                if normalize:
+                    y = 1
+                else:
+                    y = n
+                ax.annotate(annotate_n_over_bar_fmt_str.format(n), (x, y),
+                            va='bottom',
+                            annotation_clip=False,
+                            ha='center')
     if stack_order == 'matched':
         plt.legend(bbox_to_anchor=(1, 1), reverse=True)
     elif colorkey_col is not None:
@@ -2158,9 +2226,15 @@ def plot_dot_plot(loom,
     if z_score:
         for col in df.columns:
             df[col] = (df[col] - df[col].mean()) / df[col].std()
+            if df[col].isnull().sum() > 0:
+                raise Exception("Cannot normalize column: {}".format(col))
     elif minmax_normalize:
         for col in df.columns:
-            df[col] = (df[col] - df[col].min()) / (df[col].max()-df[col].min())
+            df[col] = (df[col] - df[col].min()) / (df[col].max() -
+                                                   df[col].min())
+            if df[col].isnull().sum() > 0:
+                raise Exception("Cannot normalize column: {}".format(col))
+
     fig, (ax, cax) = plt.subplots(
         1,
         2,
@@ -2293,14 +2367,15 @@ def plot_dot_plot(loom,
     elif orientation == 'horizontal':
         major_tick_columns = relevant_columns[0::2]
         minor_tick_columns = relevant_columns[1::2]
-        major_tick_positions = list(np.arange(0,len(relevant_columns),2))
-        minor_tick_positions = list(np.arange(1,len(relevant_columns),2))
+        major_tick_positions = list(np.arange(0, len(relevant_columns), 2))
+        minor_tick_positions = list(np.arange(1, len(relevant_columns), 2))
         ax.set_xlim([-0.5, len(relevant_columns) - 0.5])
         ax.set_ylim([-0.5, len(df.index) - 0.5])
         ax.set_xticks(major_tick_positions)
-        ax.set_xticks(minor_tick_positions,minor=True)
+        ax.set_xticks(minor_tick_positions, minor=True)
         ax.set_xticklabels([x.split('_With')[0] for x in major_tick_columns])
-        ax.set_xticklabels([x.split('_With')[0] for x in minor_tick_columns],minor=True)
+        ax.set_xticklabels([x.split('_With')[0] for x in minor_tick_columns],
+                           minor=True)
 
         ax.set_yticks(np.array(range(len(df.index.values))))
         ax.set_yticklabels(list(df.index.values))
@@ -2321,13 +2396,13 @@ def plot_dot_plot(loom,
         cbar.ax.set_xticklabels([])
         from matplotlib import ticker
 
-#        print(relevant_columns[1:(len(relevant_columns)+1):2])
-#        print(ax
-#        ax.xaxis.set_minor_formatter(
-#            ticker.FixedFormatter(
-#                                  ['']*0+relevant_columns[1:(len(relevant_columns) +
-#                                                      1):2]+['']*0))
-#
+        #        print(relevant_columns[1:(len(relevant_columns)+1):2])
+        #        print(ax
+        #        ax.xaxis.set_minor_formatter(
+        #            ticker.FixedFormatter(
+        #                                  ['']*0+relevant_columns[1:(len(relevant_columns) +
+        #                                                      1):2]+['']*0))
+        #
         ax.tick_params(axis='x', which='minor', length=15)
         ax.tick_params(axis='x', which='both', color='lightgrey')
         ax.autoscale(enable=True, axis='x', tight=True)
@@ -2544,7 +2619,8 @@ def plot_color_coded_embedding(loom,
                                color_palette='colorblind',
                                legend=True,
                                on_figure_annotation=False,
-                               s=2):
+                               s=2,
+                               ca_sort_order=None):
     import numpy as np
     import seaborn as sns
     if fig is not None:
@@ -2577,10 +2653,16 @@ def plot_color_coded_embedding(loom,
         else:
             raise Exception(
                 "color palette must be str or seaborn color palette")
-        category2color = {
-            category: sns.color_palette(color_palette)[i]
-            for i, category in enumerate(np.unique(loom.ca[category_ca]))
-        }
+        if ca_sort_order is None:
+            category2color = {
+                category: sns.color_palette(color_palette)[i]
+                for i, category in enumerate(np.unique(loom.ca[category_ca]))
+            }
+        else:
+            category2color = {
+                category: sns.color_palette(color_palette)[i]
+                for i, category in enumerate(ca_sort_order)
+            }
         ax.scatter(
             loom.ca[x_ca][shuffle],
             loom.ca[y_ca][shuffle],
@@ -2593,8 +2675,7 @@ def plot_color_coded_embedding(loom,
                    color='w',
                    label=category,
                    markerfacecolor=category2color[category],
-                   markersize=10)
-            for category in np.unique(loom.ca[category_ca])
+                   markersize=10) for category in category2color.keys()
         ]
         if on_figure_annotation:
             import matplotlib.patheffects as pe
@@ -2964,3 +3045,196 @@ def boxenplot_with_statistics(
                             fontsize=custom_annotation_fontsize)
 
     return ax
+
+
+def plot_bigwig_tracks(
+    bigwigs,
+    groups,
+    chromosome,
+    start,
+    end,
+    bed=None,
+    figsize=(4, None),
+    color_palette=None,
+    max_value=None,
+    min_value=0,
+    alpha=0.5,
+    highlight_regions=None,
+    track_height=None,
+):
+    """
+    Plot bigwig tracks using coolbox.
+
+    Parameters
+    ----------
+    bigwigs : list of str
+        Paths to bigwig files. Required.
+    groups : list of str
+        Group label for each bigwig (same length as `bigwigs`). Files that
+        share a label are overlaid on the same track; files with unique labels
+        each get their own track. Required.
+    chromosome : int or str
+        Chromosome identifier, e.g. 1 or 'chr1'. 'chr' is prepended
+        automatically if absent. Required.
+    start : int
+        Start coordinate of the plotted region. Required.
+    end : int
+        End coordinate of the plotted region. Required.
+    bed : str, optional
+        Path to a BED file rendered as a gene-annotation track below the
+        bigwig tracks.
+    figsize : tuple (width, height), optional
+        Figure dimensions in inches. If height is None the coolbox default is
+        used. Default: (4, None).
+    color_palette : dict, list, or None, optional
+        Colours assigned to groups.
+          - dict  : keys are group labels, values are colour strings.
+          - list  : colours are assigned to groups in order of first
+                    appearance, cycling if necessary.
+          - None  : matplotlib's default prop_cycle is used.
+    max_value : float, optional
+        Shared y-axis maximum for all bigwig tracks. Default: auto.
+    min_value : float, optional
+        Shared y-axis minimum for all bigwig tracks. Default: 0.
+    alpha : float, optional
+        Fill opacity for every bigwig track. Default: 0.5.
+    highlight_regions : list of str, optional
+        Genomic regions to shade on every track,
+        e.g. ["chr1:94002000-94003500"].
+    track_height : float, optional
+        Height in inches of each bigwig track. If None, the coolbox
+        default is used. Default: None.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    # ── lazy imports ──────────────────────────────────────────────────────────
+    import pyBigWig
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.collections as mcollections
+    import coolbox
+    from collections import OrderedDict
+
+    # ── matplotlib >= 3.8 compatibility shim ─────────────────────────────────
+    if not hasattr(mcollections, 'BrokenBarHCollection'):
+
+        class BrokenBarHCollection(mcollections.PolyCollection):
+            """Compatibility shim for matplotlib >= 3.8"""
+
+            def __init__(self, xranges, yrange, **kwargs):
+                ymin, ywidth = yrange
+                ymax = ymin + ywidth
+                verts = [[(xmin, ymin), (xmin, ymax), (xmin + xwidth, ymax),
+                          (xmin + xwidth, ymin), (xmin, ymin)]
+                         for xmin, xwidth in xranges]
+                super().__init__(verts, **kwargs)
+
+        mcollections.BrokenBarHCollection = BrokenBarHCollection
+
+    from coolbox.api import (BigWig, BigWigCoverage, BED, XAxis, Spacer,
+                             HighLights)
+
+    # ── input validation ──────────────────────────────────────────────────────
+    if len(bigwigs) != len(groups):
+        raise ValueError(
+            f"bigwigs ({len(bigwigs)}) and groups ({len(groups)}) "
+            "must have the same length.")
+
+    # ── normalise chromosome string ───────────────────────────────────────────
+    chrom_num = str(chromosome).replace('chr', '')
+    chrom_str = 'chr' + chrom_num
+    region = f"{chrom_str}:{start}-{end}"
+
+    # ── build ordered group → [file, …] map ──────────────────────────────────
+    group_files = OrderedDict()
+    for bw, grp in zip(bigwigs, groups):
+        group_files.setdefault(grp, []).append(bw)
+
+    unique_groups = list(group_files.keys())
+
+    # ── resolve colour map ────────────────────────────────────────────────────
+    cycle_colors = [c['color'] for c in plt.rcParams['axes.prop_cycle']]
+
+    if color_palette is None:
+        color_map = {
+            grp: cycle_colors[i % len(cycle_colors)]
+            for i, grp in enumerate(unique_groups)
+        }
+    elif isinstance(color_palette, dict):
+        fallback_iter = iter(c for c in cycle_colors
+                             if c not in color_palette.values())
+        color_map = {
+            grp: color_palette.get(grp, next(fallback_iter, cycle_colors[0]))
+            for grp in unique_groups
+        }
+    elif isinstance(color_palette, list):
+        color_map = {
+            grp: color_palette[i % len(color_palette)]
+            for i, grp in enumerate(unique_groups)
+        }
+    else:
+        raise TypeError("color_palette must be a dict, list, or None.")
+
+    # ── build extra kwargs that depend on track_height ────────────────────────
+    height_kwargs = {} if track_height is None else {'height': track_height}
+
+    # ── build coolbox frame ───────────────────────────────────────────────────
+    frame = None
+
+    for grp, bw_list in group_files.items():
+        color = color_map[grp]
+
+        for i, bw in enumerate(bw_list):
+            if i == 0:
+                track = BigWig(
+                    bw,
+                    alpha=alpha,
+                    title=grp,
+                    color=color,
+                    data_range_style=False,
+                    max_value=max_value,
+                    min_value=min_value,
+                    **height_kwargs,
+                )
+                frame = track if frame is None else frame + track
+            else:
+                frame += BigWigCoverage(
+                    bw,
+                    alpha=alpha,
+                    color=color,
+                    max_value=max_value,
+                    min_value=min_value,
+                )
+
+        if highlight_regions:
+            frame += HighLights(highlight_regions, color='k', alpha=0.0625)
+
+    # ── x-axis and optional annotation tracks ────────────────────────────────
+    xaxis = XAxis()
+    frame = xaxis + frame
+    frame += Spacer(0.1)
+
+    if bed is not None:
+        frame += BED(bed,
+                     gene_style='flybase',
+                     interval_height=0.1,
+                     height=0.5)
+
+    # ── render ────────────────────────────────────────────────────────────────
+    plt.tight_layout()
+    fig = frame.plot(region)
+
+    xaxis.ax.set_title(f'chr{chrom_num}, kb', y=1.0, pad=-20)
+    xaxis.ax.xaxis.set_label_position('bottom')
+    xaxis.ax.tick_params(labelbottom=True, labeltop=True)
+
+    width, height = figsize if isinstance(figsize,
+                                          (tuple, list)) else (figsize, None)
+    fig.set_figwidth(width)
+    if height is not None:
+        fig.set_figheight(height)
+
+    plt.tight_layout()
+    return fig
