@@ -474,7 +474,8 @@ def swarmviolin(data,
                 pairing_column=None,
                 only_plot_hue_pairing=False,
                 pairing_line_alpha=0.1,
-                censor_inf_in_statistics=False):
+                censor_inf_in_statistics=False,
+                connect_across_missing=False):
     """
 
     Parameters
@@ -828,72 +829,107 @@ def swarmviolin(data,
                             ha='left',
                             va='center',
                             fontsize=custom_annotation_fontsize)
+
+
     if pairing_column is not None:
         xoffsets = []
         yoffsets = []
         if hue is None:
-            groups = [x.get_text() for x in ax.get_xticklabels()]
+            groups = [g.get_text() for g in ax.get_xticklabels()]
         else:
             groups = list(
-                np.hstack([[x.get_text()] * 2 for x in ax.get_xticklabels()]))
-            group_notdoubled = [x.get_text() for x in ax.get_xticklabels()]
-        n_empty_collections = 0
-        for collection in ax.collections:
-            if collection.get_offsets().shape[0] <= 1:
-                n_empty_collections += 1
-        for collection in ax.collections[n_empty_collections::]:
-            if type(collection.get_offsets()) == np.ma.core.MaskedArray:
-
-                xoffsets.append(collection.get_offsets().data[:, 0])
-                yoffsets.append(collection.get_offsets().data[:, 1])
-            elif type(collection.get_offsets()) == np.ndarray:
-                xoffsets.append(collection.get_offsets()[:, 0])
-                yoffsets.append(collection.get_offsets()[:, 1])
+                np.hstack([[g.get_text()] * 2 for g in ax.get_xticklabels()]))
+            group_notdoubled = [g.get_text() for g in ax.get_xticklabels()]
+    
+        # All collections with actual scatter points (violin bodies have <=1 offset)
+        swarm_colls = [c for c in ax.collections if c.get_offsets().shape[0] > 1]
+    
+        # Determine which groups actually have data, in order
+        x_vals = [g.get_text() for g in ax.get_xticklabels()]
+        if hue is None:
+            has_data_per_group = [
+                len(data[data[x].astype(str) == xv]) > 0 for xv in x_vals
+            ]
+        else:
+            hue_vals = list(data[hue].unique())
+            has_data_per_group = [
+                len(data[(data[x].astype(str) == xv) & (data[hue] == hv)]) > 0
+                for xv in x_vals for hv in hue_vals
+            ]
+    
+        # Assign collections to groups in order; fill None for missing groups
+        coll_iter = iter(swarm_colls)
+        for hd in has_data_per_group:
+            if hd:
+                c = next(coll_iter)
+                offs = c.get_offsets()
+                xy = offs.data if isinstance(offs,
+                                             np.ma.MaskedArray) else np.array(offs)
+                xoffsets.append(xy[:, 0])
+                yoffsets.append(xy[:, 1])
             else:
-                raise Exception('Collection offsets unfamiliar type')
-
-
-#        print(xoffsets)
-        xoffsets = np.vstack(xoffsets)
-        yoffsets = np.vstack(yoffsets)
+                xoffsets.append(None)
+                yoffsets.append(None)
+    
+        max_pts = max(len(xo) for xo in xoffsets if xo is not None)
+        
+        def _pad(arr, n):
+            if arr is None:
+                return np.full(n, np.nan)
+            pad = n - len(arr)
+            return np.concatenate([arr, np.full(pad, np.nan)]) if pad > 0 else arr
+        
+        xoffsets = np.vstack([_pad(xo, max_pts) for xo in xoffsets])
+        yoffsets = np.vstack([_pad(yo, max_pts) for yo in yoffsets])    
         offset_df = pd.DataFrame(groups, columns=['group'])
         for i in range(xoffsets.shape[1]):
             offset_df['{}_x'.format(i)] = xoffsets[:, i]
             offset_df['{}_y'.format(i)] = yoffsets[:, i]
             if (hue is not None) and only_plot_hue_pairing:
                 for j in range(0, xoffsets.shape[0], 2):
-                    ax.plot([xoffsets[j, i], xoffsets[j + 1, i]],
-                            [yoffsets[j, i], yoffsets[j + 1, i]],
+                    x0, y0 = xoffsets[j, i], yoffsets[j, i]
+                    x1, y1 = xoffsets[j + 1, i], yoffsets[j + 1, i]
+                    if np.isnan(x0) or np.isnan(
+                            x1):  # omit line if either point missing
+                        continue
+                    ax.plot([x0, x1], [y0, y1],
                             color='k',
                             alpha=pairing_line_alpha,
                             ls='--')
             else:
-                ax.plot(xoffsets[:, i],
-                        yoffsets[:, i],
-                        color='k',
-                        alpha=pairing_line_alpha,
-                        ls='--')
+                xs, ys = xoffsets[:, i], yoffsets[:, i]
+                if connect_across_missing:
+                    mask = ~np.isnan(xs)  # drop NaN rows → connects across the gap
+                    xs, ys = xs[mask], ys[mask]
+                # if not connect_across_missing, NaN values cause matplotlib to break the line
+                ax.plot(xs, ys, color='k', alpha=pairing_line_alpha, ls='--')
+    
         replicate_matches = []
-        for col in [y for y in offset_df.columns if y.endswith('_y')]:
+        for col in [col for col in offset_df.columns if col.endswith('_y')]:
             for replicate in data[pairing_column].unique():
-                if hue is None:
-                    if offset_df.set_index('group')[col].equals(
-                            data[data[pairing_column] == replicate].set_index(
-                                x).loc[groups][y]):
-                        replicate_matches.append(replicate)
-                else:
-                    if offset_df.set_index('group')[col].reset_index(
-                            drop=True).equals(data[
-                                data[pairing_column] == replicate].set_index(
-                                    x).loc[group_notdoubled][y].reset_index(
-                                        drop=True)):
-
-                        replicate_matches.append(replicate)
-
-        if len(np.unique(replicate_matches)) != len(
-                np.unique(data[pairing_column])):
-            raise Exception(
-                "Problem with pairing column--it is possible that pairing annotation was done incorrectly"
+                rep_data = data[data[pairing_column] == replicate].copy()
+                rep_data[x] = rep_data[x].astype(str)  # match tick label string dtype
+                try:
+                    if hue is None:
+                        ref = rep_data.set_index(x).loc[groups][y]
+                        if offset_df.set_index('group')[col].equals(ref):
+                            replicate_matches.append(replicate)
+                    else:
+                        ref = (rep_data.set_index(x)
+                               .loc[group_notdoubled][y]
+                               .reset_index(drop=True))
+                        if (offset_df.set_index('group')[col]
+                                .reset_index(drop=True)
+                                .equals(ref)):
+                            replicate_matches.append(replicate)
+                except (KeyError, ValueError):
+                    pass
+        
+        if len(np.unique(replicate_matches)) != len(np.unique(data[pairing_column])):
+            import warnings
+            warnings.warn(
+                "Pairing column verification failed--pairing lines may be inaccurate. "
+                "This can occur when data contains NaN values."
             )
     return ax
 
@@ -3047,21 +3083,20 @@ def boxenplot_with_statistics(
     return ax
 
 
-def plot_bigwig_tracks(
-    bigwigs,
-    groups,
-    chromosome,
-    start,
-    end,
-    bed=None,
-    figsize=(4, None),
-    color_palette=None,
-    max_value=None,
-    min_value=0,
-    alpha=0.5,
-    highlight_regions=None,
-    track_height=None,
-):
+def plot_bigwig_tracks(bigwigs,
+                       groups,
+                       chromosome,
+                       start,
+                       end,
+                       bed=None,
+                       figsize=(4, None),
+                       color_palette=None,
+                       max_value=None,
+                       min_value=0,
+                       alpha=0.5,
+                       highlight_regions=None,
+                       track_height=None,
+                       gtf=None):
     """
     Plot bigwig tracks using coolbox.
 
@@ -3221,6 +3256,13 @@ def plot_bigwig_tracks(
                      gene_style='flybase',
                      interval_height=0.1,
                      height=0.5)
+    if gtf is not None:
+        frame += BED(
+            gtf,
+            gene_style='flybase',
+            interval_height=.1,
+            height=.35,
+        )
 
     # ── render ────────────────────────────────────────────────────────────────
     plt.tight_layout()

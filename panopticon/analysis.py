@@ -1425,7 +1425,7 @@ def get_differential_expression_dict(loom,
 
     diffex = {}
     if custom_ca is not None:
-        for cluster in np.unique(loom.ca[custom_ca]):
+        for cluster in [x for x in np.unique(loom.ca[custom_ca]) if x not in clusters_to_skip]:
             if verbose:
                 print(cluster)
             mask = loom.ca[custom_ca] == cluster
